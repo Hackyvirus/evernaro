@@ -2,6 +2,7 @@ import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
+import { authConfig } from "@/lib/auth.config";
 
 // A valid-format bcrypt hash of a value nobody will ever type, used to keep
 // authorize()'s timing constant whether or not the email is registered —
@@ -11,8 +12,7 @@ import { prisma } from "@/lib/prisma";
 const DUMMY_HASH = "$2b$12$C6UzMDM.H6dfI/f/IKcEeO0j0FEEC0MEsAcaZ1EOwLmR2ILzTkoOK";
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
-  session: { strategy: "jwt" },
-  pages: { signIn: "/login" },
+  ...authConfig,
   providers: [
     Credentials({
       credentials: {
@@ -74,33 +74,4 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       },
     }),
   ],
-  callbacks: {
-    jwt: ({ token, user }) => {
-      if (user) {
-        if (user.isPlatformAdmin) {
-          token.isPlatformAdmin = true;
-        } else {
-          token.orgId = user.orgId;
-          token.orgSlug = user.orgSlug;
-          token.orgName = user.orgName;
-          token.role = user.role;
-        }
-      }
-      return token;
-    },
-    session: ({ session, token }) => {
-      if (session.user) {
-        session.user.id = token.sub as string;
-        if (token.isPlatformAdmin) {
-          session.user.isPlatformAdmin = true;
-        } else {
-          session.user.orgId = token.orgId as string;
-          session.user.orgSlug = token.orgSlug as string;
-          session.user.orgName = token.orgName as string;
-          session.user.role = token.role as string;
-        }
-      }
-      return session;
-    },
-  },
 });

@@ -1,5 +1,11 @@
-import { auth } from "@/lib/auth";
+import NextAuth from "next-auth";
 import { NextResponse } from "next/server";
+import { authConfig } from "@/lib/auth.config";
+
+// Edge runtime: build auth() from the provider-less config only, so
+// bcrypt/Prisma (pulled in by the real providers in src/lib/auth.ts) never
+// get bundled into this Edge Function.
+const { auth } = NextAuth(authConfig);
 
 const CLIENT_PROTECTED_PREFIXES = ["/inbox", "/settings", "/contacts", "/campaigns", "/reminders"];
 
