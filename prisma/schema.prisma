@@ -17,7 +17,7 @@ model Organization {
   id            String   @id @default(cuid())
   name          String
   slug          String   @unique
-  monthlyFeeInr Int? // set manually by the platform admin — no billing integration yet
+  monthlyFeeInr Int? // set manually by the platform admin — the amount an invoice defaults to
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
@@ -29,6 +29,37 @@ model Organization {
   reminders       Reminder[]
   callLogs        CallLog[]
   businessProfile BusinessProfile?
+  invoices        Invoice[]
+}
+
+// ---------- Billing (Razorpay) ----------
+//
+// One-time-payment-per-invoice, not Razorpay's Subscriptions product —
+// Subscriptions needs a Plan created in the Razorpay dashboard first, which
+// needs a live account; this works with just RAZORPAY_KEY_ID/KEY_SECRET, so
+// it functions the moment those are set. A platform admin generates an
+// invoice (defaulting to the org's monthlyFeeInr); the org owner pays it via
+// Razorpay Checkout from their Billing page.
+
+enum InvoiceStatus {
+  PENDING
+  PAID
+  FAILED
+  CANCELLED
+}
+
+model Invoice {
+  id                String        @id @default(cuid())
+  orgId             String
+  org               Organization  @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  amountInr         Int
+  status            InvoiceStatus @default(PENDING)
+  razorpayOrderId   String?       @unique
+  razorpayPaymentId String?
+  createdAt         DateTime      @default(now())
+  paidAt            DateTime?
+
+  @@index([orgId, status])
 }
 
 // ---------- Platform admin (Eversity Tech LLP staff, not tied to any org) ----------

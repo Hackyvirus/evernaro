@@ -9,6 +9,7 @@ import {
   Menu,
   PanelLeftClose,
   PanelLeftOpen,
+  Receipt,
   Settings as SettingsIcon,
   Users,
 } from "lucide-react";
@@ -21,6 +22,7 @@ const NAV_ITEMS = [
   { href: "/campaigns", icon: Megaphone, label: "Campaigns" },
   { href: "/reminders", icon: Bell, label: "Reminders" },
   { href: "/analytics", icon: BarChart3, label: "Analytics" },
+  { href: "/billing", icon: Receipt, label: "Billing" },
   { href: "/settings", icon: SettingsIcon, label: "Settings" },
 ];
 

@@ -16,6 +16,7 @@ every client org).
   org users, one for platform admins
 - BullMQ + Redis — background jobs for bulk Campaigns and scheduled Reminders
 - Sentry — error monitoring (no-ops until `SENTRY_DSN` is set)
+- Razorpay — billing (no-ops until `RAZORPAY_KEY_ID`/`RAZORPAY_KEY_SECRET` are set)
 - Vitest — unit tests
 
 ## Local setup
@@ -77,6 +78,13 @@ validation, the org-scoping session guard), not full coverage. CI
   not part of the Next.js app — it consumes BullMQ jobs for Campaigns and
   Reminders. It needs to run continuously in production, which Vercel's
   serverless functions can't do (see Deployment below).
+- **Billing** (`src/lib/razorpay.ts`) uses Razorpay Orders + Checkout for a
+  one-time payment per invoice, not the Subscriptions product — Subscriptions
+  needs a Plan pre-created in the Razorpay dashboard, which needs a live
+  account to set up first. A platform admin generates an invoice (defaulting
+  to the org's monthly fee); the org owner pays it from their Billing page.
+  The webhook (`/api/webhooks/razorpay`) is the durable source of truth for
+  payment status — the client-side confirmation is just for fast UI feedback.
 
 ## Deployment
 
@@ -102,6 +110,11 @@ Before pointing this at real customers:
    visible once real traffic exists.
 4. Update `NEXT_PUBLIC_BASE_URL` to the real production URL before any client
    connects a channel — their webhook URLs are generated from it.
+5. Set `RAZORPAY_KEY_ID` / `NEXT_PUBLIC_RAZORPAY_KEY_ID` / `RAZORPAY_KEY_SECRET`
+   if you want invoices to be payable online, and configure a webhook in the
+   Razorpay dashboard pointing at `/api/webhooks/razorpay`, subscribed to
+   `payment.captured` and `payment.failed`, then set `RAZORPAY_WEBHOOK_SECRET`
+   to whatever secret you set there.
 
 ## Legal
 

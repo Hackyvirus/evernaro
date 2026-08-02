@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Building2 } from "lucide-react";
-import { Badge, EmptyState, StatCard } from "@/components/ui";
+import { Badge, Button, EmptyState, StatCard } from "@/components/ui";
 
 interface OrgChannel {
   type: string;
@@ -80,6 +80,7 @@ export default function PlatformClientsPage() {
                   <th className="py-2 font-medium">Conversations</th>
                   <th className="py-2 font-medium">Last activity</th>
                   <th className="py-2 font-medium">Monthly fee</th>
+                  <th className="py-2 font-medium">Billing</th>
                 </tr>
               </thead>
               <tbody>
@@ -98,6 +99,8 @@ export default function PlatformClientsPage() {
 function ClientRow({ org, onUpdated }: { org: OrgSummary; onUpdated: () => void }) {
   const [fee, setFee] = useState(org.monthlyFeeInr?.toString() ?? "");
   const [saving, setSaving] = useState(false);
+  const [invoicing, setInvoicing] = useState(false);
+  const [invoiceMessage, setInvoiceMessage] = useState<string | null>(null);
 
   async function saveFee() {
     setSaving(true);
@@ -113,6 +116,25 @@ function ClientRow({ org, onUpdated }: { org: OrgSummary; onUpdated: () => void 
     } finally {
       setSaving(false);
     }
+  }
+
+  async function generateInvoice() {
+    setInvoicing(true);
+    setInvoiceMessage(null);
+    try {
+      const res = await fetch(`/api/platform/organizations/${org.id}/invoices`, { method: "POST" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setInvoiceMessage(data.error ?? "Failed to create invoice");
+      } else if (data.warning) {
+        setInvoiceMessage(data.warning);
+      } else {
+        setInvoiceMessage("Invoice created");
+      }
+    } catch {
+      setInvoiceMessage("Network error — check your connection and try again.");
+    }
+    setInvoicing(false);
   }
 
   return (
@@ -162,6 +184,14 @@ function ClientRow({ org, onUpdated }: { org: OrgSummary; onUpdated: () => void 
             disabled={saving}
             placeholder="0"
           />
+        </div>
+      </td>
+      <td className="py-2">
+        <div className="flex flex-col items-start gap-1">
+          <Button size="sm" variant="secondary" loading={invoicing} onClick={generateInvoice}>
+            Generate invoice
+          </Button>
+          {invoiceMessage && <p className="max-w-[220px] text-xs text-text-muted">{invoiceMessage}</p>}
         </div>
       </td>
     </tr>
