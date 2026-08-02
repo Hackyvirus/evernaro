@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import {
+  BarChart3,
   Bell,
   Megaphone,
   MessageSquare,
@@ -19,6 +20,7 @@ const NAV_ITEMS = [
   { href: "/contacts", icon: Users, label: "Contacts" },
   { href: "/campaigns", icon: Megaphone, label: "Campaigns" },
   { href: "/reminders", icon: Bell, label: "Reminders" },
+  { href: "/analytics", icon: BarChart3, label: "Analytics" },
   { href: "/settings", icon: SettingsIcon, label: "Settings" },
 ];
 

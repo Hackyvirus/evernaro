@@ -86,7 +86,7 @@ into once you're ready:
 | Piece | Where | Why |
 |---|---|---|
 | Next.js app | Vercel | Natural fit for the framework; serverless functions handle the web/API traffic. |
-| Worker (`npm run worker`) | Railway / Render / Fly.io (or similar) | Needs to run continuously — Vercel can't host a long-lived process. |
+| Worker (`Dockerfile.worker`) | Railway / Render / Fly.io (or similar) | Needs to run continuously — Vercel can't host a long-lived process. The Dockerfile is ready to point any of these at directly. |
 | Redis | Upstash, or the worker host's managed Redis | `localhost:6379` only works for local dev. |
 | Postgres | Neon (already in use) | Confirm your plan tier includes point-in-time backups before relying on it for real client data. |
 

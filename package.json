@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "worker": "tsx watch src/workers/index.ts",
+    "worker:start": "tsx src/workers/index.ts",
     "test": "vitest run"
   },
   "dependencies": {

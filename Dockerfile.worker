@@ -1,0 +1,25 @@
+# Deploys the standalone BullMQ worker process (src/workers/index.ts) —
+# Campaigns, Reminders, and Voice calls are processed here, separately from
+# the Next.js web app. Needs a long-lived host (Railway/Render/Fly.io), not
+# a serverless platform.
+#
+# Build:  docker build -f Dockerfile.worker -t everreach-worker .
+# Run:    docker run --env-file .env everreach-worker
+#
+# Requires the same environment variables as the web app (DATABASE_URL,
+# REDIS_URL, ENCRYPTION_KEY, channel provider keys, etc. — see .env.example).
+
+FROM node:20-slim
+
+WORKDIR /app
+
+COPY package.json package-lock.json ./
+RUN npm ci
+
+COPY prisma ./prisma
+RUN npx prisma generate
+
+COPY src ./src
+COPY tsconfig.json ./
+
+CMD ["npm", "run", "worker:start"]

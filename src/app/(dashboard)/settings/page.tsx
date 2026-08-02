@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Badge, Button, Input, Select, Textarea } from "@/components/ui";
+import { Badge, Button, Card, Input, Select, Textarea } from "@/components/ui";
+import { VERTICAL_PRESETS } from "@/lib/vertical-presets";
 
 type Tab = "profile" | "telegram" | "email" | "whatsapp" | "instagram" | "voice";
 
@@ -205,6 +206,37 @@ function BusinessProfileTab() {
       <p className="text-sm text-text-secondary">
         This powers the AI draft-reply engine — the more detail here, the better its replies.
       </p>
+
+      <Card className="flex flex-col gap-2 p-3">
+        <p className="text-xs font-medium text-text">Quick start</p>
+        <p className="text-xs text-text-secondary">
+          Prefill this form with a starting point for your industry — nothing saves until you hit
+          Save below, so review and edit before that.
+        </p>
+        <div className="flex flex-wrap gap-2 pt-1">
+          {VERTICAL_PRESETS.map((preset) => (
+            <Button
+              key={preset.id}
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={() =>
+                setForm({
+                  ...form,
+                  industry: preset.businessProfile.industry,
+                  description: preset.businessProfile.description,
+                  tone: preset.businessProfile.tone,
+                  knowledgeBase: preset.businessProfile.knowledgeBase,
+                  signOff: preset.businessProfile.signOff,
+                })
+              }
+            >
+              Use {preset.label} starter
+            </Button>
+          ))}
+        </div>
+      </Card>
+
       <Input
         label="Business name"
         value={form.businessName}
@@ -665,6 +697,34 @@ function WhatsAppTemplates() {
           through Meta review via Gupshup, which can take anywhere from minutes to a couple of days.
         </p>
       </div>
+
+      {loaded && templates.length === 0 && (
+        <Card className="flex flex-col gap-2 p-3">
+          <p className="text-xs font-medium text-text">Suggested for Real Estate</p>
+          <div className="flex flex-col gap-2">
+            {VERTICAL_PRESETS.find((p) => p.id === "real-estate")?.whatsappTemplates.map((t) => (
+              <div key={t.name} className="flex items-center justify-between gap-3 rounded-md bg-surface px-3 py-2">
+                <div>
+                  <p className="font-mono text-xs text-text">{t.name}</p>
+                  <p className="text-xs text-text-secondary">{t.description}</p>
+                </div>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => {
+                    setName(t.name);
+                    setCategory(t.category);
+                    setBodyText(t.bodyText);
+                  }}
+                >
+                  Use this
+                </Button>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
 
       {loaded && templates.length > 0 && (
         <ul className="flex flex-col gap-2">
