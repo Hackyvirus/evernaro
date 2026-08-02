@@ -1,26 +1,146 @@
 @import "tailwindcss";
 
+/* ---------- Design tokens — light (default) ---------- */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --color-bg: #ffffff;
+  --color-surface: #f8fafc;
+  --color-card: #ffffff;
+  --color-card-elevated: #ffffff;
+  --color-text: #111827;
+  --color-text-secondary: #64748b;
+  --color-text-muted: #94a3b8;
+  --color-border: #e5e7eb;
+  --color-hover: #f1f5f9;
+
+  --color-primary: #16a34a;
+  --color-primary-hover: #15803d;
+  --color-primary-light: #dcfce7;
+  --color-primary-lighter: #f0fdf4;
+
+  --color-accent: #f97316;
+  --color-accent-light: #ffedd5;
+
+  --color-success: #22c55e;
+  --color-success-light: #dcfce7;
+  --color-warning: #f59e0b;
+  --color-warning-light: #fef3c7;
+  --color-danger: #ef4444;
+  --color-danger-light: #fee2e2;
+  --color-info: #3b82f6;
+  --color-info-light: #dbeafe;
+
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+
+  --shadow-card: 0 1px 2px 0 rgb(0 0 0 / 0.04);
+  --shadow-elevated: 0 4px 12px 0 rgb(0 0 0 / 0.08);
 }
 
+/* ---------- Design tokens — dark ---------- */
+[data-theme="dark"] {
+  --color-bg: #0f1115;
+  --color-surface: #151922;
+  --color-card: #181c25;
+  --color-card-elevated: #1e2430;
+  --color-text: #f8fafc;
+  --color-text-secondary: #a1a1aa;
+  --color-text-muted: #71717a;
+  --color-border: #272d38;
+  --color-hover: #222936;
+
+  --color-primary: #22c55e;
+  --color-primary-hover: #16a34a;
+  --color-primary-light: rgb(34 197 94 / 0.16);
+  --color-primary-lighter: rgb(34 197 94 / 0.08);
+
+  --color-accent: #fb923c;
+  --color-accent-light: rgb(251 146 60 / 0.16);
+
+  --color-success: #22c55e;
+  --color-success-light: rgb(34 197 94 / 0.16);
+  --color-warning: #f59e0b;
+  --color-warning-light: rgb(245 158 11 / 0.16);
+  --color-danger: #f87171;
+  --color-danger-light: rgb(248 113 113 / 0.16);
+  --color-info: #60a5fa;
+  --color-info-light: rgb(96 165 250 / 0.16);
+
+  --shadow-card: 0 1px 2px 0 rgb(0 0 0 / 0.24);
+  --shadow-elevated: 0 8px 24px 0 rgb(0 0 0 / 0.4);
+}
+
+/* Tailwind utility generation from the tokens above — e.g. bg-primary,
+   text-text-secondary, border-border, rounded-lg, etc. */
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-bg: var(--color-bg);
+  --color-surface: var(--color-surface);
+  --color-card: var(--color-card);
+  --color-card-elevated: var(--color-card-elevated);
+  --color-text: var(--color-text);
+  --color-text-secondary: var(--color-text-secondary);
+  --color-text-muted: var(--color-text-muted);
+  --color-border: var(--color-border);
+  --color-hover: var(--color-hover);
+
+  --color-primary: var(--color-primary);
+  --color-primary-hover: var(--color-primary-hover);
+  --color-primary-light: var(--color-primary-light);
+  --color-primary-lighter: var(--color-primary-lighter);
+
+  --color-accent: var(--color-accent);
+  --color-accent-light: var(--color-accent-light);
+
+  --color-success: var(--color-success);
+  --color-success-light: var(--color-success-light);
+  --color-warning: var(--color-warning);
+  --color-warning-light: var(--color-warning-light);
+  --color-danger: var(--color-danger);
+  --color-danger-light: var(--color-danger-light);
+  --color-info: var(--color-info);
+  --color-info-light: var(--color-info-light);
+
+  --radius-sm: var(--radius-sm);
+  --radius-md: var(--radius-md);
+  --radius-lg: var(--radius-lg);
+  --radius-xl: var(--radius-xl);
+
+  --font-sans: var(--font-inter);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+* {
+  border-color: var(--color-border);
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-inter), ui-sans-serif, system-ui, -apple-system,
+    BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+/* Every interactive element gets a visible, consistent focus ring —
+   accessibility is not optional per the design system. */
+a,
+button,
+input,
+select,
+textarea,
+[tabindex] {
+  transition:
+    background-color 150ms ease,
+    border-color 150ms ease,
+    color 150ms ease,
+    box-shadow 150ms ease;
+}
+
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
 }

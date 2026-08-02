@@ -1,0 +1,365 @@
+// EverReach — multi-tenant omnichannel inbox
+// learn more about Prisma schema: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ---------- Tenant ----------
+
+model Organization {
+  id            String   @id @default(cuid())
+  name          String
+  slug          String   @unique
+  monthlyFeeInr Int? // set manually by the platform admin — no billing integration yet
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  users           User[]
+  channels        Channel[]
+  contacts        Contact[]
+  conversations   Conversation[]
+  campaigns       Campaign[]
+  reminders       Reminder[]
+  callLogs        CallLog[]
+  businessProfile BusinessProfile?
+}
+
+// ---------- Platform admin (Eversity Tech LLP staff, not tied to any org) ----------
+
+model PlatformAdmin {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  name         String
+  createdAt    DateTime @default(now())
+}
+
+model User {
+  id           String       @id @default(cuid())
+  orgId        String
+  org          Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  email        String       @unique
+  passwordHash String
+  name         String
+  role         UserRole     @default(OWNER)
+  createdAt    DateTime     @default(now())
+}
+
+enum UserRole {
+  OWNER
+  ADMIN
+  AGENT
+}
+
+// One business profile per org — feeds the AI draft-reply engine.
+model BusinessProfile {
+  id            String       @id @default(cuid())
+  orgId         String       @unique
+  org           Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  businessName  String
+  industry      String?
+  description   String       @default("") // what the business does, who its customers are
+  tone          String       @default("friendly and professional")
+  knowledgeBase String       @default("") // FAQs, pricing, policies — free text fed to the AI
+  signOff       String       @default("")
+  updatedAt     DateTime     @updatedAt
+}
+
+// ---------- Channels ----------
+
+enum ChannelType {
+  TELEGRAM
+  EMAIL
+  WHATSAPP
+  INSTAGRAM
+  VOICE
+}
+
+model Channel {
+  id       String       @id @default(cuid())
+  orgId    String
+  org      Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  type     ChannelType
+  isActive Boolean      @default(true)
+
+  // Telegram
+  telegramBotToken    String?
+  telegramBotUsername String?
+
+  // Email
+  emailAddress  String? // the inbound address this org receives replies on
+  emailFromName String?
+  resendApiKey  String? // optional per-org override; falls back to platform key
+
+  // WhatsApp (via Gupshup as BSP)
+  whatsappApiKey       String? // Gupshup app API key
+  whatsappAppName      String? // Gupshup app name
+  whatsappAppId        String? // Gupshup app ID (GUID, from the Gupshup dashboard) — needed for template management, distinct from the app name used for sending
+  whatsappSourceNumber String? // the registered WhatsApp business number (E.164, no +)
+
+  // Instagram (Meta Graph API, via the linked Facebook Page)
+  instagramPageAccessToken String? // Page access token with instagram_manage_messages
+  instagramPageId          String? // Facebook Page ID linked to the IG professional account
+  instagramUsername        String? // for display only
+
+  // Voice (Twilio) — reminder calls only, never bulk/cold-calling. See Reminder.
+  twilioAccountSid String?
+  twilioAuthToken  String?
+  twilioFromNumber String? // the Twilio caller ID number, E.164
+  voiceLanguage    String  @default("en-IN") // TwiML Say language code
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  conversations     Conversation[]
+  campaigns         Campaign[]
+  reminders         Reminder[]
+  callLogs          CallLog[]
+  whatsappTemplates WhatsAppTemplate[]
+
+  @@unique([orgId, type])
+}
+
+// ---------- WhatsApp templates ----------
+//
+// Meta requires any WhatsApp message sent outside a 24-hour window since the
+// contact's last inbound message to use a pre-approved template — free-form
+// text is rejected. Campaigns and Reminders are proactive sends (usually
+// outside that window), so they must go through an APPROVED template rather
+// than the free-text path used by inbox replies.
+
+enum WhatsAppTemplateCategory {
+  MARKETING
+  UTILITY
+}
+
+enum WhatsAppTemplateStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model WhatsAppTemplate {
+  id                String                   @id @default(cuid())
+  channelId         String
+  channel           Channel                  @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  name              String // Gupshup/Meta element name — lowercase_underscore, immutable once submitted
+  category          WhatsAppTemplateCategory @default(UTILITY)
+  language          String                   @default("en")
+  bodyText          String // e.g. "Hi {{1}}, your appointment is on {{2}}." — {{1}} filled with contact name for now
+  gupshupTemplateId String? // returned by Gupshup once submitted
+  status            WhatsAppTemplateStatus   @default(PENDING)
+  rejectionReason   String?
+  createdAt         DateTime                 @default(now())
+  updatedAt         DateTime                 @updatedAt
+
+  campaigns Campaign[]
+  reminders Reminder[]
+
+  @@unique([channelId, name])
+  @@index([channelId])
+}
+
+// ---------- Contacts & Conversations ----------
+
+model Contact {
+  id              String       @id @default(cuid())
+  orgId           String
+  org             Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  name            String?
+  telegramChatId  String?
+  email           String?
+  phone           String? // E.164, also used as the WhatsApp identifier
+  instagramUserId String? // Instagram-scoped user ID (IGSID) from the webhook payload
+  createdAt       DateTime     @default(now())
+
+  conversations      Conversation[]
+  campaignRecipients CampaignRecipient[]
+  reminders          Reminder[]
+  callLogs           CallLog[]
+
+  @@index([orgId])
+}
+
+enum ConversationStatus {
+  OPEN
+  CLOSED
+}
+
+model Conversation {
+  id            String             @id @default(cuid())
+  orgId         String
+  org           Organization       @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  contactId     String
+  contact       Contact            @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  channelId     String
+  channel       Channel            @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  status        ConversationStatus @default(OPEN)
+  subject       String? // used for email threads
+  lastMessageAt DateTime           @default(now())
+  createdAt     DateTime           @default(now())
+
+  messages Message[]
+
+  @@index([orgId, status])
+}
+
+enum MessageDirection {
+  INBOUND
+  OUTBOUND
+}
+
+enum MessageSender {
+  CONTACT
+  AGENT
+  AI
+}
+
+model Message {
+  id             String           @id @default(cuid())
+  conversationId String
+  conversation   Conversation     @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  direction      MessageDirection
+  sender         MessageSender
+  body           String
+  isAiDraft      Boolean          @default(false) // true = suggested reply not yet sent
+  createdAt      DateTime         @default(now())
+
+  @@index([conversationId])
+}
+
+// ---------- Bulk campaigns ----------
+
+enum CampaignStatus {
+  DRAFT
+  QUEUED
+  SENDING
+  COMPLETED
+  FAILED
+}
+
+model Campaign {
+  id                 String            @id @default(cuid())
+  orgId              String
+  org                Organization      @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  channelId          String
+  channel            Channel           @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  name               String
+  messageTemplate    String // supports {{name}} placeholder, substituted per-recipient; for WhatsApp-with-template campaigns this mirrors the template body for display only — the send path uses whatsappTemplateId
+  whatsappTemplateId String?
+  whatsappTemplate   WhatsAppTemplate? @relation(fields: [whatsappTemplateId], references: [id])
+  status             CampaignStatus    @default(DRAFT)
+  totalRecipients    Int               @default(0)
+  sentCount          Int               @default(0)
+  failedCount        Int               @default(0)
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+
+  recipients CampaignRecipient[]
+
+  @@index([orgId])
+}
+
+enum RecipientStatus {
+  PENDING
+  SENT
+  FAILED
+}
+
+model CampaignRecipient {
+  id         String          @id @default(cuid())
+  campaignId String
+  campaign   Campaign        @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  contactId  String
+  contact    Contact         @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  status     RecipientStatus @default(PENDING)
+  error      String?
+  sentAt     DateTime?
+
+  @@index([campaignId])
+}
+
+// ---------- Reminders ----------
+
+enum ReminderRecurrence {
+  NONE
+  DAILY
+  WEEKLY
+  MONTHLY
+}
+
+enum ReminderStatus {
+  PENDING
+  SENT
+  CANCELLED
+  FAILED
+}
+
+model Reminder {
+  id                 String             @id @default(cuid())
+  orgId              String
+  org                Organization       @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  contactId          String
+  contact            Contact            @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  channelId          String
+  channel            Channel            @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  message            String
+  whatsappTemplateId String?
+  whatsappTemplate   WhatsAppTemplate?  @relation(fields: [whatsappTemplateId], references: [id])
+  scheduledFor       DateTime
+  recurrence         ReminderRecurrence @default(NONE)
+  status             ReminderStatus     @default(PENDING)
+  error              String? // why the last send attempt failed, if it did
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+
+  callLogs CallLog[]
+
+  @@index([orgId, status])
+  @@index([scheduledFor])
+}
+
+// ---------- Voice calling ----------
+//
+// Deliberately scoped to reminder calls only (appointment/payment/follow-up
+// to existing contacts) — never wired into bulk Campaigns. India's TRAI/DND
+// rules on automated and unsolicited calling make bulk/cold outbound voice a
+// real compliance risk; the plan this app follows explicitly calls for
+// starting with low-risk reminder calls only. See the Settings > Voice tab
+// copy for the same caveat surfaced to the user.
+
+enum CallStatus {
+  INITIATED
+  RINGING
+  IN_PROGRESS
+  COMPLETED
+  FAILED
+  NO_ANSWER
+  BUSY
+}
+
+model CallLog {
+  id            String       @id @default(cuid())
+  orgId         String
+  org           Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  contactId     String
+  contact       Contact      @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  channelId     String
+  channel       Channel      @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  reminderId    String?
+  reminder      Reminder?    @relation(fields: [reminderId], references: [id], onDelete: SetNull)
+  twilioCallSid String?
+  message       String // the text that was/will be spoken
+  status        CallStatus   @default(INITIATED)
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  @@index([orgId])
+}

@@ -1,0 +1,169 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import Link from "next/link";
+import { Building2 } from "lucide-react";
+import { Badge, EmptyState, StatCard } from "@/components/ui";
+
+interface OrgChannel {
+  type: string;
+  isActive: boolean;
+}
+
+interface OrgSummary {
+  id: string;
+  name: string;
+  slug: string;
+  createdAt: string;
+  monthlyFeeInr: number | null;
+  owner: { name: string; email: string } | null;
+  channels: OrgChannel[];
+  contactCount: number;
+  conversationCount: number;
+  lastActivityAt: string | null;
+}
+
+export default function PlatformClientsPage() {
+  const [orgs, setOrgs] = useState<OrgSummary[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  function refresh() {
+    fetch("/api/platform/organizations")
+      .then((r) => r.json())
+      .then((d) => setOrgs(d.organizations ?? []))
+      .finally(() => setLoading(false));
+  }
+
+  useEffect(refresh, []);
+
+  const mrr = orgs.reduce((sum, o) => sum + (o.monthlyFeeInr ?? 0), 0);
+  const activeChannelCount = orgs.reduce(
+    (sum, o) => sum + o.channels.filter((c) => c.isActive).length,
+    0
+  );
+
+  return (
+    <div className="flex flex-1 flex-col overflow-y-auto">
+      <header className="border-b border-border px-6 py-4">
+        <h1 className="text-lg font-semibold text-text">Clients</h1>
+        <p className="text-sm text-text-secondary">Every organization on EverReach.</p>
+      </header>
+
+      <div className="grid grid-cols-3 gap-4 border-b border-border px-6 py-4">
+        <StatCard label="Clients" value={String(orgs.length)} />
+        <StatCard label="MRR (manual)" value={`₹${mrr.toLocaleString("en-IN")}`} />
+        <StatCard label="Active channel connections" value={String(activeChannelCount)} />
+      </div>
+
+      <div className="px-6 py-4">
+        {loading ? (
+          <p className="text-sm text-text-secondary">Loading...</p>
+        ) : orgs.length === 0 ? (
+          <EmptyState
+            icon={Building2}
+            title="No clients yet"
+            action={
+              <Link href="/platform/clients/new" className="cursor-pointer text-sm text-primary hover:text-primary-hover">
+                Add one
+              </Link>
+            }
+          />
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <thead>
+                <tr className="border-b border-border text-text-secondary">
+                  <th className="py-2 font-medium">Client</th>
+                  <th className="py-2 font-medium">Owner</th>
+                  <th className="py-2 font-medium">Channels</th>
+                  <th className="py-2 font-medium">Contacts</th>
+                  <th className="py-2 font-medium">Conversations</th>
+                  <th className="py-2 font-medium">Last activity</th>
+                  <th className="py-2 font-medium">Monthly fee</th>
+                </tr>
+              </thead>
+              <tbody>
+                {orgs.map((org) => (
+                  <ClientRow key={org.id} org={org} onUpdated={refresh} />
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ClientRow({ org, onUpdated }: { org: OrgSummary; onUpdated: () => void }) {
+  const [fee, setFee] = useState(org.monthlyFeeInr?.toString() ?? "");
+  const [saving, setSaving] = useState(false);
+
+  async function saveFee() {
+    setSaving(true);
+    try {
+      await fetch(`/api/platform/organizations/${org.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ monthlyFeeInr: fee === "" ? null : Number(fee) }),
+      });
+      onUpdated();
+    } catch {
+      // best-effort — the field just won't update; no destructive state to unwind
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <tr className="border-b border-border transition-colors hover:bg-hover">
+      <td className="py-2 text-text">
+        {org.name}
+        <p className="text-xs text-text-muted">
+          Since {new Date(org.createdAt).toLocaleDateString()}
+        </p>
+      </td>
+      <td className="py-2 text-text-secondary">
+        {org.owner ? (
+          <>
+            {org.owner.name}
+            <p className="text-xs text-text-muted">{org.owner.email}</p>
+          </>
+        ) : (
+          "—"
+        )}
+      </td>
+      <td className="py-2">
+        {org.channels.length === 0 ? (
+          <span className="text-text-muted">none connected</span>
+        ) : (
+          <div className="flex flex-wrap gap-1">
+            {org.channels.map((c) => (
+              <Badge key={c.type} variant={c.isActive ? "success" : "default"}>
+                {c.type}
+              </Badge>
+            ))}
+          </div>
+        )}
+      </td>
+      <td className="py-2 text-text-secondary">{org.contactCount}</td>
+      <td className="py-2 text-text-secondary">{org.conversationCount}</td>
+      <td className="py-2 text-text-secondary">
+        {org.lastActivityAt ? new Date(org.lastActivityAt).toLocaleString() : "—"}
+      </td>
+      <td className="py-2">
+        <div className="flex items-center gap-1">
+          <span className="text-text-muted">₹</span>
+          <input
+            className="h-8 w-20 rounded-md border border-border bg-card px-2 text-xs text-text outline-none transition-colors focus:border-primary disabled:cursor-not-allowed disabled:opacity-50"
+            value={fee}
+            onChange={(e) => setFee(e.target.value.replace(/[^0-9]/g, ""))}
+            onBlur={saveFee}
+            disabled={saving}
+            placeholder="0"
+          />
+        </div>
+      </td>
+    </tr>
+  );
+}
