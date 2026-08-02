@@ -69,18 +69,18 @@ export default function PlatformClientsPage() {
             }
           />
         ) : (
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto rounded-md border border-border">
             <table className="w-full text-left text-sm">
               <thead>
-                <tr className="border-b border-border text-text-secondary">
-                  <th className="py-2 font-medium">Client</th>
-                  <th className="py-2 font-medium">Owner</th>
-                  <th className="py-2 font-medium">Channels</th>
-                  <th className="py-2 font-medium">Contacts</th>
-                  <th className="py-2 font-medium">Conversations</th>
-                  <th className="py-2 font-medium">Last activity</th>
-                  <th className="py-2 font-medium">Monthly fee</th>
-                  <th className="py-2 font-medium">Billing</th>
+                <tr className="border-b border-border bg-surface text-text-secondary">
+                  <th className="px-3 py-2.5 text-xs font-semibold tracking-wide uppercase">Client</th>
+                  <th className="px-3 py-2.5 text-xs font-semibold tracking-wide uppercase">Owner</th>
+                  <th className="px-3 py-2.5 text-xs font-semibold tracking-wide uppercase">Channels</th>
+                  <th className="px-3 py-2.5 text-xs font-semibold tracking-wide uppercase">Contacts</th>
+                  <th className="px-3 py-2.5 text-xs font-semibold tracking-wide uppercase">Conversations</th>
+                  <th className="px-3 py-2.5 text-xs font-semibold tracking-wide uppercase">Last activity</th>
+                  <th className="px-3 py-2.5 text-xs font-semibold tracking-wide uppercase">Monthly fee</th>
+                  <th className="px-3 py-2.5 text-xs font-semibold tracking-wide uppercase">Billing</th>
                 </tr>
               </thead>
               <tbody>
@@ -138,14 +138,14 @@ function ClientRow({ org, onUpdated }: { org: OrgSummary; onUpdated: () => void 
   }
 
   return (
-    <tr className="border-b border-border transition-colors hover:bg-hover">
-      <td className="py-2 text-text">
+    <tr className="border-b border-border last:border-b-0 transition-colors hover:bg-hover">
+      <td className="px-3 py-2.5 text-text">
         {org.name}
         <p className="text-xs text-text-muted">
           Since {new Date(org.createdAt).toLocaleDateString()}
         </p>
       </td>
-      <td className="py-2 text-text-secondary">
+      <td className="px-3 py-2.5 text-text-secondary">
         {org.owner ? (
           <>
             {org.owner.name}
@@ -155,7 +155,7 @@ function ClientRow({ org, onUpdated }: { org: OrgSummary; onUpdated: () => void 
           "—"
         )}
       </td>
-      <td className="py-2">
+      <td className="px-3 py-2.5">
         {org.channels.length === 0 ? (
           <span className="text-text-muted">none connected</span>
         ) : (
@@ -168,12 +168,12 @@ function ClientRow({ org, onUpdated }: { org: OrgSummary; onUpdated: () => void 
           </div>
         )}
       </td>
-      <td className="py-2 text-text-secondary">{org.contactCount}</td>
-      <td className="py-2 text-text-secondary">{org.conversationCount}</td>
-      <td className="py-2 text-text-secondary">
+      <td className="px-3 py-2.5 text-text-secondary">{org.contactCount}</td>
+      <td className="px-3 py-2.5 text-text-secondary">{org.conversationCount}</td>
+      <td className="px-3 py-2.5 text-text-secondary">
         {org.lastActivityAt ? new Date(org.lastActivityAt).toLocaleString() : "—"}
       </td>
-      <td className="py-2">
+      <td className="px-3 py-2.5">
         <div className="flex items-center gap-1">
           <span className="text-text-muted">₹</span>
           <input
@@ -186,7 +186,7 @@ function ClientRow({ org, onUpdated }: { org: OrgSummary; onUpdated: () => void 
           />
         </div>
       </td>
-      <td className="py-2">
+      <td className="px-3 py-2.5">
         <div className="flex flex-col items-start gap-1">
           <Button size="sm" variant="secondary" loading={invoicing} onClick={generateInvoice}>
             Generate invoice

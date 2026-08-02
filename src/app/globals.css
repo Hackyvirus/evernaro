@@ -1,74 +1,79 @@
 @import "tailwindcss";
 
 /* ---------- Design tokens — light (default) ---------- */
+/* Enterprise-clean direction: a confident corporate blue as the brand color
+   (green is reserved strictly for the "success" semantic, never brand),
+   cooler blue-gray neutrals, sharper/smaller radii, and borders doing more
+   of the structural work than shadows — closer to Zoho/enterprise SaaS than
+   a soft consumer-startup look. */
 :root {
   --color-bg: #ffffff;
-  --color-surface: #f8fafc;
+  --color-surface: #f3f6fa;
   --color-card: #ffffff;
   --color-card-elevated: #ffffff;
-  --color-text: #111827;
-  --color-text-secondary: #64748b;
-  --color-text-muted: #94a3b8;
-  --color-border: #e5e7eb;
-  --color-hover: #f1f5f9;
+  --color-text: #16202f;
+  --color-text-secondary: #57647a;
+  --color-text-muted: #8592a6;
+  --color-border: #dbe2ec;
+  --color-hover: #eef2f8;
 
-  --color-primary: #16a34a;
-  --color-primary-hover: #15803d;
-  --color-primary-light: #dcfce7;
-  --color-primary-lighter: #f0fdf4;
+  --color-primary: #1a5fd0;
+  --color-primary-hover: #144aa6;
+  --color-primary-light: #dce8fb;
+  --color-primary-lighter: #eff5fd;
 
-  --color-accent: #f97316;
-  --color-accent-light: #ffedd5;
+  --color-accent: #b45309;
+  --color-accent-light: #fef3c7;
 
-  --color-success: #22c55e;
+  --color-success: #15803d;
   --color-success-light: #dcfce7;
-  --color-warning: #f59e0b;
+  --color-warning: #b45309;
   --color-warning-light: #fef3c7;
-  --color-danger: #ef4444;
+  --color-danger: #b91c1c;
   --color-danger-light: #fee2e2;
-  --color-info: #3b82f6;
-  --color-info-light: #dbeafe;
+  --color-info: #0e7490;
+  --color-info-light: #cffafe;
 
-  --radius-sm: 6px;
-  --radius-md: 8px;
-  --radius-lg: 12px;
-  --radius-xl: 16px;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 10px;
 
-  --shadow-card: 0 1px 2px 0 rgb(0 0 0 / 0.04);
-  --shadow-elevated: 0 4px 12px 0 rgb(0 0 0 / 0.08);
+  --shadow-card: 0 1px 2px 0 rgb(16 24 40 / 0.05);
+  --shadow-elevated: 0 4px 16px 0 rgb(16 24 40 / 0.12);
 }
 
 /* ---------- Design tokens — dark ---------- */
 [data-theme="dark"] {
-  --color-bg: #0f1115;
-  --color-surface: #151922;
-  --color-card: #181c25;
-  --color-card-elevated: #1e2430;
-  --color-text: #f8fafc;
-  --color-text-secondary: #a1a1aa;
-  --color-text-muted: #71717a;
-  --color-border: #272d38;
-  --color-hover: #222936;
+  --color-bg: #0b0f17;
+  --color-surface: #10151f;
+  --color-card: #151b27;
+  --color-card-elevated: #1a2130;
+  --color-text: #e7ecf5;
+  --color-text-secondary: #98a5bc;
+  --color-text-muted: #66738a;
+  --color-border: #232b3b;
+  --color-hover: #1c2433;
 
-  --color-primary: #22c55e;
-  --color-primary-hover: #16a34a;
-  --color-primary-light: rgb(34 197 94 / 0.16);
-  --color-primary-lighter: rgb(34 197 94 / 0.08);
+  --color-primary: #4c8dff;
+  --color-primary-hover: #6ba3ff;
+  --color-primary-light: rgb(76 141 255 / 0.18);
+  --color-primary-lighter: rgb(76 141 255 / 0.09);
 
-  --color-accent: #fb923c;
-  --color-accent-light: rgb(251 146 60 / 0.16);
+  --color-accent: #f0a835;
+  --color-accent-light: rgb(240 168 53 / 0.16);
 
-  --color-success: #22c55e;
-  --color-success-light: rgb(34 197 94 / 0.16);
-  --color-warning: #f59e0b;
-  --color-warning-light: rgb(245 158 11 / 0.16);
-  --color-danger: #f87171;
-  --color-danger-light: rgb(248 113 113 / 0.16);
-  --color-info: #60a5fa;
-  --color-info-light: rgb(96 165 250 / 0.16);
+  --color-success: #34d17d;
+  --color-success-light: rgb(52 209 125 / 0.16);
+  --color-warning: #f0a835;
+  --color-warning-light: rgb(240 168 53 / 0.16);
+  --color-danger: #f0645f;
+  --color-danger-light: rgb(240 100 95 / 0.16);
+  --color-info: #22c1e0;
+  --color-info-light: rgb(34 193 224 / 0.16);
 
-  --shadow-card: 0 1px 2px 0 rgb(0 0 0 / 0.24);
-  --shadow-elevated: 0 8px 24px 0 rgb(0 0 0 / 0.4);
+  --shadow-card: 0 1px 2px 0 rgb(0 0 0 / 0.3);
+  --shadow-elevated: 0 8px 28px 0 rgb(0 0 0 / 0.45);
 }
 
 /* Tailwind utility generation from the tokens above — e.g. bg-primary,
@@ -118,6 +123,11 @@ body {
   color: var(--color-text);
   font-family: var(--font-inter), ui-sans-serif, system-ui, -apple-system,
     BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+}
+
+h1, h2, h3 {
+  letter-spacing: -0.01em;
 }
 
 /* Every interactive element gets a visible, consistent focus ring —

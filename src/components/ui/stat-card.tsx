@@ -1,8 +1,8 @@
 export function StatCard({ label, value }: { label: string; value: string }) {
   return (
-    <div>
-      <p className="text-2xl font-semibold text-text">{value}</p>
-      <p className="text-xs text-text-secondary">{label}</p>
+    <div className="rounded-md border border-border bg-card px-4 py-3">
+      <p className="text-xs font-medium tracking-wide text-text-secondary uppercase">{label}</p>
+      <p className="mt-1 text-2xl font-semibold text-text tabular-nums">{value}</p>
     </div>
   );
 }

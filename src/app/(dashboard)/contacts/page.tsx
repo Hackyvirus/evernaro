@@ -118,25 +118,25 @@ export default function ContactsPage() {
           ) : contacts.length === 0 ? (
             <EmptyState icon={Users} title="No contacts yet" description="Add one using the form." />
           ) : (
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto rounded-md border border-border">
               <table className="w-full text-left text-sm">
                 <thead>
-                  <tr className="border-b border-border text-text-secondary">
-                    <th className="py-2 font-medium">Name</th>
-                    <th className="py-2 font-medium">Email</th>
-                    <th className="py-2 font-medium">Phone</th>
-                    <th className="py-2 font-medium">Telegram</th>
-                    <th className="py-2 font-medium">Instagram</th>
+                  <tr className="border-b border-border bg-surface text-text-secondary">
+                    <th className="px-3 py-2.5 text-xs font-semibold tracking-wide uppercase">Name</th>
+                    <th className="px-3 py-2.5 text-xs font-semibold tracking-wide uppercase">Email</th>
+                    <th className="px-3 py-2.5 text-xs font-semibold tracking-wide uppercase">Phone</th>
+                    <th className="px-3 py-2.5 text-xs font-semibold tracking-wide uppercase">Telegram</th>
+                    <th className="px-3 py-2.5 text-xs font-semibold tracking-wide uppercase">Instagram</th>
                   </tr>
                 </thead>
                 <tbody>
                   {contacts.map((c) => (
-                    <tr key={c.id} className="border-b border-border transition-colors hover:bg-hover">
-                      <td className="py-2 text-text">{c.name ?? "—"}</td>
-                      <td className="py-2 text-text-secondary">{c.email ?? "—"}</td>
-                      <td className="py-2 text-text-secondary">{c.phone ?? "—"}</td>
-                      <td className="py-2 text-text-secondary">{c.telegramChatId ?? "—"}</td>
-                      <td className="py-2 text-text-secondary">{c.instagramUserId ?? "—"}</td>
+                    <tr key={c.id} className="border-b border-border last:border-b-0 transition-colors hover:bg-hover">
+                      <td className="px-3 py-2.5 text-text">{c.name ?? "—"}</td>
+                      <td className="px-3 py-2.5 text-text-secondary">{c.email ?? "—"}</td>
+                      <td className="px-3 py-2.5 text-text-secondary">{c.phone ?? "—"}</td>
+                      <td className="px-3 py-2.5 text-text-secondary">{c.telegramChatId ?? "—"}</td>
+                      <td className="px-3 py-2.5 text-text-secondary">{c.instagramUserId ?? "—"}</td>
                     </tr>
                   ))}
                 </tbody>

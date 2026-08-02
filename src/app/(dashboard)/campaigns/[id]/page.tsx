@@ -91,23 +91,23 @@ export default function CampaignDetailPage({ params }: { params: Promise<{ id: s
           {campaign.messageTemplate}
         </p>
 
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto rounded-md border border-border">
           <table className="w-full text-left text-sm">
             <thead>
-              <tr className="border-b border-border text-text-secondary">
-                <th className="py-2 font-medium">Contact</th>
-                <th className="py-2 font-medium">Status</th>
-                <th className="py-2 font-medium">Detail</th>
+              <tr className="border-b border-border bg-surface text-text-secondary">
+                <th className="px-3 py-2.5 text-xs font-semibold tracking-wide uppercase">Contact</th>
+                <th className="px-3 py-2.5 text-xs font-semibold tracking-wide uppercase">Status</th>
+                <th className="px-3 py-2.5 text-xs font-semibold tracking-wide uppercase">Detail</th>
               </tr>
             </thead>
             <tbody>
               {campaign.recipients.map((r) => (
-                <tr key={r.id} className="border-b border-border transition-colors hover:bg-hover">
-                  <td className="py-2 text-text">{contactLabel(r.contact)}</td>
-                  <td className="py-2">
+                <tr key={r.id} className="border-b border-border last:border-b-0 transition-colors hover:bg-hover">
+                  <td className="px-3 py-2.5 text-text">{contactLabel(r.contact)}</td>
+                  <td className="px-3 py-2.5">
                     <Badge variant={statusVariant(r.status)}>{r.status}</Badge>
                   </td>
-                  <td className="py-2 text-text-secondary">{r.error ?? ""}</td>
+                  <td className="px-3 py-2.5 text-text-secondary">{r.error ?? ""}</td>
                 </tr>
               ))}
             </tbody>
