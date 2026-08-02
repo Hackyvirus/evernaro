@@ -1,13 +1,15 @@
 "use client";
 
 import { useState } from "react";
-import { Building2, Menu, PanelLeftClose, PanelLeftOpen, UserPlus } from "lucide-react";
+import { BarChart3, Building2, Menu, PanelLeftClose, PanelLeftOpen, Receipt, UserPlus } from "lucide-react";
 import { NavItem, ThemeToggle, useSidebarCollapsed } from "@/components/ui";
 import { PlatformSignOutButton } from "./sign-out-button";
 
 const NAV_ITEMS = [
   { href: "/platform", icon: Building2, label: "Clients", exact: true },
   { href: "/platform/clients/new", icon: UserPlus, label: "Add client" },
+  { href: "/platform/billing", icon: Receipt, label: "Billing" },
+  { href: "/platform/analytics", icon: BarChart3, label: "Analytics" },
 ];
 
 function SidebarContent({

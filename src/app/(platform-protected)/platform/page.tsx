@@ -140,7 +140,9 @@ function ClientRow({ org, onUpdated }: { org: OrgSummary; onUpdated: () => void 
   return (
     <tr className="border-b border-border last:border-b-0 transition-colors hover:bg-hover">
       <td className="px-3 py-2.5 text-text">
-        {org.name}
+        <Link href={`/platform/clients/${org.id}`} className="cursor-pointer font-medium hover:text-primary">
+          {org.name}
+        </Link>
         <p className="text-xs text-text-muted">
           Since {new Date(org.createdAt).toLocaleDateString()}
         </p>
