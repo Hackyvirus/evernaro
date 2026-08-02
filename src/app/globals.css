@@ -1,26 +1,25 @@
 @import "tailwindcss";
 
 /* ---------- Design tokens — light (default) ---------- */
-/* Enterprise-clean direction: a confident corporate blue as the brand color
-   (green is reserved strictly for the "success" semantic, never brand),
-   cooler blue-gray neutrals, sharper/smaller radii, and borders doing more
-   of the structural work than shadows — closer to Zoho/enterprise SaaS than
-   a soft consumer-startup look. */
+/* Udemy-inspired direction: clean white ground, a confident violet brand
+   color (green stays reserved strictly for the "success" semantic, never
+   brand), warm near-black text instead of cool slate, and a friendlier,
+   larger radius scale than a typical enterprise-SaaS look. */
 :root {
   --color-bg: #ffffff;
-  --color-surface: #f3f6fa;
+  --color-surface: #f7f7fb;
   --color-card: #ffffff;
   --color-card-elevated: #ffffff;
-  --color-text: #16202f;
-  --color-text-secondary: #57647a;
-  --color-text-muted: #8592a6;
-  --color-border: #dbe2ec;
-  --color-hover: #eef2f8;
+  --color-text: #1c1b1f;
+  --color-text-secondary: #5f5e66;
+  --color-text-muted: #8b8a92;
+  --color-border: #e4e2ea;
+  --color-hover: #f2f0f8;
 
-  --color-primary: #1a5fd0;
-  --color-primary-hover: #144aa6;
-  --color-primary-light: #dce8fb;
-  --color-primary-lighter: #eff5fd;
+  --color-primary: #7c3aed;
+  --color-primary-hover: #6d28d9;
+  --color-primary-light: #ede9fe;
+  --color-primary-lighter: #f5f3ff;
 
   --color-accent: #b45309;
   --color-accent-light: #fef3c7;
@@ -34,31 +33,34 @@
   --color-info: #0e7490;
   --color-info-light: #cffafe;
 
-  --radius-sm: 4px;
-  --radius-md: 6px;
-  --radius-lg: 8px;
-  --radius-xl: 10px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-full: 999px;
 
-  --shadow-card: 0 1px 2px 0 rgb(16 24 40 / 0.05);
-  --shadow-elevated: 0 4px 16px 0 rgb(16 24 40 / 0.12);
+  --shadow-card: 0 1px 2px 0 rgb(28 27 31 / 0.06);
+  --shadow-elevated: 0 4px 20px 0 rgb(28 27 31 / 0.12);
 }
 
 /* ---------- Design tokens — dark ---------- */
+/* Explicitly a warm charcoal, not black — the dark theme should read as its
+   own considered surface, not an inverted light theme. */
 [data-theme="dark"] {
-  --color-bg: #0b0f17;
-  --color-surface: #10151f;
-  --color-card: #151b27;
-  --color-card-elevated: #1a2130;
-  --color-text: #e7ecf5;
-  --color-text-secondary: #98a5bc;
-  --color-text-muted: #66738a;
-  --color-border: #232b3b;
-  --color-hover: #1c2433;
+  --color-bg: #17151c;
+  --color-surface: #1e1b26;
+  --color-card: #221f2b;
+  --color-card-elevated: #2a2633;
+  --color-text: #f3f1f7;
+  --color-text-secondary: #b3aebd;
+  --color-text-muted: #7d7887;
+  --color-border: #332f3d;
+  --color-hover: #2a2633;
 
-  --color-primary: #4c8dff;
-  --color-primary-hover: #6ba3ff;
-  --color-primary-light: rgb(76 141 255 / 0.18);
-  --color-primary-lighter: rgb(76 141 255 / 0.09);
+  --color-primary: #a78bfa;
+  --color-primary-hover: #c4b5fd;
+  --color-primary-light: rgb(167 139 250 / 0.18);
+  --color-primary-lighter: rgb(167 139 250 / 0.09);
 
   --color-accent: #f0a835;
   --color-accent-light: rgb(240 168 53 / 0.16);
@@ -110,8 +112,9 @@
   --radius-md: var(--radius-md);
   --radius-lg: var(--radius-lg);
   --radius-xl: var(--radius-xl);
+  --radius-full: var(--radius-full);
 
-  --font-sans: var(--font-inter);
+  --font-sans: var(--font-sans);
 }
 
 * {
@@ -121,13 +124,13 @@
 body {
   background: var(--color-bg);
   color: var(--color-text);
-  font-family: var(--font-inter), ui-sans-serif, system-ui, -apple-system,
+  font-family: var(--font-sans), ui-sans-serif, system-ui, -apple-system,
     BlinkMacSystemFont, "Segoe UI", sans-serif;
-  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
 }
 
 h1, h2, h3 {
-  letter-spacing: -0.01em;
+  font-weight: 700;
+  letter-spacing: -0.02em;
 }
 
 /* Every interactive element gets a visible, consistent focus ring —

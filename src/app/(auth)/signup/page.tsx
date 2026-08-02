@@ -56,7 +56,7 @@ export default function SignupPage() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-surface px-4">
       <Card className="w-full max-w-sm p-8">
-        <h1 className="text-xl font-semibold text-text">Create your EverReach account</h1>
+        <h1 className="text-2xl font-bold text-text">Create your EverReach account</h1>
         <p className="mt-1 text-sm text-text-secondary">By Eversity Tech LLP.</p>
 
         <form onSubmit={onSubmit} className="mt-6 flex flex-col gap-4">

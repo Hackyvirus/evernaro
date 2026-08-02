@@ -26,7 +26,7 @@ function SidebarContent({
       <div className={`mb-6 flex items-center ${collapsed ? "justify-center" : "justify-between px-2"}`}>
         {!collapsed && (
           <div>
-            <p className="text-sm font-semibold text-text">EverReach</p>
+            <p className="text-base font-extrabold tracking-tight text-primary">EverReach</p>
             <p className="text-xs text-text-secondary">Platform · {adminName}</p>
           </div>
         )}
@@ -79,7 +79,7 @@ export function PlatformShell({
         >
           <Menu className="h-[18px] w-[18px]" aria-hidden="true" />
         </button>
-        <p className="text-sm font-semibold text-text">EverReach</p>
+        <p className="text-base font-extrabold tracking-tight text-primary">EverReach</p>
         <ThemeToggle />
       </div>
 

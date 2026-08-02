@@ -50,7 +50,7 @@ export default async function Home() {
   return (
     <div className="flex flex-1 flex-col bg-surface">
       <header className="mx-auto flex w-full max-w-5xl items-center justify-between px-6 py-5">
-        <span className="text-sm font-semibold text-text">EverReach</span>
+        <span className="text-base font-extrabold tracking-tight text-primary">EverReach</span>
         <nav className="flex items-center gap-3">
           <Link href="/login" className="cursor-pointer text-sm text-text-secondary hover:text-text">
             Log in
@@ -64,7 +64,7 @@ export default async function Home() {
       <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-16 px-6 pt-8 pb-20">
         <section className="flex flex-col items-start gap-5">
           <p className="text-xs font-medium tracking-wide text-primary uppercase">By Eversity Tech LLP</p>
-          <h1 className="max-w-2xl text-4xl font-semibold text-text sm:text-5xl">
+          <h1 className="max-w-2xl text-5xl font-extrabold text-text sm:text-6xl">
             One inbox for every customer conversation.
           </h1>
           <p className="max-w-xl text-lg text-text-secondary">

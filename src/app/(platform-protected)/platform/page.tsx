@@ -45,7 +45,7 @@ export default function PlatformClientsPage() {
   return (
     <div className="flex flex-1 flex-col overflow-y-auto">
       <header className="border-b border-border px-6 py-4">
-        <h1 className="text-lg font-semibold text-text">Clients</h1>
+        <h1 className="text-xl font-bold text-text">Clients</h1>
         <p className="text-sm text-text-secondary">Every organization on EverReach.</p>
       </header>
 

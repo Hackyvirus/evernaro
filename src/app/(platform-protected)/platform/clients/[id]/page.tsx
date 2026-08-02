@@ -135,7 +135,7 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
           <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" />
           Back to clients
         </Link>
-        <h1 className="text-lg font-semibold text-text">{org.name}</h1>
+        <h1 className="text-xl font-bold text-text">{org.name}</h1>
         <p className="text-sm text-text-secondary">
           {org.slug} · Since {new Date(org.createdAt).toLocaleDateString()}
           {org.industry ? ` · ${org.industry}` : ""}

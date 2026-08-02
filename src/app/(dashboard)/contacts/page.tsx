@@ -67,7 +67,7 @@ export default function ContactsPage() {
   return (
     <div className="flex flex-1 flex-col overflow-y-auto">
       <header className="border-b border-border px-6 py-4">
-        <h1 className="text-lg font-semibold text-text">Contacts</h1>
+        <h1 className="text-xl font-bold text-text">Contacts</h1>
         <p className="text-sm text-text-secondary">
           Customers land here automatically from inbound messages — add one manually to test
           campaigns and reminders, or to reach someone before they&apos;ve messaged you.

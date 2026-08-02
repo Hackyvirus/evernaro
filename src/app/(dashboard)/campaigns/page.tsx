@@ -141,7 +141,7 @@ export default function CampaignsPage() {
   return (
     <div className="flex flex-1 flex-col overflow-y-auto">
       <header className="border-b border-border px-6 py-4">
-        <h1 className="text-lg font-semibold text-text">Campaigns</h1>
+        <h1 className="text-xl font-bold text-text">Campaigns</h1>
         <p className="text-sm text-text-secondary">
           Send a message to every contact reachable on a channel.
         </p>

@@ -160,7 +160,7 @@ export default function RemindersPage() {
   return (
     <div className="flex flex-1 flex-col overflow-y-auto">
       <header className="border-b border-border px-6 py-4">
-        <h1 className="text-lg font-semibold text-text">Reminders</h1>
+        <h1 className="text-xl font-bold text-text">Reminders</h1>
         <p className="text-sm text-text-secondary">
           Schedule appointment, payment, or follow-up messages — one-off or recurring.
         </p>

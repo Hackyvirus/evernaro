@@ -46,7 +46,7 @@ export default function NewClientPage() {
   return (
     <div className="flex flex-1 flex-col overflow-y-auto">
       <header className="border-b border-border px-6 py-4">
-        <h1 className="text-lg font-semibold text-text">Add client</h1>
+        <h1 className="text-xl font-bold text-text">Add client</h1>
         <p className="text-sm text-text-secondary">
           Create a client org and its owner account directly — for onboarding clients yourself
           rather than having them self-sign-up.

@@ -71,7 +71,7 @@ export default function AnalyticsPage() {
   return (
     <div className="flex flex-1 flex-col overflow-y-auto">
       <header className="border-b border-border px-6 py-4">
-        <h1 className="text-lg font-semibold text-text">Analytics</h1>
+        <h1 className="text-xl font-bold text-text">Analytics</h1>
         <p className="text-sm text-text-secondary">How your inbox is performing — last 30 days.</p>
       </header>
 

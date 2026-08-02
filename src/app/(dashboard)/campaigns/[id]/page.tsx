@@ -73,7 +73,7 @@ export default function CampaignDetailPage({ params }: { params: Promise<{ id: s
   return (
     <div className="flex flex-1 flex-col overflow-y-auto">
       <header className="border-b border-border px-6 py-4">
-        <h1 className="text-lg font-semibold text-text">{campaign.name}</h1>
+        <h1 className="text-xl font-bold text-text">{campaign.name}</h1>
         <p className="mt-1 flex items-center gap-2 text-sm text-text-secondary">
           {campaign.channel.type} · <Badge variant={statusVariant(campaign.status)}>{campaign.status}</Badge>
         </p>
