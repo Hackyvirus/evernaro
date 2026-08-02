@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { requireOrgId, UnauthorizedError } from "@/lib/session";
 import { enqueueReminder } from "@/lib/queue";
 import { contactReachableOn } from "@/lib/channel-reachability";
+import { whatsappSendRequiresTemplate } from "@/lib/whatsapp-template-validation";
 
 export async function GET() {
   try {
@@ -59,13 +60,13 @@ export async function POST(req: Request) {
       );
     }
 
+    if (whatsappSendRequiresTemplate(channel.type, whatsappTemplateId)) {
+      return NextResponse.json(
+        { error: "WhatsApp reminders require an approved message template — a scheduled send is outside the active-conversation window Meta requires for free text." },
+        { status: 400 }
+      );
+    }
     if (channel.type === "WHATSAPP") {
-      if (!whatsappTemplateId) {
-        return NextResponse.json(
-          { error: "WhatsApp reminders require an approved message template — a scheduled send is outside the active-conversation window Meta requires for free text." },
-          { status: 400 }
-        );
-      }
       const template = await prisma.whatsAppTemplate.findFirst({
         where: { id: whatsappTemplateId, channelId: channel.id, status: "APPROVED" },
       });

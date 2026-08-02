@@ -4,6 +4,8 @@ import { prisma } from "@/lib/prisma";
 import { requireOrgId, UnauthorizedError } from "@/lib/session";
 import { enqueueCampaignRecipient } from "@/lib/queue";
 import { CHANNEL_IDENTIFIER_FIELD } from "@/lib/channel-reachability";
+import { dailyCampaignRecipientLimit, dailyCampaignRecipientsUsed } from "@/lib/usage-limits";
+import { whatsappSendRequiresTemplate } from "@/lib/whatsapp-template-validation";
 
 export async function GET() {
   try {
@@ -49,13 +51,13 @@ export async function POST(req: Request) {
       );
     }
 
+    if (whatsappSendRequiresTemplate(channel.type, whatsappTemplateId)) {
+      return NextResponse.json(
+        { error: "WhatsApp campaigns require an approved message template — free text is rejected by Meta outside an active conversation." },
+        { status: 400 }
+      );
+    }
     if (channel.type === "WHATSAPP") {
-      if (!whatsappTemplateId) {
-        return NextResponse.json(
-          { error: "WhatsApp campaigns require an approved message template — free text is rejected by Meta outside an active conversation." },
-          { status: 400 }
-        );
-      }
       const template = await prisma.whatsAppTemplate.findFirst({
         where: { id: whatsappTemplateId, channelId: channel.id, status: "APPROVED" },
       });
@@ -77,6 +79,17 @@ export async function POST(req: Request) {
       return NextResponse.json(
         { error: `No contacts reachable on this channel yet` },
         { status: 400 }
+      );
+    }
+
+    const limit = dailyCampaignRecipientLimit();
+    const usedToday = await dailyCampaignRecipientsUsed(orgId);
+    if (usedToday + contacts.length > limit) {
+      return NextResponse.json(
+        {
+          error: `This would send to ${contacts.length} contacts, but only ${Math.max(limit - usedToday, 0)} remain of your ${limit}/day campaign limit. Contact support to raise it.`,
+        },
+        { status: 429 }
       );
     }
 

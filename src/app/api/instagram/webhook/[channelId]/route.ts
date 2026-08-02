@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { channelWebhookSecret, secureCompare } from "@/lib/webhook-secret";
 import { parseInstagramInboundBatch, type InstagramWebhookPayload } from "@/lib/instagram";
 import { generateDraftReply } from "@/lib/ai";
+import { checkRateLimit } from "@/lib/rate-limit";
 
 // Meta's webhook verification handshake — configure this exact URL (with the
 // query param below) as the callback URL in the Meta App's Webhooks product,
@@ -33,6 +34,13 @@ export async function POST(
     const secret = new URL(req.url).searchParams.get("secret");
     if (!secureCompare(secret, channelWebhookSecret(channelId))) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    // Bounds worst-case AI spend if the secret ever leaks or Meta retries
+    // runaway — 200 legitimate customer messages/minute is far more than any
+    // real conversation volume.
+    if (!(await checkRateLimit(`webhook:instagram:${channelId}`, 200, 60))) {
+      return NextResponse.json({ ok: true }); // 200, not 429 — Meta retries on non-2xx
     }
 
     const channel = await prisma.channel.findUnique({ where: { id: channelId } });

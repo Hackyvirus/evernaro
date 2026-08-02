@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - run: npx prisma generate
+
+      - name: Type-check
+        run: npx tsc --noEmit
+
+      - name: Lint
+        run: npx eslint .
+
+      - name: Test
+        run: npm test
+
+      - name: Build
+        run: npm run build
+        env:
+          # Placeholder values — the build never opens a real connection, it
+          # just needs env vars present for config validation to pass. Real
+          # secrets live in the deployment host's environment, never here.
+          DATABASE_URL: "postgresql://ci:ci@localhost:5432/ci"
+          DIRECT_URL: "postgresql://ci:ci@localhost:5432/ci"
+          AUTH_SECRET: "ci-only-placeholder-not-a-real-secret-32bytes"
+          AI_PROVIDER: "openai"
+          OPENAI_API_KEY: "sk-ci-placeholder"
+          ANTHROPIC_API_KEY: ""
+          RESEND_API_KEY: "re_ci_placeholder"
+          FROM_EMAIL: "onboarding@resend.dev"
+          NEXT_PUBLIC_BASE_URL: "http://localhost:3000"
+          INBOUND_EMAIL_WEBHOOK_SECRET: "ci-placeholder"
+          REDIS_URL: "redis://localhost:6379"
+          ENCRYPTION_KEY: "t839W+DYA1mBYNvgwYI/LrYYYToBb4JjbbF5CWJzpvU="
+          CAMPAIGN_RATE_PER_SECOND: "5"

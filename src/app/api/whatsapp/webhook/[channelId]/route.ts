@@ -4,6 +4,7 @@ import { channelWebhookSecret, secureCompare } from "@/lib/webhook-secret";
 import { parseGupshupInbound, type GupshupInboundPayload } from "@/lib/whatsapp";
 import { generateDraftReply } from "@/lib/ai";
 import { normalizePhone } from "@/lib/phone";
+import { checkRateLimit } from "@/lib/rate-limit";
 
 export async function POST(
   req: Request,
@@ -15,6 +16,13 @@ export async function POST(
     const secret = new URL(req.url).searchParams.get("secret");
     if (!secureCompare(secret, channelWebhookSecret(channelId))) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    // Bounds worst-case AI spend if the secret ever leaks or Gupshup retries
+    // runaway — 200 legitimate customer messages/minute is far more than any
+    // real conversation volume.
+    if (!(await checkRateLimit(`webhook:whatsapp:${channelId}`, 200, 60))) {
+      return NextResponse.json({ ok: true }); // 200, not 429 — Gupshup retries on non-2xx
     }
 
     const channel = await prisma.channel.findUnique({ where: { id: channelId } });

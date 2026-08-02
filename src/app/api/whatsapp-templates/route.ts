@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
-import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { requireOrgId, UnauthorizedError } from "@/lib/session";
 import { decryptSecret } from "@/lib/crypto";
 import { gupshupCreateTemplate } from "@/lib/whatsapp";
+import { whatsappTemplateBodySchema } from "@/lib/whatsapp-template-validation";
 
 export async function GET() {
   try {
@@ -25,22 +25,10 @@ export async function GET() {
   }
 }
 
-const bodySchema = z.object({
-  name: z
-    .string()
-    .min(1)
-    .regex(/^[a-z0-9_]+$/, "Use lowercase letters, numbers, and underscores only"),
-  category: z.enum(["MARKETING", "UTILITY"]).default("UTILITY"),
-  language: z.string().min(2).default("en"),
-  bodyText: z.string().min(1).refine((s) => s.includes("{{1}}"), {
-    message: "Body must include a {{1}} placeholder — it's filled with the contact's name when sent",
-  }),
-});
-
 export async function POST(req: Request) {
   try {
     const orgId = await requireOrgId();
-    const parsed = bodySchema.safeParse(await req.json());
+    const parsed = whatsappTemplateBodySchema.safeParse(await req.json());
     if (!parsed.success) {
       return NextResponse.json(
         { error: parsed.error.issues[0]?.message ?? "Invalid template" },

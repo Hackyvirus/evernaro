@@ -1,36 +1,110 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# EverReach
 
-## Getting Started
+Omnichannel customer messaging for small businesses, built by Eversity Tech LLP.
+One inbox for Telegram, Email, WhatsApp, Instagram, and Voice reminders, with
+AI-drafted replies a human reviews before sending.
 
-First, run the development server:
+Two apps live in this repo: the **client dashboard** (what a business uses day
+to day) and the **platform admin dashboard** (what Eversity uses to manage
+every client org).
+
+## Stack
+
+- Next.js 16 (App Router) + TypeScript + Tailwind CSS v4
+- Prisma 6 + PostgreSQL (Neon)
+- Auth.js (next-auth v5 beta) — two separate Credentials providers, one for
+  org users, one for platform admins
+- BullMQ + Redis — background jobs for bulk Campaigns and scheduled Reminders
+- Sentry — error monitoring (no-ops until `SENTRY_DSN` is set)
+- Vitest — unit tests
+
+## Local setup
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+cp .env.example .env   # fill in real values — see below
+npx prisma generate
+npx prisma migrate dev
+npm run dev            # web app at http://localhost:3000
+npm run worker          # separate terminal — required for Campaigns/Reminders/Voice to actually send
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Redis must be running locally for the worker (`REDIS_URL`, defaults to
+`redis://localhost:6379`).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### Required environment variables
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+See the comments in `.env` for the full list and what each one is for —
+database, auth, AI provider, email, encryption key, Redis, and the optional
+Sentry/rate-limit knobs. The two that will bite you if wrong:
 
-## Learn More
+- `NEXT_PUBLIC_BASE_URL` must match wherever the app is actually reachable —
+  every channel's inbound webhook URL is built from it.
+- `ENCRYPTION_KEY` must be a 32-byte key, base64-encoded (generate with
+  `node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"`).
+  Losing it makes every stored channel credential unrecoverable.
 
-To learn more about Next.js, take a look at the following resources:
+## Testing
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```bash
+npm test        # vitest, runs once
+npx tsc --noEmit # type-check
+npx eslint .     # lint
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Test coverage is intentionally minimal — pure/security-critical logic only
+(encryption round-trip, phone formatting, the WhatsApp template-required
+validation, the org-scoping session guard), not full coverage. CI
+(`.github/workflows/ci.yml`) runs all three on every push and PR.
 
-## Deploy on Vercel
+## Architecture notes
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+- **Multi-tenancy**: every row that belongs to a business is scoped by
+  `orgId`, re-verified against the database on every request
+  (`src/lib/session.ts`) rather than trusted from the session JWT alone.
+- **Channel credentials** (bot tokens, API keys) are encrypted at rest
+  (AES-256-GCM, `src/lib/crypto.ts`) — a database leak alone doesn't expose
+  live third-party credentials.
+- **WhatsApp template compliance**: Meta rejects free-text messages sent more
+  than 24 hours after a contact's last inbound message. Campaigns and
+  Reminders enforce an approved template in that case
+  (`src/lib/whatsapp-template-validation.ts`); inbox replies show a warning
+  instead of a hard block, since a human is making that call in real time.
+- **Voice is reminder-only** — never wired into bulk Campaigns. India's
+  TRAI/DND rules make unsolicited automated calling a real compliance risk;
+  Voice only reaches contacts through an individually-scheduled Reminder.
+- **The worker (`src/workers/index.ts`) is a separate long-lived process**,
+  not part of the Next.js app — it consumes BullMQ jobs for Campaigns and
+  Reminders. It needs to run continuously in production, which Vercel's
+  serverless functions can't do (see Deployment below).
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Deployment
+
+Nothing here is wired up to auto-deploy yet — this is the shape to deploy
+into once you're ready:
+
+| Piece | Where | Why |
+|---|---|---|
+| Next.js app | Vercel | Natural fit for the framework; serverless functions handle the web/API traffic. |
+| Worker (`npm run worker`) | Railway / Render / Fly.io (or similar) | Needs to run continuously — Vercel can't host a long-lived process. |
+| Redis | Upstash, or the worker host's managed Redis | `localhost:6379` only works for local dev. |
+| Postgres | Neon (already in use) | Confirm your plan tier includes point-in-time backups before relying on it for real client data. |
+
+Before pointing this at real customers:
+
+1. Generate fresh production values for `AUTH_SECRET` and `ENCRYPTION_KEY`
+   (same command as above) — don't reuse the dev-environment ones. Store them
+   in the hosting platform's secret manager, never in a committed file.
+2. Set a real `FROM_EMAIL` on a domain you own (see `.env`'s comment — the
+   current value is Resend's shared sandbox domain, fine for dev, not for
+   production) and add the SPF/DKIM/DMARC records Resend gives you.
+3. Set `SENTRY_DSN` / `NEXT_PUBLIC_SENTRY_DSN` so failures are actually
+   visible once real traffic exists.
+4. Update `NEXT_PUBLIC_BASE_URL` to the real production URL before any client
+   connects a channel — their webhook URLs are generated from it.
+
+## Legal
+
+`src/app/terms` and `src/app/privacy` are working drafts, accurate to what
+the product actually does, but not yet reviewed by a lawyer. Don't treat them
+as final before onboarding a real paying client.

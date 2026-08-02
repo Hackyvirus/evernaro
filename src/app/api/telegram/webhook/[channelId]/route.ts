@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { telegramWebhookSecret, type TelegramUpdate } from "@/lib/telegram";
 import { generateDraftReply } from "@/lib/ai";
 import { secureCompare } from "@/lib/webhook-secret";
+import { checkRateLimit } from "@/lib/rate-limit";
 
 export async function POST(
   req: Request,
@@ -14,6 +15,13 @@ export async function POST(
     const secretHeader = req.headers.get("x-telegram-bot-api-secret-token");
     if (!secureCompare(secretHeader, telegramWebhookSecret(channelId))) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    // Bounds worst-case AI spend if the secret ever leaks or a provider
+    // retries runaway — 200 legitimate customer messages/minute is far more
+    // than any real conversation volume.
+    if (!(await checkRateLimit(`webhook:telegram:${channelId}`, 200, 60))) {
+      return NextResponse.json({ ok: true }); // 200, not 429 — same reasoning as below: don't invite retries
     }
 
     const channel = await prisma.channel.findUnique({ where: { id: channelId } });
