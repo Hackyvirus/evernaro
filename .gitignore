@@ -51,5 +51,4 @@ worker.log
 /.claude/skills/
 /.windsurf/
 
-.vercel
-.env*
+

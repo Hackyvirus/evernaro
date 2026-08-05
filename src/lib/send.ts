@@ -6,6 +6,7 @@ import { instagramSendMessage } from "@/lib/instagram";
 import { toGupshupFormat } from "@/lib/phone";
 import { decryptSecret, decryptSecretOrNull } from "@/lib/crypto";
 import { chargeWhatsAppMessage, refundWhatsAppMessage } from "@/lib/whatsapp-wallet";
+import { requireActiveSubscription } from "@/lib/subscription";
 
 export interface WhatsAppTemplateSend {
   gupshupTemplateId: string;
@@ -53,6 +54,11 @@ export async function sendViaChannel(
   if (!channel.isActive) {
     throw new Error("This channel has been disconnected");
   }
+
+  // Block all proactive sends from suspended or past-due organizations at the
+  // single shared chokepoint. Manual inbox replies are also gated here so an
+  // unpaid org cannot continue messaging through any channel.
+  await requireActiveSubscription(channel.orgId);
 
   if (channel.type === "TELEGRAM") {
     if (!channel.telegramBotToken || !contact.telegramChatId) {

@@ -52,30 +52,32 @@ Sentry/rate-limit knobs. The two that will bite you if wrong:
   `node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"`).
   Losing it makes every stored channel credential unrecoverable.
 
-## Test logins
+## Test logins (local development only)
 
-⚠️ **This repo is currently public.** These are dev-database test credentials,
-not production — rotate both passwords (and make the repo private) before
-relying on this for anything real. See `src/app/(dashboard)/settings` /
-`src/app/(platform-protected)/platform` for where each logs in.
+These accounts are seeded in the dev database only. They are **not valid in
+production**, and they must not be used once real customer data exists.
 
 | | URL | Email | Password |
 |---|---|---|---|
 | Client dashboard (org: Design Test Co) | `/login` | `uitest@example.com` | `TestPass1234` |
 | Platform admin | `/platform/login` | `sushant@eversitytech.com` | `TestAdmin1234` |
 
+**Before going live:** rotate the platform admin password, remove or disable
+these seeded accounts, and make the repository private.
+
 ## Testing
 
 ```bash
 npm test        # vitest, runs once
 npx tsc --noEmit # type-check
-npx eslint .     # lint
+npm run lint     # lint
+npm run build    # production build
 ```
 
 Test coverage is intentionally minimal — pure/security-critical logic only
 (encryption round-trip, phone formatting, the WhatsApp template-required
-validation, the org-scoping session guard), not full coverage. CI
-(`.github/workflows/ci.yml`) runs all three on every push and PR.
+validation, the org-scoping session guard, wallet math), not full coverage.
+CI (`.github/workflows/ci.yml`) runs all four on every push and PR.
 
 ## Architecture notes
 
@@ -85,6 +87,10 @@ validation, the org-scoping session guard), not full coverage. CI
 - **Channel credentials** (bot tokens, API keys) are encrypted at rest
   (AES-256-GCM, `src/lib/crypto.ts`) — a database leak alone doesn't expose
   live third-party credentials.
+- **Authentication**: bcrypt password hashing, email verification, password
+  reset, and optional TOTP MFA (via Settings > Security). `src/lib/totp.ts`
+  handles TOTP secrets and backup codes; `src/lib/auth.ts` enforces MFA at
+  login.
 - **WhatsApp template compliance**: Meta rejects free-text messages sent more
   than 24 hours after a contact's last inbound message. Campaigns and
   Reminders enforce an approved template in that case
@@ -104,11 +110,20 @@ validation, the org-scoping session guard), not full coverage. CI
   to the org's monthly fee); the org owner pays it from their Billing page.
   The webhook (`/api/webhooks/razorpay`) is the durable source of truth for
   payment status — the client-side confirmation is just for fast UI feedback.
+- **Subscription enforcement**: suspended or past-due organizations are blocked
+  from sending messages at the single shared chokepoint (`src/lib/send.ts` and
+  `src/workers/index.ts`). The billing UI still shows a payment banner and a
+  way to settle the invoice.
 
 ## Deployment
 
-Nothing here is wired up to auto-deploy yet — this is the shape to deploy
-into once you're ready:
+Continuous deployment is configured via GitHub Actions:
+
+- `.github/workflows/ci.yml` — runs type-check, lint, tests, and build on every
+  push and PR.
+- `.github/workflows/deploy.yml` — deploys the Next.js app to Vercel and builds
+  a Docker image for the worker. Set the repository secrets listed in the
+  workflow files before enabling this.
 
 | Piece | Where | Why |
 |---|---|---|
@@ -117,36 +132,43 @@ into once you're ready:
 | Redis | Upstash, or the worker host's managed Redis | `localhost:6379` only works for local dev. |
 | Postgres | Neon (already in use) | Confirm your plan tier includes point-in-time backups before relying on it for real client data. |
 
-Before pointing this at real customers:
+### Production launch checklist
 
-1. **Make the repo private** — this README currently contains dev-database
-   test credentials for the public repo to see.
+1. **Make the repo private** and remove the dev test credentials from this README.
 2. Generate fresh production values for `AUTH_SECRET` and `ENCRYPTION_KEY`
-   (`npm run secrets`, same command as above) — don't reuse the dev ones.
-   Store them in the hosting platform's secret manager, never in a committed
-   file. `ENCRYPTION_KEY` is the critical one: losing it makes every stored
-   channel credential unrecoverable.
-3. Set a real `FROM_EMAIL` on a domain you own (see `.env`'s comment — the
-   current value is Resend's shared sandbox domain, fine for dev, not for
-   production) and add the SPF/DKIM/DMARC records Resend gives you.
-4. Set `SENTRY_DSN` / `NEXT_PUBLIC_SENTRY_DSN` so failures are actually
-   visible once real traffic exists.
+   (`npm run secrets`). Store them in the platform secret manager, never in a
+   committed file. `ENCRYPTION_KEY` is the critical one: losing it makes every
+   stored channel credential unrecoverable.
+3. Set a real `FROM_EMAIL` on a domain you own (Resend's shared sandbox domain
+   is fine for dev, not for production) and add the SPF/DKIM/DMARC records
+   Resend gives you.
+4. Set `SENTRY_DSN` / `NEXT_PUBLIC_SENTRY_DSN` so failures are visible once real
+   traffic exists.
 5. Update `NEXT_PUBLIC_BASE_URL` to the real production URL before any client
    connects a channel — their webhook URLs are generated from it.
 6. Set `RAZORPAY_KEY_ID` / `NEXT_PUBLIC_RAZORPAY_KEY_ID` / `RAZORPAY_KEY_SECRET`
-   if you want invoices to be payable online, and configure a webhook in the
-   Razorpay dashboard pointing at `/api/webhooks/razorpay`, subscribed to
-   `payment.captured` and `payment.failed`, then set `RAZORPAY_WEBHOOK_SECRET`
-   to whatever secret you set there.
+   for online invoices, and configure a Razorpay webhook at
+   `/api/webhooks/razorpay` subscribed to `payment.captured` and `payment.failed`.
+   Set `RAZORPAY_WEBHOOK_SECRET` to the same secret.
 7. Exercise the paid flow with a real (small) payment before onboarding a
    customer — confirm the Razorpay webhook flips an invoice to PAID and the
-   wallet top-up actually credits.
+   wallet top-up credits.
 8. Replace the placeholder testimonials on the landing page
-   (`src/app/page.tsx`) with real customer quotes before running public
-   marketing.
+   (`src/app/page.tsx`) with real customer quotes before running public marketing.
+9. Have the `Terms` and `Privacy` pages reviewed by a lawyer familiar with Indian
+   IT and contract law.
+10. Run a live WhatsApp send and template sync with Gupshup, and verify inbound
+    webhooks reach the production `/api/whatsapp/webhook/[channelId]` endpoint.
+11. Rotate the platform admin password and remove the seeded dev accounts.
+
+Run `npm run secrets` to print ready-to-paste values for `AUTH_SECRET`,
+`ENCRYPTION_KEY`, and the webhook secret. After filling in `.env`, run
+`npm run verify-env` to check that all required variables are present and
+well-formed before deploying.
 
 ## Legal
 
-`src/app/terms` and `src/app/privacy` are working drafts, accurate to what
-the product actually does, but not yet reviewed by a lawyer. Don't treat them
-as final before onboarding a real paying client.
+`src/app/terms` and `src/app/privacy` are production-ready drafts, accurate to
+what the product actually does. They still need review by a lawyer familiar
+with Indian IT and contract law (and any market you sell into) before you rely
+on them as final legal documents.

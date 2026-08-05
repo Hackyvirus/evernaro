@@ -10,6 +10,8 @@ export default function LoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [totpCode, setTotpCode] = useState("");
+  const [needsMfa, setNeedsMfa] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -18,10 +20,23 @@ export default function LoginPage() {
     setError(null);
     setLoading(true);
     try {
-      const res = await signIn("credentials", { email, password, redirect: false });
+      const res = await signIn("credentials", {
+        email,
+        password,
+        totpCode: needsMfa ? totpCode : undefined,
+        redirect: false,
+      });
       setLoading(false);
       if (res?.error) {
-        setError("Invalid email or password");
+        if (res.error === "MFA_REQUIRED" || res.error === "CredentialsSignin" || res.error === "mfa") {
+          // First attempt without MFA code: show MFA field. If the user actually
+          // has MFA enabled, the next submission with the code will succeed.
+          if (!needsMfa) {
+            setNeedsMfa(true);
+            return;
+          }
+        }
+        setError(needsMfa ? "Invalid email, password, or authentication code" : "Invalid email or password");
         return;
       }
       router.push("/inbox");
@@ -50,6 +65,7 @@ export default function LoginPage() {
             required
             value={email}
             onChange={(e) => setEmail(e.target.value)}
+            disabled={needsMfa}
           />
           <Input
             label="Password"
@@ -57,14 +73,33 @@ export default function LoginPage() {
             required
             value={password}
             onChange={(e) => setPassword(e.target.value)}
+            disabled={needsMfa}
           />
+          {needsMfa && (
+            <Input
+              label="Authentication code"
+              type="text"
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              required
+              placeholder="6-digit code or 9-digit backup code"
+              value={totpCode}
+              onChange={(e) => setTotpCode(e.target.value)}
+            />
+          )}
 
           {error && <p className="text-sm text-danger">{error}</p>}
 
           <Button type="submit" loading={loading} className="mt-2 w-full">
-            {loading ? "Logging in..." : "Log in"}
+            {loading ? "Logging in..." : needsMfa ? "Verify and log in" : "Log in"}
           </Button>
         </form>
+
+        <p className="mt-4 text-center text-sm text-text-secondary">
+          <Link href="/forgot-password" className="font-medium text-primary hover:text-primary-hover">
+            Forgot password?
+          </Link>
+        </p>
 
         <p className="mt-6 text-center text-sm text-text-secondary">
           No account?{" "}

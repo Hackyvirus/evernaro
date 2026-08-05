@@ -17,9 +17,12 @@ export async function requireActiveSubscription(orgId: string): Promise<void> {
     );
   }
   if (org.status === OrganizationStatus.PAST_DUE) {
-    // PAST_DUE is a warning state; allow sends but surface a banner.
-    // Callers that want strict blocking can check status directly.
-    return;
+    // PAST_DUE is a grace period: sends are blocked at the chokepoint so the
+    // org cannot run up provider/WhatsApp spend while their subscription is
+    // unpaid. The billing UI still shows a banner and a payment link.
+    throw new SubscriptionSuspendedError(
+      "Account past due — please pay your pending invoice to continue sending messages."
+    );
   }
 }
 

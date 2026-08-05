@@ -14,6 +14,7 @@ import { twilioPlaceCall } from "../lib/voice";
 import { channelWebhookSecret } from "../lib/webhook-secret";
 import { decryptSecret } from "../lib/crypto";
 import { nextOccurrence } from "../lib/recurrence";
+import { requireActiveSubscription } from "../lib/subscription";
 import {
   CAMPAIGN_SEND_QUEUE,
   REMINDER_SEND_QUEUE,
@@ -134,6 +135,8 @@ async function placeReminderCall(reminder: {
   if (!channel.isActive) {
     throw new Error("This channel has been disconnected");
   }
+  // Voice calls are part of the paid service — same subscription gate as messages.
+  await requireActiveSubscription(reminder.orgId);
   if (!channel.twilioAccountSid || !channel.twilioAuthToken || !channel.twilioFromNumber || !contact.phone) {
     throw new Error("Voice channel not configured for this contact");
   }

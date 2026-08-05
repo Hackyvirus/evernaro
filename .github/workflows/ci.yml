@@ -2,49 +2,40 @@ name: CI
 
 on:
   push:
-    branches: [main, master]
+    branches: [main]
   pull_request:
+    branches: [main]
 
 jobs:
-  build:
+  verify:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: npm
 
-      - run: npm ci
+      - name: Install dependencies
+        run: npm ci
 
-      - run: npx prisma generate
-
-      - name: Type-check
+      - name: Type check
         run: npx tsc --noEmit
 
       - name: Lint
-        run: npx eslint .
+        run: npm run lint
 
       - name: Test
-        run: npm test
+        run: npm run test
 
       - name: Build
         run: npm run build
         env:
-          # Placeholder values — the build never opens a real connection, it
-          # just needs env vars present for config validation to pass. Real
-          # secrets live in the deployment host's environment, never here.
-          DATABASE_URL: "postgresql://ci:ci@localhost:5432/ci"
-          DIRECT_URL: "postgresql://ci:ci@localhost:5432/ci"
-          AUTH_SECRET: "ci-only-placeholder-not-a-real-secret-32bytes"
-          AI_PROVIDER: "openai"
-          OPENAI_API_KEY: "sk-ci-placeholder"
-          ANTHROPIC_API_KEY: ""
-          RESEND_API_KEY: "re_ci_placeholder"
-          FROM_EMAIL: "onboarding@resend.dev"
-          NEXT_PUBLIC_BASE_URL: "http://localhost:3000"
-          INBOUND_EMAIL_WEBHOOK_SECRET: "ci-placeholder"
-          REDIS_URL: "redis://localhost:6379"
-          ENCRYPTION_KEY: "t839W+DYA1mBYNvgwYI/LrYYYToBb4JjbbF5CWJzpvU="
-          CAMPAIGN_RATE_PER_SECOND: "5"
+          # Minimal env vars required for a production build without real secrets.
+          DATABASE_URL: postgresql://localhost:5432/everreach
+          DIRECT_URL: postgresql://localhost:5432/everreach
+          AUTH_SECRET: ${{ secrets.AUTH_SECRET || 'ci-auth-secret-not-for-production-ci-only' }}
+          ENCRYPTION_KEY: ${{ secrets.ENCRYPTION_KEY || 'ci-encryption-key-not-for-production-ci-only' }}
+          NEXT_PUBLIC_BASE_URL: http://localhost:3000

@@ -21,7 +21,7 @@ const CLIENT_PROTECTED_PREFIXES = [
   "/billing",
 ];
 
-export default auth((req) => {
+export const proxy = auth((req) => {
   const { pathname } = req.nextUrl;
   const isLoggedIn = !!req.auth;
   const isPlatformAdmin = !!req.auth?.user?.isPlatformAdmin;
@@ -41,7 +41,7 @@ export default auth((req) => {
     return NextResponse.next();
   }
 
-  const isAuthPage = pathname.startsWith("/login") || pathname.startsWith("/signup");
+  const isAuthPage = pathname.startsWith("/login") || pathname.startsWith("/signup") || pathname.startsWith("/forgot-password") || pathname.startsWith("/reset-password") || pathname.startsWith("/verify-email");
   if (isAuthPage) {
     if (isLoggedIn && !isPlatformAdmin) {
       return NextResponse.redirect(new URL("/dashboard", req.nextUrl));
@@ -72,6 +72,9 @@ export const config = {
     "/billing/:path*",
     "/login",
     "/signup",
+    "/forgot-password",
+    "/reset-password",
+    "/verify-email",
     "/platform/:path*",
   ],
 };

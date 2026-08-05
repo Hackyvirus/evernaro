@@ -17,6 +17,7 @@ declare module "next-auth" {
       orgName?: string;
       role?: string;
       isPlatformAdmin?: boolean;
+      ev?: boolean;
     } & DefaultSession["user"];
   }
 }
@@ -28,5 +29,6 @@ declare module "next-auth/jwt" {
     orgName?: string;
     role?: string;
     isPlatformAdmin?: boolean;
+    ev?: boolean;
   }
 }

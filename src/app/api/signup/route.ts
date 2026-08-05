@@ -3,6 +3,8 @@ import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { checkRateLimit, clientIp } from "@/lib/rate-limit";
+import { generateSecureToken, hoursFromNow } from "@/lib/token";
+import { sendVerificationEmail } from "@/lib/auth-email";
 
 const signupSchema = z.object({
   orgName: z.string().min(2),
@@ -35,8 +37,9 @@ export async function POST(req: Request) {
     );
   }
   const { orgName, name, email, password } = parsed.data;
+  const normalizedEmail = email.toLowerCase();
 
-  const existing = await prisma.user.findUnique({ where: { email: email.toLowerCase() } });
+  const existing = await prisma.user.findUnique({ where: { email: normalizedEmail } });
   if (existing) {
     return NextResponse.json({ error: "An account with that email already exists" }, { status: 409 });
   }
@@ -49,6 +52,7 @@ export async function POST(req: Request) {
   }
 
   const passwordHash = await bcrypt.hash(password, 12);
+  const verificationToken = generateSecureToken();
 
   await prisma.organization.create({
     data: {
@@ -56,10 +60,12 @@ export async function POST(req: Request) {
       slug,
       users: {
         create: {
-          email: email.toLowerCase(),
+          email: normalizedEmail,
           passwordHash,
           name,
           role: "OWNER",
+          emailVerificationToken: verificationToken,
+          emailVerificationTokenExpiresAt: hoursFromNow(24),
         },
       },
       businessProfile: {
@@ -70,6 +76,14 @@ export async function POST(req: Request) {
       },
     },
   });
+
+  try {
+    await sendVerificationEmail(normalizedEmail, verificationToken);
+  } catch {
+    // Don't fail signup if email is misconfigured in this environment; the
+    // user can request a fresh verification email from the login page.
+    console.error("Failed to send verification email to", normalizedEmail);
+  }
 
   return NextResponse.json({ ok: true });
 }

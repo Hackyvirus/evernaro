@@ -20,6 +20,7 @@ export default async function DashboardLayout({
         userName={session.user.name ?? ""}
         userEmail={session.user.email ?? ""}
         role={role}
+        emailVerified={session.user.ev ?? false}
       >
         {children}
       </DashboardShell>

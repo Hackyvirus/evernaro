@@ -18,9 +18,52 @@ import {
   Receipt,
   Settings,
   Users,
+  X,
 } from "lucide-react";
 import { NavItem, ThemeToggle, useSidebarCollapsed, IconButton } from "@/components/ui";
 import { SignOutButton } from "./sign-out-button";
+
+function EmailVerificationBanner({ email }: { email: string }) {
+  const [dismissed, setDismissed] = useState(false);
+  const [status, setStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
+
+  if (dismissed) return null;
+
+  async function resend() {
+    setStatus("sending");
+    try {
+      const res = await fetch("/api/auth/resend-verification", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+      setStatus(res.ok ? "sent" : "error");
+    } catch {
+      setStatus("error");
+    }
+  }
+
+  return (
+    <div className="flex items-start justify-between gap-3 border-b border-warning bg-warning-light px-4 py-3 text-xs text-text">
+      <p>
+        <strong>Verify your email address.</strong> Some features are limited until you confirm{" "}
+        {email}. Didn&apos;t receive it?{" "}
+        <button
+          type="button"
+          onClick={resend}
+          disabled={status === "sending" || status === "sent"}
+          className="inline font-medium text-primary hover:text-primary-hover disabled:opacity-60"
+        >
+          {status === "sending" ? "Sending..." : status === "sent" ? "Sent" : "Resend verification email"}
+        </button>
+        {status === "error" && <span className="ml-2 text-danger">Failed — try again later.</span>}
+      </p>
+      <button type="button" aria-label="Dismiss" onClick={() => setDismissed(true)} className="text-text-secondary hover:text-text">
+        <X className="h-4 w-4" />
+      </button>
+    </div>
+  );
+}
 
 type NavItemDef = {
   href: string;
@@ -145,12 +188,14 @@ export function DashboardShell({
   userName,
   userEmail,
   role,
+  emailVerified,
   children,
 }: {
   orgName: string;
   userName: string;
   userEmail: string;
   role: string;
+  emailVerified?: boolean;
   children: React.ReactNode;
 }) {
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -198,7 +243,10 @@ export function DashboardShell({
         />
       </aside>
 
-      <main className="flex flex-1 flex-col overflow-hidden">{children}</main>
+      <main className="flex flex-1 flex-col overflow-hidden">
+        {emailVerified === false && <EmailVerificationBanner email={userEmail} />}
+        {children}
+      </main>
     </div>
   );
 }

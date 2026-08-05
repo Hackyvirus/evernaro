@@ -9,12 +9,6 @@ export default function TermsPage() {
         ← EverReach
       </Link>
 
-      <div className="mt-6 rounded-md border border-warning bg-warning-light px-4 py-3 text-xs text-text">
-        <strong>Draft, not final.</strong> This is a working starting point, not a substitute for
-        review by a lawyer familiar with Indian contract and IT law. Don&apos;t rely on it as-is for
-        real customer onboarding.
-      </div>
-
       <h1 className="mt-6 text-2xl font-semibold">Terms of Service</h1>
       <p className="mt-1 text-text-secondary">Last updated: 2 August 2026</p>
 
@@ -115,6 +109,12 @@ export default function TermsPage() {
 
       <p className="mt-10 text-xs text-text-muted">
         See also the <Link href="/privacy" className="text-primary hover:text-primary-hover">Privacy Policy</Link>.
+      </p>
+
+      <p className="mt-6 text-xs text-text-muted">
+        These terms are accurate to how EverReach works today. They should still be reviewed by a
+        lawyer familiar with Indian contract and IT law before being relied on as final legal
+        documents for paid customers.
       </p>
     </div>
   );

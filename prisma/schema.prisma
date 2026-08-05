@@ -253,6 +253,21 @@ model User {
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @default(now()) @updatedAt
 
+  // Email verification
+  emailVerified                 Boolean   @default(false)
+  emailVerificationToken        String?   @unique
+  emailVerificationTokenExpiresAt DateTime?
+
+  // Password reset
+  passwordResetToken        String?   @unique
+  passwordResetTokenExpiresAt DateTime?
+
+  // TOTP MFA
+  mfaSecret     String?   // encrypted TOTP secret; null until MFA setup
+  mfaEnabled    Boolean   @default(false)
+  mfaBackupCodes String[]  // bcrypt-hashed backup codes
+  mfaTempSecret String?   // holds secret during MFA setup until verified
+
   assignedConversations Conversation[] @relation("AssignedTo")
   closedConversations   Conversation[] @relation("ClosedBy")
   reminders             Reminder[]

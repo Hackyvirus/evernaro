@@ -9,13 +9,6 @@ export default function PrivacyPage() {
         ← EverReach
       </Link>
 
-      <div className="mt-6 rounded-md border border-warning bg-warning-light px-4 py-3 text-xs text-text">
-        <strong>Draft, not final.</strong> This describes what the product actually does with data
-        today, but it hasn&apos;t been reviewed by a lawyer and doesn&apos;t claim compliance with any
-        specific regulation (India&apos;s DPDP Act, GDPR, or otherwise). Get real legal review before
-        relying on it with real customer data.
-      </div>
-
       <h1 className="mt-6 text-2xl font-semibold">Privacy Policy</h1>
       <p className="mt-1 text-text-secondary">Last updated: 2 August 2026</p>
 
@@ -106,6 +99,12 @@ export default function PrivacyPage() {
 
       <p className="mt-10 text-xs text-text-muted">
         See also the <Link href="/terms" className="text-primary hover:text-primary-hover">Terms of Service</Link>.
+      </p>
+
+      <p className="mt-6 text-xs text-text-muted">
+        This policy describes what EverReach does with data today. It should still be reviewed by a
+        lawyer familiar with Indian data-protection law and any other jurisdiction you sell into
+        before being relied on as a final legal document.
       </p>
     </div>
   );

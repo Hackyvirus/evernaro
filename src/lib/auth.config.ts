@@ -20,6 +20,7 @@ export const authConfig = {
           token.orgSlug = user.orgSlug;
           token.orgName = user.orgName;
           token.role = user.role;
+          token.ev = (user as unknown as { emailVerified?: boolean }).emailVerified;
         }
       }
       return token;
@@ -34,6 +35,7 @@ export const authConfig = {
           session.user.orgSlug = token.orgSlug as string;
           session.user.orgName = token.orgName as string;
           session.user.role = token.role as string;
+          session.user.ev = token.ev as boolean;
         }
       }
       return session;

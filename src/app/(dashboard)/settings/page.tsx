@@ -2,11 +2,12 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import { QRCodeSVG } from "qrcode.react";
 import { Badge, Button, Card, Input, Select, Textarea, PageHeader, Tabs } from "@/components/ui";
 import { VERTICAL_PRESETS } from "@/lib/vertical-presets";
 import { RoleAwareAdminGuard } from "../role";
 
-type Tab = "profile" | "telegram" | "email" | "whatsapp" | "instagram" | "voice";
+type Tab = "profile" | "telegram" | "email" | "whatsapp" | "instagram" | "voice" | "security";
 
 const TABS: { id: Tab; label: string }[] = [
   { id: "profile", label: "Business profile" },
@@ -15,6 +16,7 @@ const TABS: { id: Tab; label: string }[] = [
   { id: "whatsapp", label: "WhatsApp" },
   { id: "instagram", label: "Instagram" },
   { id: "voice", label: "Voice" },
+  { id: "security", label: "Security" },
 ];
 
 interface BusinessProfileForm {
@@ -122,6 +124,7 @@ function SettingsPageContent() {
         }
       />
     ),
+    security: <SecurityTab />,
   };
 
   return (
@@ -1039,3 +1042,133 @@ function VoiceTab({
     </div>
   );
 }
+
+
+function SecurityTab() {
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [passwordStatus, setPasswordStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [qrUri, setQrUri] = useState<string | null>(null);
+  const [mfaCode, setMfaCode] = useState('');
+  const [mfaStatus, setMfaStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [mfaError, setMfaError] = useState<string | null>(null);
+  const [backupCodes, setBackupCodes] = useState<string[] | null>(null);
+  const [mfaEnabled, setMfaEnabled] = useState(false);
+  const [disablePassword, setDisablePassword] = useState('');
+  const [disableStatus, setDisableStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [disableError, setDisableError] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch('/api/auth/mfa').then(r => r.ok ? r.json() : null).then(d => {
+      if (d?.enabled) setMfaEnabled(true);
+    });
+  }, []);
+
+  async function changePassword(e: React.FormEvent) {
+    e.preventDefault();
+    setPasswordError(null);
+    if (newPassword.length < 8) { setPasswordError('Password must be at least 8 characters'); return; }
+    if (newPassword !== confirmPassword) { setPasswordError('Passwords do not match'); return; }
+    setPasswordStatus('saving');
+    const res = await fetch('/api/users/me/password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ currentPassword, newPassword }),
+    });
+    const data = await res.json().catch(() => ({}));
+    setPasswordStatus(res.ok ? 'saved' : 'error');
+    if (!res.ok) setPasswordError(data.error ?? 'Failed to update password');
+    if (res.ok) { setCurrentPassword(''); setNewPassword(''); setConfirmPassword(''); }
+  }
+
+  async function startMfaSetup() {
+    setMfaStatus('idle'); setMfaError(null); setBackupCodes(null);
+    const res = await fetch('/api/auth/mfa', { method: 'POST' });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) { setMfaError(data.error ?? 'Failed'); return; }
+    setQrUri(data.uri);
+  }
+
+  async function verifyMfaSetup(e: React.FormEvent) {
+    e.preventDefault();
+    setMfaError(null); setMfaStatus('saving');
+    const res = await fetch('/api/auth/mfa', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code: mfaCode }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) { setMfaStatus('error'); setMfaError(data.error ?? 'Invalid code'); return; }
+    setMfaStatus('saved');
+    setMfaEnabled(true);
+    setBackupCodes(data.backupCodes ?? []);
+    setQrUri(null);
+  }
+
+  async function disableMfa(e: React.FormEvent) {
+    e.preventDefault();
+    setDisableError(null);
+    setDisableStatus('saving');
+    const res = await fetch('/api/auth/mfa/disable', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password: disablePassword }),
+    });
+    const data = await res.json().catch(() => ({}));
+    setDisableStatus(res.ok ? 'saved' : 'error');
+    if (!res.ok) setDisableError(data.error ?? 'Failed to disable MFA');
+    if (res.ok) { setMfaEnabled(false); setDisablePassword(''); }
+  }
+
+  return (
+    <div className='flex flex-col gap-6'>
+      <section className='flex flex-col gap-4'>
+        <h3 className='text-sm font-medium text-text'>Change password</h3>
+        <form onSubmit={changePassword} className='flex flex-col gap-4'>
+          <Input label='Current password' type='password' required value={currentPassword} onChange={e => setCurrentPassword(e.target.value)} />
+          <Input label='New password' type='password' required minLength={8} value={newPassword} onChange={e => setNewPassword(e.target.value)} />
+          <Input label='Confirm new password' type='password' required value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} />
+          {passwordError && <p className='text-sm text-danger'>{passwordError}</p>}
+          <Button type='submit' loading={passwordStatus === 'saving'} className='w-fit'>{passwordStatus === 'saved' ? 'Updated' : 'Update password'}</Button>
+        </form>
+      </section>
+
+      <section className='flex flex-col gap-4 border-t border-border pt-4'>
+        <h3 className='text-sm font-medium text-text'>Two-factor authentication</h3>
+        {mfaEnabled ? (
+          <form onSubmit={disableMfa} className='flex flex-col gap-4'>
+            <p className='text-sm text-text-secondary'>MFA is enabled. Enter your current password to disable it.</p>
+            <Input label='Current password' type='password' required value={disablePassword} onChange={e => setDisablePassword(e.target.value)} />
+            {disableError && <p className='text-sm text-danger'>{disableError}</p>}
+            <Button type='submit' loading={disableStatus === 'saving'} variant='danger' className='w-fit'>Disable MFA</Button>
+          </form>
+        ) : (
+          <>
+            {!qrUri && <Button onClick={startMfaSetup} className='w-fit'>Set up MFA</Button>}
+            {qrUri && (
+              <form onSubmit={verifyMfaSetup} className='flex flex-col gap-4'>
+                <p className='text-sm text-text-secondary'>Scan this QR code with your authenticator app, then enter the 6-digit code.</p>
+                <div className='rounded-md border border-border bg-white p-3 w-fit'>
+                  <QRCodeSVG value={qrUri} size={160} />
+                </div>
+                <Input label='Authentication code' inputMode='numeric' required value={mfaCode} onChange={e => setMfaCode(e.target.value)} />
+                {mfaError && <p className='text-sm text-danger'>{mfaError}</p>}
+                <Button type='submit' loading={mfaStatus === 'saving'} className='w-fit'>Verify and enable MFA</Button>
+              </form>
+            )}
+            {backupCodes && (
+              <div className='rounded-md border border-success bg-success/10 p-3'>
+                <p className='text-sm font-medium text-text'>MFA enabled. Save these backup codes — they let you log in if you lose your authenticator.</p>
+                <ul className='mt-2 font-mono text-xs text-text-secondary space-y-1'>
+                  {backupCodes.map(c => <li key={c}>{c.match(/.{3}/g)?.join(' ')}</li>)}
+                </ul>
+              </div>
+            )}
+          </>)}
+      </section>
+    </div>
+  );
+}
+
