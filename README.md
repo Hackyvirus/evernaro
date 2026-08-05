@@ -30,6 +30,13 @@ npm run dev            # web app at http://localhost:3000
 npm run worker          # separate terminal — required for Campaigns/Reminders/Voice to actually send
 ```
 
+Generate fresh secret values (AUTH_SECRET, ENCRYPTION_KEY, webhook secret)
+instead of inventing them by hand:
+
+```bash
+npm run secrets        # prints ready-to-paste values — copy into .env, never commit
+```
+
 Redis must be running locally for the worker (`REDIS_URL`, defaults to
 `redis://localhost:6379`).
 
@@ -44,6 +51,18 @@ Sentry/rate-limit knobs. The two that will bite you if wrong:
 - `ENCRYPTION_KEY` must be a 32-byte key, base64-encoded (generate with
   `node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"`).
   Losing it makes every stored channel credential unrecoverable.
+
+## Test logins
+
+⚠️ **This repo is currently public.** These are dev-database test credentials,
+not production — rotate both passwords (and make the repo private) before
+relying on this for anything real. See `src/app/(dashboard)/settings` /
+`src/app/(platform-protected)/platform` for where each logs in.
+
+| | URL | Email | Password |
+|---|---|---|---|
+| Client dashboard (org: Design Test Co) | `/login` | `uitest@example.com` | `TestPass1234` |
+| Platform admin | `/platform/login` | `sushant@eversitytech.com` | `TestAdmin1234` |
 
 ## Testing
 
@@ -100,21 +119,31 @@ into once you're ready:
 
 Before pointing this at real customers:
 
-1. Generate fresh production values for `AUTH_SECRET` and `ENCRYPTION_KEY`
-   (same command as above) — don't reuse the dev-environment ones. Store them
-   in the hosting platform's secret manager, never in a committed file.
-2. Set a real `FROM_EMAIL` on a domain you own (see `.env`'s comment — the
+1. **Make the repo private** — this README currently contains dev-database
+   test credentials for the public repo to see.
+2. Generate fresh production values for `AUTH_SECRET` and `ENCRYPTION_KEY`
+   (`npm run secrets`, same command as above) — don't reuse the dev ones.
+   Store them in the hosting platform's secret manager, never in a committed
+   file. `ENCRYPTION_KEY` is the critical one: losing it makes every stored
+   channel credential unrecoverable.
+3. Set a real `FROM_EMAIL` on a domain you own (see `.env`'s comment — the
    current value is Resend's shared sandbox domain, fine for dev, not for
    production) and add the SPF/DKIM/DMARC records Resend gives you.
-3. Set `SENTRY_DSN` / `NEXT_PUBLIC_SENTRY_DSN` so failures are actually
+4. Set `SENTRY_DSN` / `NEXT_PUBLIC_SENTRY_DSN` so failures are actually
    visible once real traffic exists.
-4. Update `NEXT_PUBLIC_BASE_URL` to the real production URL before any client
+5. Update `NEXT_PUBLIC_BASE_URL` to the real production URL before any client
    connects a channel — their webhook URLs are generated from it.
-5. Set `RAZORPAY_KEY_ID` / `NEXT_PUBLIC_RAZORPAY_KEY_ID` / `RAZORPAY_KEY_SECRET`
+6. Set `RAZORPAY_KEY_ID` / `NEXT_PUBLIC_RAZORPAY_KEY_ID` / `RAZORPAY_KEY_SECRET`
    if you want invoices to be payable online, and configure a webhook in the
    Razorpay dashboard pointing at `/api/webhooks/razorpay`, subscribed to
    `payment.captured` and `payment.failed`, then set `RAZORPAY_WEBHOOK_SECRET`
    to whatever secret you set there.
+7. Exercise the paid flow with a real (small) payment before onboarding a
+   customer — confirm the Razorpay webhook flips an invoice to PAID and the
+   wallet top-up actually credits.
+8. Replace the placeholder testimonials on the landing page
+   (`src/app/page.tsx`) with real customer quotes before running public
+   marketing.
 
 ## Legal
 

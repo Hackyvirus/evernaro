@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
+import { UserRole } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { requireOrgId, UnauthorizedError } from "@/lib/session";
+import { requireOrgMember, UnauthorizedError, ForbiddenError } from "@/lib/session";
 
 export async function GET() {
   try {
-    const orgId = await requireOrgId();
+    const { orgId } = await requireOrgMember(UserRole.VIEWER);
     const channels = await prisma.channel.findMany({
       where: { orgId },
       select: {
@@ -26,6 +27,9 @@ export async function GET() {
   } catch (err) {
     if (err instanceof UnauthorizedError) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    if (err instanceof ForbiddenError) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
     return NextResponse.json({ error: "Failed to load channels" }, { status: 500 });
   }

@@ -1,0 +1,2227 @@
+# EverReach — Complete Product UX, Dashboard & Implementation Specification
+
+## Role
+
+You are a senior SaaS product architect, UX designer, and full-stack engineer.
+
+You are working on **EverReach**, an omnichannel customer messaging SaaS built by Eversity Tech LLP.
+
+Your task is to transform the current application into a polished, production-ready SaaS product.
+
+**IMPORTANT:**
+
+Do NOT blindly rewrite the existing application.
+
+First inspect the entire repository, understand the existing architecture and functionality, identify what already exists, and then implement the missing functionality incrementally.
+
+Preserve working functionality unless there is a clear reason to improve it.
+
+Do not create mock pages that only look good. Pages should be connected to the existing database, APIs, authentication, workers, channels, billing, and other infrastructure wherever those capabilities already exist.
+
+---
+
+# 1. Current Product
+
+EverReach provides:
+
+> One inbox for every customer conversation.
+
+Supported channels:
+
+* Telegram
+* Email
+* WhatsApp
+* Instagram
+* Voice reminders
+
+Core capabilities:
+
+* Unified omnichannel inbox
+* Contacts
+* AI-drafted replies
+* Human approval before sending
+* Business knowledge base
+* Campaigns
+* Scheduled reminders
+* Recurring reminders
+* Analytics
+* WhatsApp template compliance
+* WhatsApp prepaid wallet
+* Billing
+* Team management
+* Channel configuration
+* Organization settings
+* Platform administration
+
+AI replies are ALWAYS drafts.
+
+EverReach must never autonomously send an AI-generated customer reply.
+
+Human review and explicit send action are required.
+
+---
+
+# 2. Existing Technical Stack
+
+Do not replace the existing stack unless absolutely necessary.
+
+Current stack:
+
+* Next.js 16
+* App Router
+* TypeScript
+* Tailwind CSS v4
+* Prisma 6
+* PostgreSQL / Neon
+* Auth.js / next-auth v5
+* BullMQ
+* Redis
+* Sentry
+* Razorpay
+* Vitest
+
+Architecture:
+
+* Multi-tenant organization model
+* Every organization-owned database record is scoped using orgId
+* Organization authorization is revalidated against the database
+* Channel credentials are encrypted at rest
+* Background worker handles campaigns/reminders/voice
+* WhatsApp 24-hour template enforcement exists
+* Razorpay billing integration exists
+* Sentry integration exists
+
+---
+
+# 3. Product Design Direction
+
+EverReach should look like a modern premium B2B SaaS.
+
+Design inspiration:
+
+* Linear
+* Intercom
+* HubSpot
+* Stripe Dashboard
+* Slack
+* modern CRM products
+
+Do NOT copy any company's design.
+
+Use the principles:
+
+* clean
+* minimal
+* professional
+* trustworthy
+* information-dense without being cluttered
+* excellent spacing
+* strong typography hierarchy
+* subtle borders
+* subtle shadows
+* rounded cards
+* clear status badges
+* responsive
+* accessible
+* keyboard friendly
+
+Avoid:
+
+* excessive gradients
+* giant colorful cards
+* unnecessary animations
+* excessive rounded containers
+* huge empty spaces
+* dashboard pages filled with meaningless statistics
+* generic AI-looking UI
+
+EverReach should feel like a serious business product.
+
+---
+
+# 4. GLOBAL APPLICATION STRUCTURE
+
+There are TWO applications/surfaces:
+
+## A. Client Application
+
+Used by a business/customer organization.
+
+Recommended main navigation:
+
+1. Overview
+2. Inbox
+3. Contacts
+4. Campaigns
+5. Reminders
+6. Analytics
+7. Channels
+8. Knowledge Base
+9. Team
+10. Billing
+11. Settings
+
+Some items can be grouped under Settings if necessary, but the functionality must exist.
+
+---
+
+# 5. CLIENT DASHBOARD — REQUIRED PAGES
+
+The client application should contain approximately:
+
+## 11 main areas
+
+Do not create unnecessary pages just to increase page count.
+
+Each area can have tabs, drawers, modals and detail views.
+
+---
+
+# 6. CLIENT — OVERVIEW / HOME
+
+Route:
+
+`/dashboard`
+
+Purpose:
+
+Give the business owner a quick understanding of what needs attention.
+
+Show:
+
+### Header
+
+* Good morning/afternoon/evening
+* Organization name
+* Date
+* Notification button
+* User profile menu
+
+### KPI cards
+
+* Conversations today
+* Unread conversations
+* Contacts
+* Messages sent
+* Campaigns active
+* Reminders scheduled
+
+### Attention required
+
+Show actionable items:
+
+* Unread messages
+* Failed messages
+* Failed campaigns
+* Failed reminders
+* WhatsApp templates requiring approval
+* Low WhatsApp wallet balance
+* Disconnected channels
+* AI drafts waiting for review
+
+### Recent conversations
+
+Show 5–10 latest conversations.
+
+### Upcoming reminders
+
+Show today's and tomorrow's reminders.
+
+### Campaign performance
+
+Show latest campaigns:
+
+* Sent
+* Delivered
+* Failed
+* Response rate
+
+### Channel health
+
+Show:
+
+* WhatsApp connected
+* Instagram connected
+* Telegram connected
+* Email connected
+* Voice available
+
+Use clear status:
+
+Connected
+Warning
+Disconnected
+Action required
+
+### UX principle
+
+The dashboard should answer:
+
+> "What requires my attention right now?"
+
+Not just display vanity metrics.
+
+---
+
+# 7. CLIENT — INBOX
+
+Route:
+
+`/inbox`
+
+This is the most important page in EverReach.
+
+Make this the best-designed screen in the application.
+
+Use a three-column layout:
+
+### Left
+
+Conversation list.
+
+Filters:
+
+* All
+* Unread
+* Assigned to me
+* AI draft ready
+* Waiting for reply
+* Resolved
+
+Channel filters:
+
+* All
+* WhatsApp
+* Instagram
+* Telegram
+* Email
+
+Search:
+
+* Customer name
+* Phone
+* Email
+* Message content
+
+Conversation item should show:
+
+* avatar
+* customer name
+* latest message
+* time
+* channel icon
+* unread count
+* assigned user
+* status
+
+### Center
+
+Conversation thread.
+
+Display:
+
+* customer information
+* channel
+* message history
+* timestamps
+* incoming/outgoing distinction
+* attachments if supported
+* delivery status
+
+Composer:
+
+* text input
+* attachment
+* emoji if supported
+* send
+* save draft
+
+### AI Draft
+
+Clearly show:
+
+"AI Draft — Review before sending"
+
+Actions:
+
+* Edit
+* Regenerate
+* Use draft
+* Discard
+
+Never automatically send.
+
+### Right sidebar
+
+Customer profile:
+
+* Name
+* Phone
+* Email
+* Company
+* Tags
+* Assigned team member
+* Conversation status
+* Last interaction
+* Customer notes
+
+Actions:
+
+* Add tag
+* Assign
+* Add note
+* Create reminder
+* View contact
+* Resolve conversation
+
+### WhatsApp compliance
+
+If outside 24-hour window:
+
+Show prominent but non-alarming warning:
+
+"WhatsApp requires an approved template for messages outside the 24-hour customer service window."
+
+Then:
+
+* Select template
+* Preview
+* Send
+
+Do not allow an invalid message to silently fail.
+
+---
+
+# 8. CLIENT — CONTACTS
+
+Route:
+
+`/contacts`
+
+This is the CRM-like contact management page.
+
+Table:
+
+* Name
+* Phone
+* Email
+* Company
+* Tags
+* Source
+* Last interaction
+* Assigned user
+* Status
+
+Actions:
+
+* Search
+* Filter
+* Sort
+* Add contact
+* Import contacts
+* Export contacts
+
+Bulk actions:
+
+* Add tag
+* Assign user
+* Create campaign
+* Schedule reminder
+
+Contact detail page/drawer:
+
+* Profile
+* Conversations
+* Notes
+* Tags
+* Campaign history
+* Reminder history
+* Activity timeline
+
+---
+
+# 9. CLIENT — CAMPAIGNS
+
+Route:
+
+`/campaigns`
+
+Campaign list:
+
+* Campaign name
+* Channel
+* Audience
+* Status
+* Created
+* Scheduled
+* Sent
+* Delivered
+* Failed
+* Response rate
+
+Statuses:
+
+* Draft
+* Scheduled
+* Running
+* Completed
+* Paused
+* Failed
+
+Actions:
+
+* Create campaign
+* Duplicate
+* Pause
+* Resume
+* Cancel
+* View report
+
+---
+
+# 10. CLIENT — CREATE CAMPAIGN
+
+Route:
+
+`/campaigns/new`
+
+Use a multi-step wizard.
+
+## Step 1 — Campaign details
+
+* Name
+* Description
+* Channel
+
+## Step 2 — Audience
+
+Select:
+
+* All contacts
+* Tag
+* Filter
+* Manually selected contacts
+
+Show estimated audience size.
+
+## Step 3 — Message
+
+Message editor.
+
+For WhatsApp:
+
+* Validate 24-hour rule
+* Require approved template when needed
+
+Show:
+
+* character count
+* variables
+* preview
+
+## Step 4 — Schedule
+
+Options:
+
+* Send now
+* Schedule
+* Timezone
+
+## Step 5 — Review
+
+Show:
+
+* audience
+* channel
+* message
+* estimated sends
+* estimated WhatsApp cost
+* compliance warnings
+
+Require explicit confirmation.
+
+## Step 6 — Result
+
+After execution:
+
+* sent
+* delivered
+* failed
+* pending
+
+---
+
+# 11. CLIENT — CAMPAIGN DETAIL
+
+Route:
+
+`/campaigns/[id]`
+
+Show:
+
+* campaign name
+* status
+* channel
+* created date
+* scheduled date
+
+Statistics:
+
+* Audience
+* Sent
+* Delivered
+* Failed
+* Replies
+* Delivery rate
+* Response rate
+
+Timeline:
+
+* Created
+* Scheduled
+* Started
+* Completed
+
+Failure breakdown:
+
+* Invalid number
+* Provider failure
+* Template rejected
+* Rate limit
+* Other
+
+Actions:
+
+* Pause
+* Resume
+* Duplicate
+* Cancel
+
+---
+
+# 12. CLIENT — REMINDERS
+
+Route:
+
+`/reminders`
+
+Show:
+
+* Upcoming
+* Completed
+* Failed
+* Recurring
+
+Columns:
+
+* Contact
+* Reminder type
+* Channel
+* Date/time
+* Assigned user
+* Status
+
+Types:
+
+* Appointment
+* Payment
+* Follow-up
+* Callback
+* Custom
+
+Actions:
+
+* Create reminder
+* Edit
+* Cancel
+* Reschedule
+* Duplicate
+
+Voice reminders must remain individually scheduled.
+
+Never provide bulk automated voice calling.
+
+---
+
+# 13. CLIENT — CREATE REMINDER
+
+Route:
+
+`/reminders/new`
+
+Fields:
+
+* Contact
+* Reminder title
+* Message
+* Channel
+* Date
+* Time
+* Timezone
+* Recurrence
+* Assigned user
+
+Channels:
+
+* WhatsApp
+* Email
+* Telegram
+* Instagram where supported
+* Voice
+
+Voice must explicitly explain:
+
+"Voice reminders are individually scheduled and are not available for bulk campaigns."
+
+Show review screen before scheduling.
+
+---
+
+# 14. CLIENT — ANALYTICS
+
+Route:
+
+`/analytics`
+
+This should be a useful business intelligence page.
+
+Filters:
+
+* Today
+* 7 days
+* 30 days
+* 90 days
+* Custom
+
+KPIs:
+
+* Total conversations
+* Incoming messages
+* Outgoing messages
+* Response time
+* Unread rate
+* Campaign messages
+* Reminder completion
+* Failed messages
+
+Charts:
+
+### Conversations by channel
+
+WhatsApp
+Instagram
+Telegram
+Email
+
+### Messages over time
+
+Incoming vs outgoing.
+
+### Response time
+
+Average response time.
+
+### Campaign performance
+
+Sent vs delivered vs failed.
+
+### Reminder performance
+
+Scheduled
+Completed
+Failed
+
+### Team performance
+
+* Messages handled
+* Conversations resolved
+* Average response time
+
+Do not fabricate data.
+
+If insufficient data exists, show:
+
+"No data yet"
+
+instead of fake charts.
+
+---
+
+# 15. CLIENT — CHANNELS
+
+Route:
+
+`/channels`
+
+This should be separate from general settings because channels are core to EverReach.
+
+Show cards:
+
+### WhatsApp
+
+* Connected/disconnected
+* Phone number
+* Business account
+* Templates
+* Wallet balance
+* Last webhook event
+
+Actions:
+
+* Connect
+* Reconnect
+* Disconnect
+* Test connection
+
+### Instagram
+
+* Connected
+* Account
+* Reconnect
+* Disconnect
+
+### Telegram
+
+* Bot status
+* Bot name
+* Reconnect
+* Disconnect
+
+### Email
+
+* Sending domain
+* From address
+* Connection status
+* Test email
+
+### Voice
+
+* Provider
+* Number
+* Connection status
+* Test
+
+Every credential must be masked.
+
+Never expose API keys/secrets.
+
+---
+
+# 16. CLIENT — WHATSAPP TEMPLATES
+
+This can be a tab under WhatsApp or a dedicated page.
+
+Show:
+
+* Template name
+* Category
+* Language
+* Status
+* Last updated
+
+Statuses:
+
+* Approved
+* Pending
+* Rejected
+* Disabled
+
+Actions:
+
+* View
+* Create if supported
+* Sync
+* Refresh status
+
+Template preview should show variable substitutions.
+
+---
+
+# 17. CLIENT — KNOWLEDGE BASE
+
+Route:
+
+`/knowledge`
+
+This is critical for AI drafts.
+
+Purpose:
+
+Give the AI reliable business-specific information.
+
+Sections:
+
+### Business profile
+
+* Business name
+* Description
+* Address
+* Phone
+* Website
+* Working hours
+
+### FAQs
+
+Example:
+
+Question:
+"What is your cancellation policy?"
+
+Answer:
+"Appointments can be cancelled up to 24 hours..."
+
+### Products/services
+
+* Name
+* Description
+* Price
+* Availability
+* Terms
+
+### Policies
+
+* Refund policy
+* Cancellation policy
+* Delivery policy
+* Privacy policy
+* Other business rules
+
+### AI instructions
+
+Allow owner to define:
+
+* Tone
+* Formality
+* Language
+* What AI should never say
+* When AI should escalate to human
+
+Example:
+
+"Never promise discounts without approval."
+
+AI should use this knowledge when creating drafts.
+
+---
+
+# 18. CLIENT — TEAM
+
+Route:
+
+`/team`
+
+Show team members:
+
+* Name
+* Email
+* Role
+* Status
+* Last active
+
+Roles:
+
+### Owner
+
+Full organization access.
+
+### Admin
+
+Manage organization and team.
+
+### Agent
+
+Inbox, contacts, campaigns/reminders depending on permissions.
+
+### Viewer
+
+Read-only analytics/inbox.
+
+Actions:
+
+* Invite member
+* Change role
+* Suspend
+* Remove
+
+Invitation flow should be simple.
+
+---
+
+# 19. CLIENT — BILLING
+
+Route:
+
+`/billing`
+
+Show:
+
+### Current plan
+
+* Starter/Growth/Scale
+* Price
+* Renewal date
+* Features
+
+### Usage
+
+* Channels
+* Team seats
+* Sends
+* Campaign usage
+* AI usage if metered
+
+### WhatsApp wallet
+
+Show:
+
+* Current balance
+* Amount used
+* Recent transactions
+* Low balance warning
+
+Actions:
+
+* Add funds
+* View transactions
+
+### Invoices
+
+Table:
+
+* Invoice number
+* Date
+* Amount
+* Status
+* Payment date
+
+Actions:
+
+* View
+* Download
+
+### Payment
+
+Use Razorpay integration already present.
+
+Do not expose secrets.
+
+---
+
+# 20. CLIENT — SETTINGS
+
+Route:
+
+`/settings`
+
+Create a proper settings system with sections.
+
+### General
+
+* Business name
+* Logo
+* Industry
+* Website
+* Address
+* Timezone
+
+### Profile
+
+User profile.
+
+### Notifications
+
+* New message
+* Campaign complete
+* Failed message
+* Low wallet
+* Failed reminder
+
+### AI
+
+* AI enabled
+* Tone
+* Language
+* Draft behavior
+* Escalation rules
+
+AI must remain human-review-only.
+
+### Security
+
+* Change password
+* Sessions
+* Logout all sessions if supported
+
+### Danger zone
+
+* Disconnect all channels
+* Delete organization
+
+Deletion should require strong confirmation.
+
+---
+
+# 21. CLIENT SIDEBAR
+
+Use a professional sidebar.
+
+Top:
+
+EverReach logo
+
+Organization selector if user can belong to multiple organizations.
+
+Navigation:
+
+Overview
+Inbox
+Contacts
+Campaigns
+Reminders
+Analytics
+
+Divider
+
+Channels
+Knowledge Base
+Team
+
+Divider
+
+Billing
+Settings
+
+Bottom:
+
+Help
+User profile
+Logout
+
+Show notification badges where useful.
+
+---
+
+# 22. PLATFORM ADMIN APPLICATION
+
+This is NOT a normal client dashboard.
+
+It is the internal control center for Eversity Tech LLP.
+
+The platform admin should be able to manage the EverReach SaaS.
+
+Recommended:
+
+## 10 major areas
+
+1. Overview
+2. Organizations
+3. Users
+4. Channels
+5. Messages
+6. Campaigns
+7. Reminders
+8. Billing
+9. System Health
+10. Audit Logs
+11. Platform Settings
+
+---
+
+# 23. PLATFORM ADMIN — OVERVIEW
+
+Route:
+
+`/platform`
+
+Dashboard should answer:
+
+> "Is EverReach healthy and what is happening across the platform?"
+
+KPI cards:
+
+* Total organizations
+* Active organizations
+* New organizations
+* Active users
+* Messages today
+* Messages this month
+* Campaigns running
+* Reminders scheduled
+* Revenue
+* Failed jobs
+
+System health:
+
+* PostgreSQL
+* Redis
+* Worker
+* Sentry
+* Razorpay
+* Email provider
+* WhatsApp provider
+* Instagram provider
+* Telegram provider
+* Voice provider
+
+Use:
+
+Healthy
+Warning
+Critical
+
+Recent activity:
+
+* New organization
+* Payment
+* Channel connected
+* Campaign completed
+* Failed job
+* User invited
+
+---
+
+# 24. PLATFORM ADMIN — ORGANIZATIONS
+
+Route:
+
+`/platform/organizations`
+
+Table:
+
+* Organization
+* Owner
+* Plan
+* Status
+* Channels
+* Users
+* Messages
+* MRR
+* Created
+* Last active
+
+Filters:
+
+* Plan
+* Status
+* Industry
+* Date
+
+Actions:
+
+* View
+* Suspend
+* Reactivate
+* Contact
+* Billing
+* Impersonate only if explicitly implemented securely
+
+---
+
+# 25. PLATFORM ADMIN — ORGANIZATION DETAIL
+
+Route:
+
+`/platform/organizations/[id]`
+
+Show:
+
+### Overview
+
+* Organization details
+* Owner
+* Plan
+* Created
+* Last active
+
+### Usage
+
+* Messages
+* Campaigns
+* Reminders
+* Contacts
+* AI drafts
+
+### Channels
+
+Status for every channel.
+
+### Team
+
+Users and roles.
+
+### Billing
+
+* Current plan
+* Invoices
+* Payments
+* Wallet
+
+### Activity
+
+Audit timeline.
+
+### Health
+
+Recent errors related to the organization.
+
+Provide safe administrative actions:
+
+* Suspend organization
+* Reactivate
+* Reset specific channel connection
+* Change plan
+* Generate invoice
+
+Do NOT allow platform admins to casually view customer message contents unless there is an explicit support/debugging permission and a clear audit trail.
+
+---
+
+# 26. PLATFORM ADMIN — USERS
+
+Route:
+
+`/platform/users`
+
+Show:
+
+* User
+* Organization
+* Role
+* Email
+* Status
+* Last login
+* Created
+
+Actions:
+
+* View
+* Suspend
+* Reactivate
+
+Do not expose passwords or credentials.
+
+---
+
+# 27. PLATFORM ADMIN — CHANNELS
+
+Route:
+
+`/platform/channels`
+
+Show platform-wide channel status.
+
+Group by:
+
+* WhatsApp
+* Instagram
+* Telegram
+* Email
+* Voice
+
+Metrics:
+
+* Connected
+* Disconnected
+* Failed
+* Webhook failures
+* Provider errors
+
+Show recent channel errors.
+
+---
+
+# 28. PLATFORM ADMIN — MESSAGES
+
+Route:
+
+`/platform/messages`
+
+This is an operational monitoring page.
+
+DO NOT make this a place where admins casually read all customer conversations.
+
+Show metadata:
+
+* Organization
+* Channel
+* Direction
+* Status
+* Provider
+* Timestamp
+* Error code
+
+Filters:
+
+* Organization
+* Channel
+* Status
+* Date
+
+Statuses:
+
+* Queued
+* Sent
+* Delivered
+* Failed
+* Retry
+* Rejected
+
+Allow support diagnostics without exposing sensitive message contents by default.
+
+---
+
+# 29. PLATFORM ADMIN — CAMPAIGNS
+
+Route:
+
+`/platform/campaigns`
+
+Platform-wide campaign monitoring.
+
+Show:
+
+* Organization
+* Campaign
+* Channel
+* Status
+* Audience
+* Sent
+* Failed
+* Created
+* Scheduled
+
+Actions:
+
+* View
+* Pause if necessary
+* Investigate failure
+
+---
+
+# 30. PLATFORM ADMIN — REMINDERS
+
+Route:
+
+`/platform/reminders`
+
+Show:
+
+* Organization
+* Contact identifier where appropriate
+* Channel
+* Type
+* Scheduled
+* Status
+
+Monitor:
+
+* queued
+* sent
+* completed
+* failed
+* cancelled
+
+Voice reminder failures should be visible.
+
+---
+
+# 31. PLATFORM ADMIN — BILLING
+
+Route:
+
+`/platform/billing`
+
+Show:
+
+### Revenue
+
+* Today
+* This month
+* Last month
+* MRR
+* Failed payments
+
+### Subscriptions/plans
+
+* Starter
+* Growth
+* Scale
+
+### Invoices
+
+* Organization
+* Invoice
+* Amount
+* Status
+* Created
+* Paid
+
+### Payments
+
+* Razorpay payment ID
+* Invoice
+* Amount
+* Status
+* Date
+
+Never store unnecessary payment credentials.
+
+---
+
+# 32. PLATFORM ADMIN — SYSTEM HEALTH
+
+Route:
+
+`/platform/health`
+
+This is very important.
+
+Display:
+
+### Application
+
+* Next.js
+* API health
+* response errors
+
+### Database
+
+* PostgreSQL connectivity
+* latency
+* connection pool status
+
+### Redis
+
+* connectivity
+* queue depth
+
+### Workers
+
+* worker online/offline
+* active jobs
+* failed jobs
+* delayed jobs
+
+### Queues
+
+* campaigns
+* reminders
+* voice
+
+### Providers
+
+* Resend
+* WhatsApp
+* Instagram
+* Telegram
+* Voice
+* Razorpay
+
+### Sentry
+
+Show recent error count and critical errors if integration permits.
+
+---
+
+# 33. PLATFORM ADMIN — AUDIT LOGS
+
+Route:
+
+`/platform/audit-logs`
+
+Every sensitive platform action should be auditable.
+
+Record:
+
+* Admin
+* Action
+* Organization
+* Target
+* Timestamp
+* IP if appropriate
+* Result
+
+Examples:
+
+* Organization suspended
+* Plan changed
+* User suspended
+* Channel disconnected
+* Invoice generated
+* Support access granted
+
+Never silently perform sensitive administrative operations.
+
+---
+
+# 34. PLATFORM ADMIN — PLATFORM SETTINGS
+
+Route:
+
+`/platform/settings`
+
+Sections:
+
+### Plans
+
+* Starter
+* Growth
+* Scale
+* Pricing
+* Limits
+
+### AI
+
+* Default provider
+* Model
+* Global limits
+
+### Messaging
+
+* Global rate limits
+* Default retry configuration
+
+### Wallet
+
+* Low balance threshold
+
+### System
+
+* Maintenance mode if implemented
+
+Never display secret values.
+
+Use environment/secret management for credentials.
+
+---
+
+# 35. PLATFORM ADMIN SIDEBAR
+
+Design:
+
+EverReach Platform
+
+Overview
+
+Organizations
+Users
+
+Channels
+Messages
+Campaigns
+Reminders
+
+Billing
+
+System Health
+Audit Logs
+
+Settings
+
+Bottom:
+
+Admin profile
+Logout
+
+Use a visually distinct but professional indication that this is the platform-admin area.
+
+---
+
+# 36. TOTAL PAGE/AREA TARGET
+
+Do NOT create 40–50 separate routes unnecessarily.
+
+Target approximately:
+
+## Client
+
+1. Overview
+2. Inbox
+3. Contacts
+4. Campaigns
+5. Campaign detail/create
+6. Reminders
+7. Reminder create
+8. Analytics
+9. Channels
+10. WhatsApp Templates
+11. Knowledge Base
+12. Team
+13. Billing
+14. Settings
+
+Approximately **14 functional areas/routes**, with detail pages and modals where appropriate.
+
+## Platform Admin
+
+1. Overview
+2. Organizations
+3. Organization detail
+4. Users
+5. Channels
+6. Messages
+7. Campaigns
+8. Reminders
+9. Billing
+10. System Health
+11. Audit Logs
+12. Settings
+
+Approximately **12 functional areas/routes**.
+
+The current application should be expanded toward this architecture, but existing routes should be reused wherever possible.
+
+---
+
+# 37. RESPONSIVE DESIGN
+
+Desktop:
+
+Primary target.
+
+Tablet:
+
+Fully usable.
+
+Mobile:
+
+The dashboard must remain functional.
+
+For Inbox on mobile:
+
+Do NOT try to force a three-column layout.
+
+Instead:
+
+Conversation list → conversation → customer information
+
+using navigation/drawers.
+
+---
+
+# 38. LOADING STATES
+
+Every data-heavy page needs:
+
+* skeleton loaders
+* empty states
+* error states
+* retry actions
+
+Never leave a blank screen.
+
+Example:
+
+"Your inbox is empty"
+
+"Connect your first channel to start receiving conversations."
+
+---
+
+# 39. EMPTY STATES
+
+Every page must have a useful empty state.
+
+Example Contacts:
+
+"No contacts yet"
+
+"Contacts will appear here when customers message you or when you import them."
+
+Button:
+
+"Add contact"
+
+Campaigns:
+
+"No campaigns yet"
+
+"Create your first campaign to reach your contacts."
+
+Channels:
+
+"No channels connected"
+
+"Connect WhatsApp, Instagram, Telegram or Email to start."
+
+Analytics:
+
+"Not enough data yet"
+
+"Analytics will appear once EverReach starts receiving and sending messages."
+
+---
+
+# 40. ERROR HANDLING
+
+Do not show raw:
+
+* Prisma errors
+* database errors
+* provider stack traces
+* API keys
+* internal IDs unnecessarily
+
+Instead:
+
+User-friendly message.
+
+Example:
+
+"WhatsApp couldn't send this message."
+
+Then:
+
+"Check the channel connection or try again."
+
+Provide:
+
+Retry
+View details where appropriate
+
+Log technical details to Sentry.
+
+---
+
+# 41. SECURITY REQUIREMENTS
+
+Preserve and strengthen existing security architecture.
+
+Every organization request must verify:
+
+1. authenticated user
+2. organization membership
+3. role permissions
+4. organization ownership of requested resource
+
+Never trust orgId supplied by the client.
+
+Prevent:
+
+* IDOR
+* cross-tenant data access
+* unauthorized team access
+* unauthorized campaign access
+* unauthorized billing access
+
+Credentials:
+
+* encrypted at rest
+* never returned to frontend
+* never displayed in logs
+
+---
+
+# 42. AI SAFETY
+
+AI is assistive.
+
+AI MUST NOT:
+
+* automatically send messages
+* automatically promise refunds
+* automatically promise discounts
+* invent pricing
+* invent policies
+* fabricate availability
+
+Every AI response must be clearly marked:
+
+"AI Draft"
+
+Human must explicitly send it.
+
+Provide:
+
+Regenerate
+Edit
+Use draft
+Discard
+
+---
+
+# 43. PERFORMANCE
+
+Avoid loading entire tables.
+
+Implement:
+
+* pagination
+* server-side filtering where appropriate
+* debounced search
+* proper database indexes
+* efficient Prisma queries
+
+Inbox should feel instant.
+
+Do not fetch all conversations/contacts/messages into browser memory.
+
+---
+
+# 44. ACCESSIBILITY
+
+Implement:
+
+* keyboard navigation
+* visible focus states
+* semantic buttons
+* accessible labels
+* sufficient contrast
+* screen-reader friendly status indicators
+* no color-only meaning
+
+---
+
+# 45. PRODUCT UX PRIORITY
+
+Prioritize development in this order:
+
+## Priority 1 — Critical
+
+1. Inbox
+2. Conversations
+3. Channels
+4. Contacts
+5. AI drafts
+6. WhatsApp compliance
+7. Authentication/authorization
+8. Organization isolation
+
+## Priority 2 — Revenue
+
+9. Billing
+10. WhatsApp wallet
+11. Campaigns
+12. Reminders
+
+## Priority 3 — Retention
+
+13. Analytics
+14. Knowledge Base
+15. Team management
+
+## Priority 4 — Platform operations
+
+16. Platform overview
+17. Organizations
+18. Users
+19. Channels
+20. System health
+21. Audit logs
+22. Billing administration
+
+---
+
+# 46. IMPLEMENTATION PROCESS
+
+Before coding:
+
+### Step 1
+
+Inspect the entire repository.
+
+Understand:
+
+* routes
+* components
+* database schema
+* APIs
+* server actions
+* workers
+* authentication
+* authorization
+* existing UI
+* existing dashboards
+* current feature implementation
+
+### Step 2
+
+Create a document:
+
+`EVERREACH_UI_AUDIT.md`
+
+Containing:
+
+* existing pages
+* existing functionality
+* missing pages
+* incomplete pages
+* broken functionality
+* security concerns
+* UX problems
+* recommended implementation order
+
+### Step 3
+
+Do NOT implement everything in one giant change.
+
+Work in phases.
+
+---
+
+# 47. PHASE 1
+
+Improve application shell.
+
+Implement:
+
+* sidebar
+* header
+* breadcrumbs
+* responsive layout
+* notifications
+* user menu
+* organization context
+
+Do not break existing routes.
+
+---
+
+# 48. PHASE 2
+
+Build/upgrade:
+
+* Overview
+* Inbox
+* Conversation UI
+* AI draft UI
+* Customer profile
+* Channels
+
+These are the core EverReach experience.
+
+---
+
+# 49. PHASE 3
+
+Build/upgrade:
+
+* Contacts
+* Campaigns
+* Reminders
+* WhatsApp templates
+* Knowledge Base
+
+---
+
+# 50. PHASE 4
+
+Build/upgrade:
+
+* Analytics
+* Team
+* Billing
+* Wallet
+* Settings
+
+---
+
+# 51. PHASE 5
+
+Build/upgrade platform administration:
+
+* Platform Overview
+* Organizations
+* Organization detail
+* Users
+* Channels
+* Messages
+* Campaigns
+* Reminders
+* Billing
+* System Health
+* Audit Logs
+* Platform Settings
+
+---
+
+# 52. BEFORE EACH PHASE
+
+First inspect existing code.
+
+Then explain:
+
+* what already exists
+* what is missing
+* what files will change
+* database changes required
+* API changes required
+* risks
+
+Then implement.
+
+Do not change unrelated functionality.
+
+---
+
+# 53. AFTER EACH PHASE
+
+Run:
+
+```bash
+npx tsc --noEmit
+npm test
+npx eslint .
+```
+
+Fix all relevant errors.
+
+Then inspect the git diff.
+
+Do not leave:
+
+* TypeScript errors
+* lint errors
+* broken imports
+* dead routes
+* broken navigation
+* placeholder buttons
+* fake data presented as real data
+
+---
+
+# 54. IMPORTANT — NO FAKE FUNCTIONALITY
+
+Do not create buttons that do nothing.
+
+If a feature cannot yet be implemented because the backend capability doesn't exist:
+
+Either:
+
+1. implement the backend correctly, or
+2. clearly mark the feature as unavailable/coming soon.
+
+Never make a fake button appear functional.
+
+Do not create fake analytics numbers.
+
+Do not hardcode fake customers into production UI.
+
+Use seed/demo data only in development.
+
+---
+
+# 55. IMPORTANT — DON'T OVERENGINEER
+
+Don't create unnecessary abstractions.
+
+Reuse:
+
+* existing components
+* existing API routes
+* existing Prisma models
+* existing services
+* existing authentication
+* existing worker jobs
+
+Only add database models when genuinely required.
+
+---
+
+# 56. FINAL UX STANDARD
+
+After implementation, EverReach should feel like a mature SaaS product.
+
+A business owner should be able to:
+
+1. Create an organization
+2. Log in
+3. Connect a channel
+4. Receive a customer message
+5. See it in Inbox
+6. See AI-generated draft
+7. Review/edit it
+8. Send it
+9. Add customer to Contacts
+10. Schedule a reminder
+11. Create a campaign
+12. View campaign results
+13. See analytics
+14. Manage team
+15. Manage billing
+16. Manage knowledge used by AI
+
+A platform administrator should be able to:
+
+1. See overall platform health
+2. See organizations
+3. Manage organizations
+4. See users
+5. Monitor channels
+6. Monitor messaging
+7. Monitor campaigns
+8. Monitor reminders
+9. Manage billing
+10. Diagnose infrastructure
+11. Review audit logs
+12. Configure platform settings
+
+---
+
+# 57. FIRST TASK — DO NOT CODE YET
+
+Start by auditing the repository.
+
+Do NOT make any changes yet.
+
+Create:
+
+`EVERREACH_UI_AUDIT.md`
+
+Include:
+
+### Existing
+
+* Existing client routes
+* Existing platform routes
+* Existing components
+* Existing APIs
+* Existing database models
+* Existing workers
+* Existing integrations
+
+### Missing
+
+List every missing page/functionality from this specification.
+
+### Broken
+
+Identify anything that appears incomplete or incorrect.
+
+### Security
+
+Identify possible:
+
+* cross-tenant access
+* authorization problems
+* secret exposure
+* webhook security issues
+* billing security issues
+* unsafe admin functionality
+
+### UX
+
+Identify:
+
+* poor navigation
+* missing empty states
+* missing loading states
+* confusing flows
+* inconsistent UI
+* missing responsive behavior
+
+### Implementation plan
+
+Create a prioritized plan:
+
+P0 = critical/security/revenue
+
+P1 = core user experience
+
+P2 = retention/features
+
+P3 = polish
+
+At the end, STOP.
+
+Do not modify application code until the audit is complete.

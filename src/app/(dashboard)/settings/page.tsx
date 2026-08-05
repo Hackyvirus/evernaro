@@ -1,10 +1,21 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Badge, Button, Card, Input, Select, Textarea } from "@/components/ui";
+import { useSearchParams } from "next/navigation";
+import { Badge, Button, Card, Input, Select, Textarea, PageHeader, Tabs } from "@/components/ui";
 import { VERTICAL_PRESETS } from "@/lib/vertical-presets";
+import { RoleAwareAdminGuard } from "../role";
 
 type Tab = "profile" | "telegram" | "email" | "whatsapp" | "instagram" | "voice";
+
+const TABS: { id: Tab; label: string }[] = [
+  { id: "profile", label: "Business profile" },
+  { id: "telegram", label: "Telegram" },
+  { id: "email", label: "Email" },
+  { id: "whatsapp", label: "WhatsApp" },
+  { id: "instagram", label: "Instagram" },
+  { id: "voice", label: "Voice" },
+];
 
 interface BusinessProfileForm {
   businessName: string;
@@ -32,7 +43,18 @@ interface ChannelSummary {
 }
 
 export default function SettingsPage() {
-  const [tab, setTab] = useState<Tab>("profile");
+  return (
+    <RoleAwareAdminGuard>
+      <SettingsPageContent />
+    </RoleAwareAdminGuard>
+  );
+}
+
+function SettingsPageContent() {
+  const searchParams = useSearchParams();
+  const initialChannel = searchParams.get("channel");
+  const initialTab = TABS.find((t) => t.id === initialChannel)?.id ?? "profile";
+  const [tab, setTab] = useState<Tab>(initialTab);
   const [channels, setChannels] = useState<ChannelSummary[]>([]);
   // If the user connects a channel before the initial GET resolves, that
   // stale response (fetched before the connection existed) must not be
@@ -58,82 +80,63 @@ export default function SettingsPage() {
   const instagramChannel = channels.find((c) => c.type === "INSTAGRAM");
   const voiceChannel = channels.find((c) => c.type === "VOICE");
 
+  const tabContent: Record<Tab, React.ReactNode> = {
+    profile: <BusinessProfileTab />,
+    telegram: (
+      <TelegramTab
+        channel={telegramChannel}
+        onConnected={(c) =>
+          applyLocalUpdate((prev) => [...prev.filter((p) => p.type !== "TELEGRAM"), c])
+        }
+      />
+    ),
+    email: (
+      <EmailTab
+        channel={emailChannel}
+        onConnected={(c) =>
+          applyLocalUpdate((prev) => [...prev.filter((p) => p.type !== "EMAIL"), c])
+        }
+      />
+    ),
+    whatsapp: (
+      <WhatsAppTab
+        channel={whatsappChannel}
+        onConnected={(c) =>
+          applyLocalUpdate((prev) => [...prev.filter((p) => p.type !== "WHATSAPP"), c])
+        }
+      />
+    ),
+    instagram: (
+      <InstagramTab
+        channel={instagramChannel}
+        onConnected={(c) =>
+          applyLocalUpdate((prev) => [...prev.filter((p) => p.type !== "INSTAGRAM"), c])
+        }
+      />
+    ),
+    voice: (
+      <VoiceTab
+        channel={voiceChannel}
+        onConnected={(c) =>
+          applyLocalUpdate((prev) => [...prev.filter((p) => p.type !== "VOICE"), c])
+        }
+      />
+    ),
+  };
+
   return (
     <div className="flex flex-1 flex-col overflow-y-auto">
-      <header className="border-b border-border px-6 py-4">
-        <h1 className="text-xl font-bold text-text">Settings</h1>
-        <p className="text-sm text-text-secondary">Connect channels and tell the AI about your business.</p>
-      </header>
+      <PageHeader
+        title="Settings"
+        description="Connect channels and tell the AI about your business."
+      />
 
-      <div className="border-b border-border px-6">
-        <nav className="flex gap-4 overflow-x-auto text-sm">
-          {(
-            [
-              ["profile", "Business profile"],
-              ["telegram", "Telegram"],
-              ["email", "Email"],
-              ["whatsapp", "WhatsApp"],
-              ["instagram", "Instagram"],
-              ["voice", "Voice"],
-            ] as [Tab, string][]
-          ).map(([key, label]) => (
-            <button
-              key={key}
-              onClick={() => setTab(key)}
-              className={`cursor-pointer border-b-2 px-1 py-3 whitespace-nowrap transition-colors ${
-                tab === key
-                  ? "border-primary font-medium text-primary"
-                  : "border-transparent text-text-secondary hover:text-text"
-              }`}
-            >
-              {label}
-            </button>
-          ))}
-        </nav>
-      </div>
-
-      <div className="max-w-xl flex-1 px-6 py-6">
-        {tab === "profile" && <BusinessProfileTab />}
-        {tab === "telegram" && (
-          <TelegramTab
-            channel={telegramChannel}
-            onConnected={(c) =>
-              applyLocalUpdate((prev) => [...prev.filter((p) => p.type !== "TELEGRAM"), c])
-            }
-          />
-        )}
-        {tab === "email" && (
-          <EmailTab
-            channel={emailChannel}
-            onConnected={(c) =>
-              applyLocalUpdate((prev) => [...prev.filter((p) => p.type !== "EMAIL"), c])
-            }
-          />
-        )}
-        {tab === "whatsapp" && (
-          <WhatsAppTab
-            channel={whatsappChannel}
-            onConnected={(c) =>
-              applyLocalUpdate((prev) => [...prev.filter((p) => p.type !== "WHATSAPP"), c])
-            }
-          />
-        )}
-        {tab === "instagram" && (
-          <InstagramTab
-            channel={instagramChannel}
-            onConnected={(c) =>
-              applyLocalUpdate((prev) => [...prev.filter((p) => p.type !== "INSTAGRAM"), c])
-            }
-          />
-        )}
-        {tab === "voice" && (
-          <VoiceTab
-            channel={voiceChannel}
-            onConnected={(c) =>
-              applyLocalUpdate((prev) => [...prev.filter((p) => p.type !== "VOICE"), c])
-            }
-          />
-        )}
+      <div className="px-6">
+        <Tabs
+          tabs={TABS.map((t) => ({ ...t, content: tabContent[t.id] }))}
+          defaultTab={tab}
+          onChange={(id) => setTab(id as Tab)}
+        />
       </div>
     </div>
   );

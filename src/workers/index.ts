@@ -9,6 +9,7 @@ import { Worker, type Job } from "bullmq";
 import { redisConnection } from "../lib/redis";
 import { prisma } from "../lib/prisma";
 import { sendViaChannel } from "../lib/send";
+import { InsufficientWalletBalanceError } from "../lib/whatsapp-wallet";
 import { twilioPlaceCall } from "../lib/voice";
 import { channelWebhookSecret } from "../lib/webhook-secret";
 import { decryptSecret } from "../lib/crypto";
@@ -53,6 +54,14 @@ async function processCampaignJob(job: Job<CampaignSendJob>) {
   });
   if (!recipient || recipient.status !== "PENDING") return;
 
+  // Transition scheduled campaigns to sending when the first recipient job runs.
+  if (recipient.campaign.status === "SCHEDULED") {
+    await prisma.campaign.update({
+      where: { id: recipient.campaignId },
+      data: { status: "SENDING" },
+    });
+  }
+
   const text = renderTemplate(recipient.campaign.messageTemplate, recipient.contact.name);
   const wat = recipient.campaign.whatsappTemplate;
 
@@ -66,8 +75,13 @@ async function processCampaignJob(job: Job<CampaignSendJob>) {
       text,
       undefined,
       wat?.gupshupTemplateId
-        ? { gupshupTemplateId: wat.gupshupTemplateId, params: [recipient.contact.name?.trim() || "there"] }
-        : undefined
+        ? {
+            gupshupTemplateId: wat.gupshupTemplateId,
+            params: [recipient.contact.name?.trim() || "there"],
+            category: wat.category,
+          }
+        : undefined,
+      { type: "CAMPAIGN_RECIPIENT", id: recipient.id }
     );
     await prisma.campaignRecipient.update({
       where: { id: recipient.id },
@@ -78,9 +92,15 @@ async function processCampaignJob(job: Job<CampaignSendJob>) {
       data: { sentCount: { increment: 1 } },
     });
   } catch (err) {
+    const message =
+      err instanceof InsufficientWalletBalanceError
+        ? "Insufficient WhatsApp balance — top up the wallet from Billing"
+        : err instanceof Error
+          ? err.message
+          : "Send failed";
     await prisma.campaignRecipient.update({
       where: { id: recipient.id },
-      data: { status: "FAILED", error: err instanceof Error ? err.message : "Send failed" },
+      data: { status: "FAILED", error: message },
     });
     await prisma.campaign.update({
       where: { id: recipient.campaignId },
@@ -161,17 +181,34 @@ async function processReminderJob(job: Job<ReminderSendJob>) {
       if (!reminder.whatsappTemplate.gupshupTemplateId) {
         throw new Error("Template was never confirmed by Gupshup — check its status in Settings");
       }
-      await sendViaChannel(reminder.channel, reminder.contact, reminder.message, undefined, {
-        gupshupTemplateId: reminder.whatsappTemplate.gupshupTemplateId,
-        params: [reminder.contact.name?.trim() || "there"],
-      });
+      await sendViaChannel(
+        reminder.channel,
+        reminder.contact,
+        reminder.message,
+        undefined,
+        {
+          gupshupTemplateId: reminder.whatsappTemplate.gupshupTemplateId,
+          params: [reminder.contact.name?.trim() || "there"],
+          category: reminder.whatsappTemplate.category,
+        },
+        { type: "REMINDER", id: reminder.id }
+      );
     } else {
-      await sendViaChannel(reminder.channel, reminder.contact, reminder.message);
+      await sendViaChannel(reminder.channel, reminder.contact, reminder.message, undefined, undefined, {
+        type: "REMINDER",
+        id: reminder.id,
+      });
     }
   } catch (err) {
+    const message =
+      err instanceof InsufficientWalletBalanceError
+        ? "Insufficient WhatsApp balance — top up the wallet from Billing"
+        : err instanceof Error
+          ? err.message
+          : "Send failed";
     await prisma.reminder.update({
       where: { id: reminder.id },
-      data: { status: "FAILED", error: err instanceof Error ? err.message : "Send failed" },
+      data: { status: "FAILED", error: message },
     });
     console.error(`Reminder ${reminder.id} failed:`, err);
     return;

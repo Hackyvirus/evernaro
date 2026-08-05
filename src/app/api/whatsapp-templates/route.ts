@@ -1,13 +1,14 @@
 import { NextResponse } from "next/server";
+import { UserRole } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { requireOrgId, UnauthorizedError } from "@/lib/session";
+import { requireOrgMember, UnauthorizedError, ForbiddenError } from "@/lib/session";
 import { decryptSecret } from "@/lib/crypto";
 import { gupshupCreateTemplate } from "@/lib/whatsapp";
 import { whatsappTemplateBodySchema } from "@/lib/whatsapp-template-validation";
 
 export async function GET() {
   try {
-    const orgId = await requireOrgId();
+    const { orgId } = await requireOrgMember(UserRole.VIEWER);
     const channel = await prisma.channel.findFirst({ where: { orgId, type: "WHATSAPP" } });
     if (!channel) {
       return NextResponse.json({ templates: [] });
@@ -21,13 +22,16 @@ export async function GET() {
     if (err instanceof UnauthorizedError) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+    if (err instanceof ForbiddenError) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
     return NextResponse.json({ error: "Failed to load templates" }, { status: 500 });
   }
 }
 
 export async function POST(req: Request) {
   try {
-    const orgId = await requireOrgId();
+    const { orgId } = await requireOrgMember(UserRole.ADMIN);
     const parsed = whatsappTemplateBodySchema.safeParse(await req.json());
     if (!parsed.success) {
       return NextResponse.json(
@@ -92,6 +96,9 @@ export async function POST(req: Request) {
   } catch (err) {
     if (err instanceof UnauthorizedError) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    if (err instanceof ForbiddenError) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
     return NextResponse.json({ error: "Failed to create template" }, { status: 500 });
   }

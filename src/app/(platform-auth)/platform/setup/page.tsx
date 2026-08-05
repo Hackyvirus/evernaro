@@ -3,6 +3,8 @@ import { prisma } from "@/lib/prisma";
 import { Card } from "@/components/ui";
 import { SetupForm } from "./setup-form";
 
+export const dynamic = "force-dynamic";
+
 export default async function PlatformSetupPage() {
   const existing = await prisma.platformAdmin.findFirst();
   if (existing) redirect("/platform/login");

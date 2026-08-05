@@ -4,7 +4,7 @@ import { useState } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Button, Card, Input } from "@/components/ui";
+import { Button, Card, Input, Logo } from "@/components/ui";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -33,8 +33,13 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-surface px-4">
-      <Card className="w-full max-w-sm p-8">
+    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-surface px-4">
+      <div className="pointer-events-none absolute -top-24 -right-24 h-72 w-72 rounded-full bg-primary-lighter blur-3xl" aria-hidden="true" />
+      <div className="pointer-events-none absolute -bottom-24 -left-24 h-72 w-72 rounded-full bg-accent-light blur-3xl" aria-hidden="true" />
+      <Card className="relative w-full max-w-sm p-8">
+        <div className="mb-6 flex justify-center">
+          <Logo />
+        </div>
         <h1 className="text-2xl font-bold text-text">Log in to EverReach</h1>
         <p className="mt-1 text-sm text-text-secondary">One inbox for every customer channel.</p>
 

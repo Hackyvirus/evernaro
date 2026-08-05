@@ -1,4 +1,5 @@
 export { Button } from "./button";
+export { Logo } from "./logo";
 export { Input, Textarea, Select } from "./input";
 export { Card } from "./card";
 export { Badge } from "./badge";
@@ -8,3 +9,11 @@ export { NavItem } from "./nav-item";
 export { StatCard } from "./stat-card";
 export { ThemeToggle } from "./theme-toggle";
 export { useSidebarCollapsed } from "./use-sidebar-collapsed";
+export { PageHeader } from "./page-header";
+export { Breadcrumbs } from "./breadcrumbs";
+export { Skeleton, SkeletonCard, SkeletonTable } from "./skeleton";
+export { Table, TableHead, TableBody, TableRow, TableHeader, TableCell, TableEmpty } from "./table";
+export { Tabs } from "./tabs";
+export { ToastProvider, useToast } from "./toast";
+export { IconButton } from "./icon-button";
+export { Avatar, AvatarStack } from "./avatar";

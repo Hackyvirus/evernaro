@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { DashboardShell } from "./dashboard-shell";
+import { RoleProvider } from "./role";
 
 export default async function DashboardLayout({
   children,
@@ -10,5 +11,18 @@ export default async function DashboardLayout({
   const session = await auth();
   if (!session?.user) redirect("/login");
 
-  return <DashboardShell orgName={session.user.orgName ?? ""}>{children}</DashboardShell>;
+  const role = (session.user.role ?? "AGENT") as "OWNER" | "ADMIN" | "AGENT" | "VIEWER";
+
+  return (
+    <RoleProvider role={role}>
+      <DashboardShell
+        orgName={session.user.orgName ?? ""}
+        userName={session.user.name ?? ""}
+        userEmail={session.user.email ?? ""}
+        role={role}
+      >
+        {children}
+      </DashboardShell>
+    </RoleProvider>
+  );
 }

@@ -1,12 +1,13 @@
 import { NextResponse } from "next/server";
+import { UserRole } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { requireOrgId, UnauthorizedError } from "@/lib/session";
+import { requireOrgMember, UnauthorizedError, ForbiddenError } from "@/lib/session";
 import { decryptSecret } from "@/lib/crypto";
 import { gupshupGetTemplateStatus } from "@/lib/whatsapp";
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const orgId = await requireOrgId();
+    const { orgId } = await requireOrgMember(UserRole.ADMIN);
     const { id } = await params;
 
     const template = await prisma.whatsAppTemplate.findFirst({
@@ -43,6 +44,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   } catch (err) {
     if (err instanceof UnauthorizedError) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    if (err instanceof ForbiddenError) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
     const message = err instanceof Error ? err.message : "Failed to sync template status";
     return NextResponse.json({ error: message }, { status: 500 });

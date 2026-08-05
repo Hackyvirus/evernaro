@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { InvoiceType, OrganizationStatus, UserRole } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { requireOrgId, UnauthorizedError } from "@/lib/session";
+import { requireOrgMember, UnauthorizedError, ForbiddenError } from "@/lib/session";
 import { verifyRazorpayPaymentSignature } from "@/lib/razorpay";
+import { creditWallet } from "@/lib/whatsapp-wallet";
 
 const bodySchema = z.object({
   razorpayOrderId: z.string().min(1),
@@ -16,7 +18,7 @@ const bodySchema = z.object({
 // feedback instead of waiting on the webhook round-trip.
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const orgId = await requireOrgId();
+    const { orgId } = await requireOrgMember(UserRole.ADMIN);
     const { id } = await params;
     const parsed = bodySchema.safeParse(await req.json());
     if (!parsed.success) {
@@ -41,10 +43,27 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       });
     }
 
+    // Subscription payment reactivates the organization.
+    if (invoice.type === InvoiceType.SUBSCRIPTION) {
+      await prisma.organization.update({
+        where: { id: orgId },
+        data: { status: OrganizationStatus.ACTIVE },
+      });
+    }
+
+    // Idempotent regardless of whether the webhook already handled this —
+    // creditWallet no-ops on a second call for the same invoiceId.
+    if (invoice.type === InvoiceType.WALLET_TOPUP) {
+      await creditWallet(invoice.orgId, invoice.amountInr * 100, "TOPUP", { invoiceId: invoice.id });
+    }
+
     return NextResponse.json({ ok: true });
   } catch (err) {
     if (err instanceof UnauthorizedError) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    if (err instanceof ForbiddenError) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
     return NextResponse.json({ error: "Failed to confirm payment" }, { status: 500 });
   }

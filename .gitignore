@@ -50,3 +50,6 @@ worker.log
 /.agents/
 /.claude/skills/
 /.windsurf/
+
+.vercel
+.env*

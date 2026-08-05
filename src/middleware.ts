@@ -7,7 +7,19 @@ import { authConfig } from "@/lib/auth.config";
 // get bundled into this Edge Function.
 const { auth } = NextAuth(authConfig);
 
-const CLIENT_PROTECTED_PREFIXES = ["/inbox", "/settings", "/contacts", "/campaigns", "/reminders"];
+const CLIENT_PROTECTED_PREFIXES = [
+  "/dashboard",
+  "/inbox",
+  "/settings",
+  "/contacts",
+  "/campaigns",
+  "/reminders",
+  "/analytics",
+  "/channels",
+  "/knowledge",
+  "/team",
+  "/billing",
+];
 
 export default auth((req) => {
   const { pathname } = req.nextUrl;
@@ -32,7 +44,7 @@ export default auth((req) => {
   const isAuthPage = pathname.startsWith("/login") || pathname.startsWith("/signup");
   if (isAuthPage) {
     if (isLoggedIn && !isPlatformAdmin) {
-      return NextResponse.redirect(new URL("/inbox", req.nextUrl));
+      return NextResponse.redirect(new URL("/dashboard", req.nextUrl));
     }
     return NextResponse.next();
   }
@@ -47,11 +59,17 @@ export default auth((req) => {
 
 export const config = {
   matcher: [
+    "/dashboard/:path*",
     "/inbox/:path*",
     "/settings/:path*",
     "/contacts/:path*",
     "/campaigns/:path*",
     "/reminders/:path*",
+    "/analytics/:path*",
+    "/channels/:path*",
+    "/knowledge/:path*",
+    "/team/:path*",
+    "/billing/:path*",
     "/login",
     "/signup",
     "/platform/:path*",

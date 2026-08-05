@@ -1,37 +1,66 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
+import type { LucideIcon } from "lucide-react";
 import {
   BarChart3,
   Bell,
+  BookOpen,
+  Briefcase,
+  Cable,
+  HelpCircle,
   Megaphone,
-  MessageSquare,
   Menu,
+  MessageSquare,
   PanelLeftClose,
   PanelLeftOpen,
   Receipt,
-  Settings as SettingsIcon,
+  Settings,
   Users,
 } from "lucide-react";
-import { NavItem, ThemeToggle, useSidebarCollapsed } from "@/components/ui";
+import { NavItem, ThemeToggle, useSidebarCollapsed, IconButton } from "@/components/ui";
 import { SignOutButton } from "./sign-out-button";
 
-const NAV_ITEMS = [
+type NavItemDef = {
+  href: string;
+  icon: LucideIcon;
+  label: string;
+  roles?: string[];
+};
+
+const MAIN_NAV: NavItemDef[] = [
+  { href: "/dashboard", icon: Briefcase, label: "Overview" },
   { href: "/inbox", icon: MessageSquare, label: "Inbox" },
   { href: "/contacts", icon: Users, label: "Contacts" },
   { href: "/campaigns", icon: Megaphone, label: "Campaigns" },
   { href: "/reminders", icon: Bell, label: "Reminders" },
   { href: "/analytics", icon: BarChart3, label: "Analytics" },
-  { href: "/billing", icon: Receipt, label: "Billing" },
-  { href: "/settings", icon: SettingsIcon, label: "Settings" },
+];
+
+const CONFIG_NAV: NavItemDef[] = [
+  { href: "/channels", icon: Cable, label: "Channels" },
+  { href: "/knowledge", icon: BookOpen, label: "Knowledge Base" },
+  { href: "/team", icon: Users, label: "Team", roles: ["ADMIN", "OWNER"] },
+];
+
+const BOTTOM_NAV: NavItemDef[] = [
+  { href: "/billing", icon: Receipt, label: "Billing", roles: ["ADMIN", "OWNER"] },
+  { href: "/settings", icon: Settings, label: "Settings" },
 ];
 
 function SidebarContent({
   orgName,
+  userName,
+  userEmail,
+  role,
   collapsed = false,
   onToggleCollapse,
 }: {
   orgName: string;
+  userName: string;
+  userEmail: string;
+  role: string;
   collapsed?: boolean;
   onToggleCollapse?: () => void;
 }) {
@@ -44,29 +73,68 @@ function SidebarContent({
             <p className="text-xs text-text-secondary">{orgName}</p>
           </div>
         )}
+        {collapsed && <span className="sr-only">EverReach</span>}
         {onToggleCollapse && (
-          <button
-            type="button"
+          <IconButton
+            label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
             onClick={onToggleCollapse}
-            aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-            className="flex h-7 w-7 flex-shrink-0 cursor-pointer items-center justify-center rounded-md text-text-muted transition-colors hover:bg-hover hover:text-text"
+            className="flex-shrink-0"
           >
             {collapsed ? (
               <PanelLeftOpen className="h-[18px] w-[18px]" aria-hidden="true" />
             ) : (
               <PanelLeftClose className="h-[18px] w-[18px]" aria-hidden="true" />
             )}
-          </button>
+          </IconButton>
         )}
       </div>
-      <nav className="flex flex-1 flex-col gap-1">
-        {NAV_ITEMS.map((item) => (
-          <NavItem key={item.href} {...item} collapsed={collapsed} />
-        ))}
+
+      <nav className="flex flex-1 flex-col gap-6 overflow-y-auto">
+        <div className="flex flex-col gap-1">
+          {MAIN_NAV.filter((item) => !item.roles || item.roles.includes(role)).map((item) => (
+            <NavItem key={item.href} {...item} collapsed={collapsed} />
+          ))}
+        </div>
+
+        <div className="flex flex-col gap-1">
+          {!collapsed && (
+            <p className="px-3 text-[10px] font-semibold tracking-wide text-text-muted uppercase">Configuration</p>
+          )}
+          {CONFIG_NAV.filter((item) => !item.roles || item.roles.includes(role)).map((item) => (
+            <NavItem key={item.href} {...item} collapsed={collapsed} />
+          ))}
+        </div>
+
+        <div className="flex flex-col gap-1">
+          {!collapsed && (
+            <p className="px-3 text-[10px] font-semibold tracking-wide text-text-muted uppercase">Account</p>
+          )}
+          {BOTTOM_NAV.filter((item) => !item.roles || item.roles.includes(role)).map((item) => (
+            <NavItem key={item.href} {...item} collapsed={collapsed} />
+          ))}
+        </div>
       </nav>
-      <div className={`flex items-center pt-2 ${collapsed ? "flex-col gap-2" : "justify-between"}`}>
-        <SignOutButton collapsed={collapsed} />
-        <ThemeToggle />
+
+      <div className={`flex flex-col gap-3 border-t border-border pt-3 ${collapsed ? "items-center gap-2" : "gap-2"}`}>
+        {!collapsed && (
+          <div className="px-3 py-1">
+            <p className="text-xs font-medium text-text truncate">{userName || userEmail}</p>
+            <p className="text-[10px] text-text-muted capitalize">{role.toLowerCase()}</p>
+          </div>
+        )}
+        <div className={`flex items-center ${collapsed ? "flex-col gap-2" : "w-full justify-between"}`}>
+          <Link
+            href="/help"
+            className={`flex items-center gap-2 rounded-md py-2 text-sm text-text-secondary transition-colors hover:bg-hover hover:text-text ${collapsed ? "justify-center px-0" : "px-3"}`}
+          >
+            <HelpCircle className="h-[18px] w-[18px] flex-shrink-0" aria-hidden="true" />
+            {!collapsed && <span>Help</span>}
+          </Link>
+          <div className={`flex items-center ${collapsed ? "flex-col gap-2" : "gap-2"}`}>
+            <SignOutButton collapsed={collapsed} />
+            <ThemeToggle />
+          </div>
+        </div>
       </div>
     </>
   );
@@ -74,9 +142,15 @@ function SidebarContent({
 
 export function DashboardShell({
   orgName,
+  userName,
+  userEmail,
+  role,
   children,
 }: {
   orgName: string;
+  userName: string;
+  userEmail: string;
+  role: string;
   children: React.ReactNode;
 }) {
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -86,14 +160,9 @@ export function DashboardShell({
     <div className="flex min-h-screen flex-1 flex-col bg-surface md:flex-row">
       {/* Mobile top bar */}
       <div className="flex items-center justify-between border-b border-border bg-card px-4 py-3 md:hidden">
-        <button
-          type="button"
-          onClick={() => setMobileOpen(true)}
-          aria-label="Open navigation menu"
-          className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-md text-text-secondary hover:bg-hover hover:text-text"
-        >
+        <IconButton label="Open navigation menu" onClick={() => setMobileOpen(true)}>
           <Menu className="h-[18px] w-[18px]" aria-hidden="true" />
-        </button>
+        </IconButton>
         <p className="text-base font-extrabold tracking-tight text-primary">EverReach</p>
         <ThemeToggle />
       </div>
@@ -108,7 +177,7 @@ export function DashboardShell({
             onClick={() => setMobileOpen(false)}
           />
           <aside className="relative flex h-full w-64 flex-col bg-card p-4 shadow-[var(--shadow-elevated)]">
-            <SidebarContent orgName={orgName} />
+            <SidebarContent orgName={orgName} userName={userName} userEmail={userEmail} role={role} />
           </aside>
         </div>
       )}
@@ -121,6 +190,9 @@ export function DashboardShell({
       >
         <SidebarContent
           orgName={orgName}
+          userName={userName}
+          userEmail={userEmail}
+          role={role}
           collapsed={collapsed}
           onToggleCollapse={() => setCollapsed(!collapsed)}
         />

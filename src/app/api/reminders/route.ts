@@ -1,23 +1,29 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { UserRole } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { requireOrgId, UnauthorizedError } from "@/lib/session";
+import { requireOrgMember, UnauthorizedError, ForbiddenError } from "@/lib/session";
 import { enqueueReminder } from "@/lib/queue";
 import { contactReachableOn } from "@/lib/channel-reachability";
 import { whatsappSendRequiresTemplate } from "@/lib/whatsapp-template-validation";
+import { requireActiveSubscription, SubscriptionSuspendedError } from "@/lib/subscription";
+import { logAudit } from "@/lib/audit";
 
 export async function GET() {
   try {
-    const orgId = await requireOrgId();
+    const { orgId } = await requireOrgMember(UserRole.VIEWER);
     const reminders = await prisma.reminder.findMany({
       where: { orgId },
       orderBy: { scheduledFor: "asc" },
-      include: { contact: true, channel: { select: { type: true } } },
+      include: { contact: true, channel: { select: { type: true } }, assignedTo: { select: { id: true, name: true } } },
     });
     return NextResponse.json({ reminders });
   } catch (err) {
     if (err instanceof UnauthorizedError) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    if (err instanceof ForbiddenError) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
     return NextResponse.json({ error: "Failed to load reminders" }, { status: 500 });
   }
@@ -25,21 +31,25 @@ export async function GET() {
 
 const bodySchema = z.object({
   contactId: z.string().min(1),
+  title: z.string().optional(),
+  type: z.enum(["APPOINTMENT", "PAYMENT", "FOLLOW_UP", "CALLBACK", "CUSTOM"]).default("CUSTOM"),
   channelId: z.string().min(1),
   message: z.string().min(1),
-  scheduledFor: z.string().min(1), // ISO datetime
+  scheduledFor: z.string().min(1),
   recurrence: z.enum(["NONE", "DAILY", "WEEKLY", "MONTHLY"]).default("NONE"),
   whatsappTemplateId: z.string().optional(),
+  assignedToId: z.string().optional(),
 });
 
 export async function POST(req: Request) {
   try {
-    const orgId = await requireOrgId();
+    const { orgId, userId } = await requireOrgMember(UserRole.AGENT);
+    await requireActiveSubscription(orgId);
     const parsed = bodySchema.safeParse(await req.json());
     if (!parsed.success) {
       return NextResponse.json({ error: "Contact, channel, message, and time are required" }, { status: 400 });
     }
-    const { contactId, channelId, message, scheduledFor, recurrence, whatsappTemplateId } = parsed.data;
+    const { contactId, title, type, channelId, message, scheduledFor, recurrence, whatsappTemplateId, assignedToId } = parsed.data;
 
     const scheduledDate = new Date(scheduledFor);
     if (Number.isNaN(scheduledDate.getTime()) || scheduledDate.getTime() < Date.now()) {
@@ -82,9 +92,12 @@ export async function POST(req: Request) {
       data: {
         orgId,
         contactId,
+        title: title ?? null,
+        type,
         channelId,
         message,
         whatsappTemplateId: channel.type === "WHATSAPP" ? whatsappTemplateId : null,
+        assignedToId: assignedToId || null,
         scheduledFor: scheduledDate,
         recurrence,
       },
@@ -92,10 +105,25 @@ export async function POST(req: Request) {
 
     await enqueueReminder(reminder.id, scheduledDate);
 
+    await logAudit({
+      orgId,
+      userId,
+      action: "REMINDER_CREATED",
+      targetType: "Reminder",
+      targetId: reminder.id,
+      metadata: { channelType: channel.type, scheduledFor, recurrence },
+    });
+
     return NextResponse.json({ ok: true, reminder });
   } catch (err) {
     if (err instanceof UnauthorizedError) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    if (err instanceof ForbiddenError) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+    if (err instanceof SubscriptionSuspendedError) {
+      return NextResponse.json({ error: err.message }, { status: 403 });
     }
     return NextResponse.json({ error: "Failed to create reminder" }, { status: 500 });
   }

@@ -1,26 +1,42 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
-import type { Prisma } from "@prisma/client";
+import type { ConversationPriority, ConversationStatus } from "@prisma/client";
 import { contactLabel as getContactLabel } from "@/lib/contact-label";
 import { Button, Textarea } from "@/components/ui";
+import { useRole, isAgentOrAbove } from "../../role";
 
-type ConversationWithRelations = Prisma.ConversationGetPayload<{
-  include: {
-    contact: true;
-    channel: {
-      select: {
-        type: true;
-        telegramBotUsername: true;
-        emailAddress: true;
-        whatsappSourceNumber: true;
-        instagramUsername: true;
-      };
-    };
-    messages: true;
+type ConversationWithRelations = {
+  id: string;
+  status: ConversationStatus;
+  priority: ConversationPriority;
+  contact: {
+    id: string;
+    name: string | null;
+    email: string | null;
+    phone: string | null;
+    telegramChatId: string | null;
+    instagramUserId: string | null;
+    company?: string | null;
+    tags?: string[];
+    notes?: string | null;
   };
-}>;
+  channel: {
+    type: "TELEGRAM" | "EMAIL" | "WHATSAPP" | "INSTAGRAM" | "VOICE";
+    telegramBotUsername?: string | null;
+    emailAddress?: string | null;
+    whatsappSourceNumber?: string | null;
+    instagramUsername?: string | null;
+  };
+  messages: {
+    id: string;
+    body: string;
+    direction: "INBOUND" | "OUTBOUND";
+    sender: "CONTACT" | "AGENT" | "AI";
+    isAiDraft: boolean;
+    createdAt: Date | string;
+  }[];
+};
 
 function isOlderThan24h(date: Date | string) {
   return Date.now() - new Date(date).getTime() > 24 * 60 * 60 * 1000;
@@ -37,10 +53,11 @@ function channelLabel(channel: ConversationWithRelations["channel"]) {
 
 export function ConversationView({
   conversation,
+  onRefresh,
 }: {
   conversation: ConversationWithRelations;
+  onRefresh?: () => void;
 }) {
-  const router = useRouter();
   const draft = useMemo(
     () => conversation.messages.find((m) => m.isAiDraft),
     [conversation.messages]
@@ -50,9 +67,12 @@ export function ConversationView({
     [conversation.messages]
   );
 
+  const role = useRole();
+  const canReply = isAgentOrAbove(role);
   const [text, setText] = useState(draft?.body ?? "");
   const [sending, setSending] = useState(false);
   const [regenerating, setRegenerating] = useState(false);
+  const [discarding, setDiscarding] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const contactLabel = getContactLabel(conversation.contact);
@@ -85,7 +105,7 @@ export function ConversationView({
         return;
       }
       setText("");
-      router.refresh();
+      onRefresh?.();
     } catch {
       setError("Network error — check your connection and try again.");
     } finally {
@@ -102,11 +122,29 @@ export function ConversationView({
         setError("Failed to generate a draft (is ANTHROPIC_API_KEY configured?)");
         return;
       }
-      router.refresh();
+      onRefresh?.();
     } catch {
       setError("Network error — check your connection and try again.");
     } finally {
       setRegenerating(false);
+    }
+  }
+
+  async function discardDraft() {
+    setDiscarding(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/conversations/${conversation.id}/draft`, { method: "DELETE" });
+      if (!res.ok) {
+        setError("Failed to discard draft");
+        return;
+      }
+      if (draft && text === draft.body) setText("");
+      onRefresh?.();
+    } catch {
+      setError("Network error — check your connection and try again.");
+    } finally {
+      setDiscarding(false);
     }
   }
 
@@ -121,7 +159,7 @@ export function ConversationView({
         {sentMessages.map((m) => (
           <div
             key={m.id}
-            className={`flex ${m.direction === "INBOUND" ? "justify-start" : "justify-end"}`}
+            className={`animate-message-in flex ${m.direction === "INBOUND" ? "justify-start" : "justify-end"}`}
           >
             <div
               className={`max-w-md rounded-lg px-3 py-2 text-sm ${
@@ -136,12 +174,23 @@ export function ConversationView({
         ))}
 
         {draft && (
-          <div className="flex justify-end">
+          <div className="animate-message-in flex justify-end">
             <div className="max-w-md rounded-lg border border-dashed border-warning bg-warning-light px-3 py-2 text-sm text-text">
-              <p className="mb-1 text-xs font-medium tracking-wide text-warning uppercase">
+              <p className="mb-2 text-xs font-medium tracking-wide text-warning uppercase">
                 AI draft — review before sending
               </p>
-              {draft.body}
+              <p className="mb-2">{draft.body}</p>
+              <div className="flex flex-wrap gap-2">
+                <Button size="sm" variant="secondary" onClick={() => setText(draft.body)} disabled={!canReply}>
+                  Use draft
+                </Button>
+                <Button size="sm" variant="secondary" onClick={regenerate} loading={regenerating} disabled={!canReply}>
+                  Regenerate
+                </Button>
+                <Button size="sm" variant="ghost" onClick={discardDraft} loading={discarding} disabled={!canReply}>
+                  Discard
+                </Button>
+              </div>
             </div>
           </div>
         )}
@@ -150,8 +199,8 @@ export function ConversationView({
       <div className="border-t border-border px-6 py-4">
         {isStaleWhatsApp && (
           <p className="mb-2 rounded-md border border-warning bg-warning-light px-3 py-2 text-xs text-text">
-            This contact hasn&apos;t messaged in over 24 hours — WhatsApp will likely reject a free-text
-            reply. Use an approved template from a Reminder instead, or wait for them to write in again.
+            WhatsApp requires an approved template for messages outside the 24-hour customer service
+            window. Create a Reminder with an approved template, or wait for the customer to reply.
           </p>
         )}
         {error && <p className="mb-2 text-sm text-danger">{error}</p>}
@@ -159,18 +208,14 @@ export function ConversationView({
           <Textarea
             value={text}
             onChange={(e) => setText(e.target.value)}
-            placeholder="Type a reply..."
+            placeholder={!canReply ? "Viewers can not send replies" : isStaleWhatsApp ? "Reply disabled — use a template" : "Type a reply..."}
             rows={3}
             className="flex-1 resize-none"
+            disabled={isStaleWhatsApp || !canReply}
           />
-          <div className="flex flex-col gap-2">
-            <Button onClick={send} loading={sending} disabled={!text.trim()}>
-              {sending ? "Sending..." : "Send"}
-            </Button>
-            <Button onClick={regenerate} loading={regenerating} variant="secondary">
-              {regenerating ? "Thinking..." : "AI draft"}
-            </Button>
-          </div>
+          <Button onClick={send} loading={sending} disabled={!text.trim() || isStaleWhatsApp || !canReply}>
+            {sending ? "Sending..." : "Send"}
+          </Button>
         </div>
       </div>
     </div>

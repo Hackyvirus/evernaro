@@ -1,15 +1,17 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { UserRole } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { requireOrgId, UnauthorizedError } from "@/lib/session";
+import { requireOrgMember, UnauthorizedError, ForbiddenError } from "@/lib/session";
 import { telegramGetMe, telegramSetWebhook } from "@/lib/telegram";
 import { encryptSecret } from "@/lib/crypto";
+import { logAudit } from "@/lib/audit";
 
 const bodySchema = z.object({ botToken: z.string().min(10) });
 
 export async function POST(req: Request) {
   try {
-    const orgId = await requireOrgId();
+    const { orgId, userId } = await requireOrgMember(UserRole.ADMIN);
     const parsed = bodySchema.safeParse(await req.json());
     if (!parsed.success) {
       return NextResponse.json({ error: "A valid bot token is required" }, { status: 400 });
@@ -32,6 +34,15 @@ export async function POST(req: Request) {
 
     await telegramSetWebhook(botToken, channel.id);
 
+    await logAudit({
+      orgId,
+      userId,
+      action: "CHANNEL_CONNECTED",
+      targetType: "Channel",
+      targetId: channel.id,
+      metadata: { type: "TELEGRAM", botUsername: me.username },
+    });
+
     return NextResponse.json({
       ok: true,
       id: channel.id,
@@ -40,6 +51,9 @@ export async function POST(req: Request) {
   } catch (err) {
     if (err instanceof UnauthorizedError) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    if (err instanceof ForbiddenError) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
     const message = err instanceof Error ? err.message : "Failed to connect Telegram bot";
     return NextResponse.json({ error: message }, { status: 400 });

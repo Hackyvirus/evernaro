@@ -31,7 +31,13 @@ describe("requireOrgId", () => {
   it("throws when the DB no longer has this user in the session's org — the whole point of this re-check", async () => {
     authMock.mockResolvedValue({ user: { id: "user_1", orgId: "org_A" } });
     // User was moved to a different org (or removed) since the JWT was issued.
-    findUniqueUserMock.mockResolvedValue({ orgId: "org_B" });
+    findUniqueUserMock.mockResolvedValue({ orgId: "org_B", isActive: true });
+    await expect(requireOrgId()).rejects.toThrow(UnauthorizedError);
+  });
+
+  it("throws when the user is inactive", async () => {
+    authMock.mockResolvedValue({ user: { id: "user_1", orgId: "org_A" } });
+    findUniqueUserMock.mockResolvedValue({ orgId: "org_A", isActive: false });
     await expect(requireOrgId()).rejects.toThrow(UnauthorizedError);
   });
 
@@ -43,7 +49,7 @@ describe("requireOrgId", () => {
 
   it("returns the orgId when the session and DB agree", async () => {
     authMock.mockResolvedValue({ user: { id: "user_1", orgId: "org_A" } });
-    findUniqueUserMock.mockResolvedValue({ orgId: "org_A" });
+    findUniqueUserMock.mockResolvedValue({ orgId: "org_A", isActive: true });
     await expect(requireOrgId()).resolves.toBe("org_A");
   });
 });

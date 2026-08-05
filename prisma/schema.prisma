@@ -13,13 +13,20 @@ datasource db {
 
 // ---------- Tenant ----------
 
+enum OrganizationStatus {
+  ACTIVE
+  PAST_DUE
+  SUSPENDED
+}
+
 model Organization {
-  id            String   @id @default(cuid())
+  id            String             @id @default(cuid())
   name          String
-  slug          String   @unique
+  slug          String             @unique
   monthlyFeeInr Int? // set manually by the platform admin — the amount an invoice defaults to
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  status        OrganizationStatus @default(ACTIVE)
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
 
   users           User[]
   channels        Channel[]
@@ -30,6 +37,8 @@ model Organization {
   callLogs        CallLog[]
   businessProfile BusinessProfile?
   invoices        Invoice[]
+  wallet          WhatsAppWallet?
+  auditLogs       AuditLog[]
 }
 
 // ---------- Billing (Razorpay) ----------
@@ -48,10 +57,21 @@ enum InvoiceStatus {
   CANCELLED
 }
 
+// SUBSCRIPTION = the existing manual recurring-fee invoice (default, matches
+// every pre-existing row). WALLET_TOPUP = a self-serve credit purchase for
+// the WhatsApp wallet — see WhatsAppWallet below. Kept as one Invoice model
+// rather than a parallel table so both reuse the same Razorpay order/webhook
+// plumbing; distinguished only by what happens when status flips to PAID.
+enum InvoiceType {
+  SUBSCRIPTION
+  WALLET_TOPUP
+}
+
 model Invoice {
   id                String        @id @default(cuid())
   orgId             String
   org               Organization  @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  type              InvoiceType   @default(SUBSCRIPTION)
   amountInr         Int
   status            InvoiceStatus @default(PENDING)
   razorpayOrderId   String?       @unique
@@ -59,7 +79,100 @@ model Invoice {
   createdAt         DateTime      @default(now())
   paidAt            DateTime?
 
+  walletTransaction WalletTransaction?
+
   @@index([orgId, status])
+}
+
+// ---------- WhatsApp wallet ----------
+//
+// A prepaid balance per org that meters actual WhatsApp send cost (Meta
+// conversation-category pricing via Gupshup) — without this, a connected
+// WhatsApp channel can send unboundedly with nothing capping real cost.
+// Enforced at the single send chokepoint (sendViaChannel, src/lib/send.ts).
+// Amounts are in paise (smallest unit), not whole rupees like
+// Invoice.amountInr — per-message costs are sub-rupee.
+
+model WhatsAppWallet {
+  id                       String       @id @default(cuid())
+  orgId                    String       @unique
+  org                      Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  balancePaise             Int          @default(0)
+  lowBalanceThresholdPaise Int          @default(10000) // ₹100 default, platform-admin editable
+  lowBalanceAlertSentAt    DateTime? // set when the alert fires, cleared on the next credit that takes balance back above threshold — so it fires once per crossing, not on every message
+  createdAt                DateTime     @default(now())
+  updatedAt                DateTime     @updatedAt
+
+  transactions WalletTransaction[]
+}
+
+enum WalletTransactionType {
+  TOPUP
+  MESSAGE_DEBIT
+  REFUND
+  MANUAL_CREDIT
+  MANUAL_DEBIT
+}
+
+// What a MESSAGE_DEBIT transaction's referenceId points at — campaigns and
+// reminders never create a Message row (only inbox replies do), so this
+// can't just be a messageId.
+enum WalletReferenceType {
+  INBOX_MESSAGE
+  CAMPAIGN_RECIPIENT
+  REMINDER
+}
+
+model WalletTransaction {
+  id                String                @id @default(cuid())
+  walletId          String
+  wallet            WhatsAppWallet        @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  type              WalletTransactionType
+  amountPaise       Int // signed: positive = credit, negative = debit
+  balanceAfterPaise Int // snapshot for audit without recomputation
+
+  // Idempotency key for MESSAGE_DEBIT rows — a retried/stalled job re-running
+  // the same send must not double-charge. Postgres unique indexes treat NULL
+  // as distinct from NULL, so this constraint is a no-op for every other
+  // transaction type (where both columns are null) and only bites on a real
+  // duplicate debit for the same reference.
+  referenceType WalletReferenceType?
+  referenceId   String?
+
+  // Idempotency for TOPUP rows — Razorpay retries webhook delivery, and the
+  // client-side confirm route can also fire for the same invoice; only one
+  // WalletTransaction may ever exist per invoiceId (unique allows many nulls).
+  invoiceId String?  @unique
+  invoice   Invoice? @relation(fields: [invoiceId], references: [id])
+
+  // Idempotency for REFUND rows — at most one refund per original debit.
+  relatedTransactionId String?            @unique
+  relatedTransaction   WalletTransaction? @relation("WalletTransactionRefund", fields: [relatedTransactionId], references: [id])
+  refundOf             WalletTransaction? @relation("WalletTransactionRefund")
+
+  note      String?
+  createdAt DateTime @default(now())
+
+  @@unique([referenceType, referenceId])
+  @@index([walletId, createdAt])
+}
+
+enum WhatsAppMessageCategory {
+  MARKETING
+  UTILITY
+  AUTHENTICATION
+  SERVICE // free-text within Meta's 24-hour customer-service window
+}
+
+model WhatsAppRateCard {
+  id            String                  @id @default(cuid())
+  category      WhatsAppMessageCategory
+  countryCode   String                  @default("IN")
+  costPaise     Int
+  effectiveFrom DateTime                @default(now())
+  updatedAt     DateTime                @updatedAt
+
+  @@unique([category, countryCode])
 }
 
 // ---------- Platform admin (Eversity Tech LLP staff, not tied to any org) ----------
@@ -70,6 +183,62 @@ model PlatformAdmin {
   passwordHash String
   name         String
   createdAt    DateTime @default(now())
+  updatedAt    DateTime @default(now()) @updatedAt
+  auditLogs    AuditLog[]
+}
+
+enum AuditLogAction {
+  ORG_CREATED
+  ORG_SUSPENDED
+  ORG_REACTIVATED
+  ORG_PLAN_CHANGED
+  ORG_DELETED
+  USER_INVITED
+  USER_ROLE_CHANGED
+  USER_SUSPENDED
+  USER_REACTIVATED
+  USER_REMOVED
+  CHANNEL_CONNECTED
+  CHANNEL_DISCONNECTED
+  CHANNEL_TESTED
+  WALLET_MANUAL_CREDIT
+  WALLET_MANUAL_DEBIT
+  WALLET_THRESHOLD_CHANGED
+  INVOICE_GENERATED
+  INVOICE_PAID
+  INVOICE_FAILED
+  INVOICE_CANCELLED
+  CAMPAIGN_CREATED
+  CAMPAIGN_CANCELLED
+  REMINDER_CREATED
+  REMINDER_CANCELLED
+  SETTINGS_CHANGED
+  KNOWLEDGE_BASE_CHANGED
+  CONVERSATION_UPDATED
+  OTHER
+}
+
+model AuditLog {
+  id              String         @id @default(cuid())
+  orgId           String?
+  org             Organization?  @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  userId          String?
+  user            User?          @relation(fields: [userId], references: [id], onDelete: SetNull)
+  platformAdminId String?
+  platformAdmin   PlatformAdmin? @relation(fields: [platformAdminId], references: [id], onDelete: SetNull)
+  action          AuditLogAction
+  targetType      String? // e.g. "Organization", "User", "Channel", "Invoice"
+  targetId        String?
+  metadata        Json? // old/new values, reason, etc.
+  ip              String?
+  userAgent       String?
+  result          String         @default("SUCCESS") // SUCCESS, FAILURE, etc.
+  createdAt       DateTime       @default(now())
+
+  @@index([orgId, createdAt])
+  @@index([createdAt])
+  @@index([action])
+  @@index([targetType, targetId])
 }
 
 model User {
@@ -80,13 +249,21 @@ model User {
   passwordHash String
   name         String
   role         UserRole     @default(OWNER)
+  isActive     Boolean      @default(true)
   createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @default(now()) @updatedAt
+
+  assignedConversations Conversation[] @relation("AssignedTo")
+  closedConversations   Conversation[] @relation("ClosedBy")
+  reminders             Reminder[]
+  auditLogs             AuditLog[]
 }
 
 enum UserRole {
   OWNER
   ADMIN
   AGENT
+  VIEWER
 }
 
 // One business profile per org — feeds the AI draft-reply engine.
@@ -97,11 +274,27 @@ model BusinessProfile {
   businessName  String
   industry      String?
   description   String       @default("") // what the business does, who its customers are
+  address       String?
+  phone         String?
+  website       String?
+  workingHours  String?
   tone          String       @default("friendly and professional")
+  formality     String       @default("semi-formal")
+  language      String       @default("en")
   knowledgeBase String       @default("") // FAQs, pricing, policies — free text fed to the AI
+  faqs          Json         @default("[]")
+  products      Json         @default("[]")
+  policies      Json         @default("[]")
+  aiInstructions Json        @default("{}")
   signOff       String       @default("")
   updatedAt     DateTime     @updatedAt
 }
+
+// Helpers for typed JSON fields in BusinessProfile
+// faqs: { question: string; answer: string }[]
+// products: { name: string; description?: string; price?: string; availability?: string; terms?: string }[]
+// policies: { title: string; body: string }[]
+// aiInstructions: { neverSay?: string; escalate?: string }
 
 // ---------- Channels ----------
 
@@ -209,6 +402,9 @@ model Contact {
   email           String?
   phone           String? // E.164, also used as the WhatsApp identifier
   instagramUserId String? // Instagram-scoped user ID (IGSID) from the webhook payload
+  company         String?
+  tags            String[]     @default([])
+  notes           String?      @db.Text
   createdAt       DateTime     @default(now())
 
   conversations      Conversation[]
@@ -224,22 +420,37 @@ enum ConversationStatus {
   CLOSED
 }
 
+enum ConversationPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
 model Conversation {
-  id            String             @id @default(cuid())
+  id            String               @id @default(cuid())
   orgId         String
-  org           Organization       @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  org           Organization         @relation(fields: [orgId], references: [id], onDelete: Cascade)
   contactId     String
-  contact       Contact            @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  contact       Contact              @relation(fields: [contactId], references: [id], onDelete: Cascade)
   channelId     String
-  channel       Channel            @relation(fields: [channelId], references: [id], onDelete: Cascade)
-  status        ConversationStatus @default(OPEN)
+  channel       Channel              @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  status        ConversationStatus   @default(OPEN)
+  priority      ConversationPriority @default(MEDIUM)
   subject       String? // used for email threads
-  lastMessageAt DateTime           @default(now())
-  createdAt     DateTime           @default(now())
+  assignedToId  String? // FK to User
+  assignedTo    User?                @relation("AssignedTo", fields: [assignedToId], references: [id], onDelete: SetNull)
+  closedById    String? // FK to User
+  closedBy      User?                @relation("ClosedBy", fields: [closedById], references: [id], onDelete: SetNull)
+  closedAt      DateTime?
+  lastMessageAt DateTime             @default(now())
+  createdAt     DateTime             @default(now())
 
   messages Message[]
 
   @@index([orgId, status])
+  @@index([orgId, assignedToId])
+  @@index([assignedToId])
 }
 
 enum MessageDirection {
@@ -270,9 +481,12 @@ model Message {
 
 enum CampaignStatus {
   DRAFT
+  SCHEDULED
   QUEUED
   SENDING
+  PAUSED
   COMPLETED
+  CANCELLED
   FAILED
 }
 
@@ -283,10 +497,13 @@ model Campaign {
   channelId          String
   channel            Channel           @relation(fields: [channelId], references: [id], onDelete: Cascade)
   name               String
+  description        String?
   messageTemplate    String // supports {{name}} placeholder, substituted per-recipient; for WhatsApp-with-template campaigns this mirrors the template body for display only — the send path uses whatsappTemplateId
   whatsappTemplateId String?
   whatsappTemplate   WhatsAppTemplate? @relation(fields: [whatsappTemplateId], references: [id])
   status             CampaignStatus    @default(DRAFT)
+  scheduledAt        DateTime?
+  timezone           String            @default("Asia/Kolkata")
   totalRecipients    Int               @default(0)
   sentCount          Int               @default(0)
   failedCount        Int               @default(0)
@@ -296,6 +513,8 @@ model Campaign {
   recipients CampaignRecipient[]
 
   @@index([orgId])
+  @@index([status])
+  @@index([scheduledAt])
 }
 
 enum RecipientStatus {
@@ -333,6 +552,14 @@ enum ReminderStatus {
   FAILED
 }
 
+enum ReminderType {
+  APPOINTMENT
+  PAYMENT
+  FOLLOW_UP
+  CALLBACK
+  CUSTOM
+}
+
 model Reminder {
   id                 String             @id @default(cuid())
   orgId              String
@@ -341,9 +568,13 @@ model Reminder {
   contact            Contact            @relation(fields: [contactId], references: [id], onDelete: Cascade)
   channelId          String
   channel            Channel            @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  title              String?
+  type               ReminderType       @default(CUSTOM)
   message            String
   whatsappTemplateId String?
   whatsappTemplate   WhatsAppTemplate?  @relation(fields: [whatsappTemplateId], references: [id])
+  assignedToId       String?
+  assignedTo         User?              @relation(fields: [assignedToId], references: [id], onDelete: SetNull)
   scheduledFor       DateTime
   recurrence         ReminderRecurrence @default(NONE)
   status             ReminderStatus     @default(PENDING)

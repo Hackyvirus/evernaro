@@ -1,8 +1,11 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { UserRole } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { requireOrgId, UnauthorizedError } from "@/lib/session";
+import { requireOrgMember, UnauthorizedError, ForbiddenError } from "@/lib/session";
 import { sendViaChannel } from "@/lib/send";
+import { InsufficientWalletBalanceError } from "@/lib/whatsapp-wallet";
+import { requireActiveSubscription, SubscriptionSuspendedError } from "@/lib/subscription";
 
 const bodySchema = z.object({ text: z.string().min(1) });
 
@@ -11,7 +14,8 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const orgId = await requireOrgId();
+    const { orgId } = await requireOrgMember(UserRole.AGENT);
+    await requireActiveSubscription(orgId);
     const { id } = await params;
     const parsed = bodySchema.safeParse(await req.json());
     if (!parsed.success) {
@@ -50,6 +54,18 @@ export async function POST(
   } catch (err) {
     if (err instanceof UnauthorizedError) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    if (err instanceof ForbiddenError) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+    if (err instanceof SubscriptionSuspendedError) {
+      return NextResponse.json({ error: err.message }, { status: 403 });
+    }
+    if (err instanceof InsufficientWalletBalanceError) {
+      return NextResponse.json(
+        { error: "WhatsApp balance is too low to send this message — top up from Billing." },
+        { status: 402 }
+      );
     }
     const message = err instanceof Error ? err.message : "Failed to send message";
     return NextResponse.json({ error: message }, { status: 400 });

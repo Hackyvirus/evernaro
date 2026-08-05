@@ -2,8 +2,8 @@
 
 import { useEffect, useState, use } from "react";
 import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
-import { Badge, Button, Card, Input, StatCard } from "@/components/ui";
+import { ArrowLeft, Wallet } from "lucide-react";
+import { Badge, Button, Card, Input, Select, StatCard } from "@/components/ui";
 
 interface Channel {
   id: string;
@@ -60,6 +60,32 @@ function invoiceStatusVariant(status: Invoice["status"]): "default" | "success" 
   return "warning";
 }
 
+interface WalletData {
+  id: string;
+  balancePaise: number;
+  lowBalanceThresholdPaise: number;
+}
+
+interface WalletTx {
+  id: string;
+  type: "TOPUP" | "MESSAGE_DEBIT" | "REFUND" | "MANUAL_CREDIT" | "MANUAL_DEBIT";
+  amountPaise: number;
+  note: string | null;
+  createdAt: string;
+}
+
+const TX_LABEL: Record<WalletTx["type"], string> = {
+  TOPUP: "Top-up",
+  MESSAGE_DEBIT: "WhatsApp message",
+  REFUND: "Refund",
+  MANUAL_CREDIT: "Manual credit",
+  MANUAL_DEBIT: "Manual debit",
+};
+
+function formatPaise(paise: number) {
+  return `₹${(paise / 100).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
 export default function ClientDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const [org, setOrg] = useState<OrgDetail | null>(null);
@@ -68,6 +94,16 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
   const [savingFee, setSavingFee] = useState(false);
   const [invoicing, setInvoicing] = useState(false);
   const [invoiceMessage, setInvoiceMessage] = useState<string | null>(null);
+
+  const [wallet, setWallet] = useState<WalletData | null>(null);
+  const [walletTx, setWalletTx] = useState<WalletTx[]>([]);
+  const [threshold, setThreshold] = useState("");
+  const [savingThreshold, setSavingThreshold] = useState(false);
+  const [adjustAction, setAdjustAction] = useState<"credit" | "debit">("credit");
+  const [adjustAmount, setAdjustAmount] = useState("");
+  const [adjustNote, setAdjustNote] = useState("");
+  const [adjusting, setAdjusting] = useState(false);
+  const [walletMessage, setWalletMessage] = useState<string | null>(null);
 
   function refresh() {
     fetch(`/api/platform/organizations/${id}`)
@@ -81,7 +117,63 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
       .finally(() => setLoaded(true));
   }
 
+  function refreshWallet() {
+    fetch(`/api/platform/organizations/${id}/wallet`)
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.wallet) {
+          setWallet(d.wallet);
+          setThreshold(String(Math.round(d.wallet.lowBalanceThresholdPaise / 100)));
+        }
+        setWalletTx(d.transactions ?? []);
+      });
+  }
+
   useEffect(refresh, [id]);
+  useEffect(refreshWallet, [id]);
+
+  async function saveThreshold() {
+    setSavingThreshold(true);
+    try {
+      await fetch(`/api/platform/organizations/${id}/wallet`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ lowBalanceThresholdPaise: Math.round(Number(threshold) * 100) }),
+      });
+      refreshWallet();
+    } finally {
+      setSavingThreshold(false);
+    }
+  }
+
+  async function submitAdjustment() {
+    setWalletMessage(null);
+    const amountInr = Number(adjustAmount);
+    if (!amountInr || amountInr <= 0 || !adjustNote.trim()) {
+      setWalletMessage("Enter an amount and a note");
+      return;
+    }
+    setAdjusting(true);
+    try {
+      const res = await fetch(`/api/platform/organizations/${id}/wallet`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: adjustAction, amountInr, note: adjustNote.trim() }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setWalletMessage(data.error ?? "Failed to adjust wallet");
+      } else {
+        setAdjustAmount("");
+        setAdjustNote("");
+        setWalletMessage("Wallet updated");
+        refreshWallet();
+      }
+    } catch {
+      setWalletMessage("Network error — check your connection and try again.");
+    }
+    setAdjusting(false);
+  }
 
   async function saveFee() {
     setSavingFee(true);
@@ -152,7 +244,7 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
 
         <div className="grid gap-6 lg:grid-cols-2">
           <Card className="flex flex-col gap-3 p-4">
-            <h2 className="text-sm font-semibold text-text">Owner</h2>
+            <h2 className="text-sm font-bold text-text">Owner</h2>
             {owner ? (
               <div className="text-sm">
                 <p className="text-text">{owner.name}</p>
@@ -179,7 +271,7 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
           </Card>
 
           <Card className="flex flex-col gap-3 p-4">
-            <h2 className="text-sm font-semibold text-text">Channels</h2>
+            <h2 className="text-sm font-bold text-text">Channels</h2>
             {org.channels.length === 0 ? (
               <p className="text-sm text-text-muted">No channels connected yet.</p>
             ) : (
@@ -200,7 +292,77 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
 
         <Card className="flex flex-col gap-4 p-4">
           <div className="flex flex-wrap items-end justify-between gap-3">
-            <h2 className="text-sm font-semibold text-text">Billing</h2>
+            <div className="flex items-center gap-2">
+              <Wallet className="h-4 w-4 text-primary" aria-hidden="true" />
+              <h2 className="text-sm font-bold text-text">WhatsApp wallet</h2>
+            </div>
+            <Input
+              label="Low-balance alert (₹)"
+              className="w-36"
+              value={threshold}
+              onChange={(e) => setThreshold(e.target.value.replace(/[^0-9]/g, ""))}
+              onBlur={saveThreshold}
+              disabled={savingThreshold}
+            />
+          </div>
+
+          {wallet ? (
+            <p className="text-2xl font-extrabold text-text tabular-nums">{formatPaise(wallet.balancePaise)}</p>
+          ) : (
+            <p className="text-sm text-text-secondary">Loading...</p>
+          )}
+
+          <div className="flex flex-wrap items-end gap-2 border-t border-border pt-3">
+            <Select
+              label="Action"
+              className="w-28"
+              value={adjustAction}
+              onChange={(e) => setAdjustAction(e.target.value as "credit" | "debit")}
+            >
+              <option value="credit">Credit</option>
+              <option value="debit">Debit</option>
+            </Select>
+            <Input
+              label="Amount (₹)"
+              className="w-28"
+              value={adjustAmount}
+              onChange={(e) => setAdjustAmount(e.target.value.replace(/[^0-9]/g, ""))}
+              placeholder="0"
+            />
+            <Input
+              label="Note"
+              className="w-48"
+              value={adjustNote}
+              onChange={(e) => setAdjustNote(e.target.value)}
+              placeholder="e.g. Bank transfer received"
+            />
+            <Button size="sm" variant="secondary" loading={adjusting} onClick={submitAdjustment}>
+              Apply
+            </Button>
+          </div>
+          {walletMessage && <p className="text-xs text-text-muted">{walletMessage}</p>}
+
+          {walletTx.length > 0 && (
+            <ul className="flex flex-col gap-2 border-t border-border pt-3">
+              {walletTx.slice(0, 10).map((tx) => (
+                <li key={tx.id} className="flex items-center justify-between text-sm">
+                  <div>
+                    <p className="text-text">{TX_LABEL[tx.type]}</p>
+                    {tx.note && <p className="text-xs text-text-muted">{tx.note}</p>}
+                  </div>
+                  <span className={tx.amountPaise >= 0 ? "text-success tabular-nums" : "text-text-secondary tabular-nums"}>
+                    {tx.amountPaise >= 0 ? "+" : ""}
+                    {formatPaise(tx.amountPaise)}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
+
+        <Card className="flex flex-col gap-4 p-4">
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <h2 className="text-sm font-bold text-text">Billing</h2>
             <div className="flex items-end gap-2">
               <Input
                 label="Monthly fee (₹)"

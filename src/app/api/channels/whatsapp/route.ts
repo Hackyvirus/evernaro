@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { UserRole } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { requireOrgId, UnauthorizedError } from "@/lib/session";
+import { requireOrgMember, UnauthorizedError, ForbiddenError } from "@/lib/session";
 import { channelWebhookSecret } from "@/lib/webhook-secret";
 import { encryptSecret } from "@/lib/crypto";
+import { logAudit } from "@/lib/audit";
 
 const bodySchema = z.object({
   apiKey: z.string().min(5),
@@ -14,7 +16,7 @@ const bodySchema = z.object({
 
 export async function POST(req: Request) {
   try {
-    const orgId = await requireOrgId();
+    const { orgId, userId } = await requireOrgMember(UserRole.ADMIN);
     const parsed = bodySchema.safeParse(await req.json());
     if (!parsed.success) {
       return NextResponse.json(
@@ -46,10 +48,22 @@ export async function POST(req: Request) {
 
     const webhookUrl = `${process.env.NEXT_PUBLIC_BASE_URL}/api/whatsapp/webhook/${channel.id}?secret=${channelWebhookSecret(channel.id)}`;
 
+    await logAudit({
+      orgId,
+      userId,
+      action: "CHANNEL_CONNECTED",
+      targetType: "Channel",
+      targetId: channel.id,
+      metadata: { type: "WHATSAPP", appName, sourceNumber },
+    });
+
     return NextResponse.json({ ok: true, id: channel.id, webhookUrl });
   } catch (err) {
     if (err instanceof UnauthorizedError) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    if (err instanceof ForbiddenError) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
     return NextResponse.json({ error: "Failed to save WhatsApp channel" }, { status: 500 });
   }

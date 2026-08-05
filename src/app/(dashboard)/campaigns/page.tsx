@@ -2,242 +2,196 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Megaphone } from "lucide-react";
-import { Badge, Button, Card, EmptyState, Input, Select, Textarea } from "@/components/ui";
-
-interface ChannelOption {
-  id: string;
-  type: "TELEGRAM" | "EMAIL" | "WHATSAPP" | "INSTAGRAM" | "VOICE";
-  telegramBotUsername: string | null;
-  emailAddress: string | null;
-  whatsappSourceNumber: string | null;
-  instagramUsername: string | null;
-}
-
-interface WhatsAppTemplateOption {
-  id: string;
-  name: string;
-  bodyText: string;
-  status: "PENDING" | "APPROVED" | "REJECTED";
-}
+import { Megaphone, Plus, Pause, Play, Copy, X, Clock, ArrowRight } from "lucide-react";
+import { Badge, Button, EmptyState, PageHeader, SkeletonCard, Table, TableHead, TableBody, TableRow, TableHeader, TableCell } from "@/components/ui";
+import { useToast } from "@/components/ui/toast";
+import { useRole, isAgentOrAbove } from "../role";
 
 interface CampaignSummary {
   id: string;
   name: string;
+  description?: string | null;
   status: string;
   totalRecipients: number;
   sentCount: number;
   failedCount: number;
   createdAt: string;
+  scheduledAt?: string | null;
   channel: { type: string };
 }
 
-function channelLabel(c: ChannelOption) {
-  if (c.type === "TELEGRAM") return `Telegram${c.telegramBotUsername ? ` · @${c.telegramBotUsername}` : ""}`;
-  if (c.type === "EMAIL") return `Email${c.emailAddress ? ` · ${c.emailAddress}` : ""}`;
-  if (c.type === "WHATSAPP") return `WhatsApp${c.whatsappSourceNumber ? ` · ${c.whatsappSourceNumber}` : ""}`;
-  return `Instagram${c.instagramUsername ? ` · @${c.instagramUsername}` : ""}`;
-}
-
 function statusVariant(status: string): "default" | "success" | "warning" | "danger" | "info" {
-  if (status === "COMPLETED") return "success";
+  if (status === "COMPLETED" || status === "SENT") return "success";
+  if (status === "SCHEDULED") return "info";
   if (status === "SENDING" || status === "QUEUED") return "info";
-  if (status === "FAILED") return "danger";
+  if (status === "FAILED" || status === "CANCELLED") return "danger";
+  if (status === "PAUSED") return "warning";
+  if (status === "DRAFT") return "default";
   return "default";
 }
 
-// Voice is excluded from bulk campaigns — see the compliance note in
-// src/app/api/campaigns/route.ts. Reachable only via individually-scheduled
-// Reminders.
-function campaignableChannels(channels: ChannelOption[]) {
-  return channels.filter((c) => c.type !== "VOICE");
+function formatDate(iso?: string | null) {
+  if (!iso) return "—";
+  return new Date(iso).toLocaleString();
 }
 
 export default function CampaignsPage() {
-  const [channels, setChannels] = useState<ChannelOption[]>([]);
-  const [templates, setTemplates] = useState<WhatsAppTemplateOption[]>([]);
+  const { showToast } = useToast();
+  const role = useRole();
   const [campaigns, setCampaigns] = useState<CampaignSummary[]>([]);
   const [loaded, setLoaded] = useState(false);
-  const [name, setName] = useState("");
-  const [channelId, setChannelId] = useState("");
-  const [messageTemplate, setMessageTemplate] = useState("");
-  const [whatsappTemplateId, setWhatsappTemplateId] = useState("");
-  const [status, setStatus] = useState<"idle" | "saving" | "error">("idle");
-  const [error, setError] = useState<string | null>(null);
-
-  const selectedChannel = channels.find((c) => c.id === channelId);
-  const isWhatsApp = selectedChannel?.type === "WHATSAPP";
-  const approvedTemplates = templates.filter((t) => t.status === "APPROVED");
 
   useEffect(() => {
     let active = true;
-    fetch("/api/channels")
-      .then((r) => r.json())
-      .then((d) => active && setChannels(d.channels ?? []));
-    fetch("/api/whatsapp-templates")
-      .then((r) => r.json())
-      .then((d) => active && setTemplates(d.templates ?? []));
-
-    function poll() {
-      fetch("/api/campaigns")
-        .then((r) => r.json())
-        .then((d) => active && setCampaigns(d.campaigns ?? []))
-        .finally(() => active && setLoaded(true));
+    async function load() {
+      try {
+        const r = await fetch("/api/campaigns");
+        const d = await r.json();
+        if (active) setCampaigns(d.campaigns ?? []);
+      } catch {
+        showToast("error", "Failed to load campaigns");
+      } finally {
+        if (active) setLoaded(true);
+      }
     }
-    poll();
-    const interval = setInterval(poll, 4000); // live-ish progress while sending
+    load();
+    const interval = setInterval(load, 5000);
     return () => {
       active = false;
       clearInterval(interval);
     };
-  }, []);
+  }, [showToast]);
 
-  function refresh() {
-    fetch("/api/campaigns")
-      .then((r) => r.json())
-      .then((d) => setCampaigns(d.campaigns ?? []));
-  }
-
-  async function createCampaign() {
-    setStatus("saving");
-    setError(null);
-    const chosenTemplate = approvedTemplates.find((t) => t.id === whatsappTemplateId);
-    const finalMessage = isWhatsApp && chosenTemplate ? chosenTemplate.bodyText : messageTemplate;
-    let res: Response;
-    let data;
+  async function action(id: string, actionType: "pause" | "resume" | "cancel" | "duplicate") {
     try {
-      res = await fetch("/api/campaigns", {
-        method: "POST",
+      const res = await fetch(`/api/campaigns/${id}`, {
+        method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name,
-          channelId,
-          messageTemplate: finalMessage,
-          whatsappTemplateId: isWhatsApp ? whatsappTemplateId : undefined,
-        }),
+        body: JSON.stringify({ action: actionType }),
       });
-      data = await res.json();
+      const d = await res.json();
+      if (!res.ok) {
+        showToast("error", d.error ?? "Action failed");
+        return;
+      }
+      setCampaigns((prev) => prev.map((c) => (c.id === id ? d.campaign : c)));
+      showToast("success", "Campaign updated");
     } catch {
-      setStatus("error");
-      setError("Network error — check your connection and try again.");
-      return;
+      showToast("error", "Network error");
     }
-    if (!res.ok) {
-      setStatus("error");
-      setError(data.error ?? "Failed to create campaign");
-      return;
-    }
-    setStatus("idle");
-    setName("");
-    setMessageTemplate("");
-    setWhatsappTemplateId("");
-    refresh();
   }
-
-  const canSend = isWhatsApp
-    ? Boolean(name && channelId && whatsappTemplateId)
-    : Boolean(name && channelId && messageTemplate);
 
   return (
     <div className="flex flex-1 flex-col overflow-y-auto">
-      <header className="border-b border-border px-6 py-4">
-        <h1 className="text-xl font-bold text-text">Campaigns</h1>
-        <p className="text-sm text-text-secondary">
-          Send a message to every contact reachable on a channel.
-        </p>
-      </header>
-
-      <div className="flex flex-1 flex-col gap-6 p-6 lg:flex-row">
-        <div className="w-full flex-shrink-0 lg:max-w-md">
-          <h2 className="mb-3 text-sm font-medium text-text">New campaign</h2>
-          <Card className="flex flex-col gap-3 p-4">
-            <Input
-              label="Name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="e.g. Wakad 2BHK listings — August"
-            />
-            <Select label="Channel" value={channelId} onChange={(e) => setChannelId(e.target.value)}>
-              <option value="">Select a connected channel...</option>
-              {campaignableChannels(channels).map((c) => (
-                <option key={c.id} value={c.id}>
-                  {channelLabel(c)}
-                </option>
-              ))}
-            </Select>
-
-            {isWhatsApp ? (
-              <Select
-                label="Message template"
-                value={whatsappTemplateId}
-                onChange={(e) => setWhatsappTemplateId(e.target.value)}
-                hint={
-                  approvedTemplates.length === 0
-                    ? "No approved templates yet — add one in Settings → WhatsApp first."
-                    : undefined
-                }
-              >
-                <option value="">Select an approved template...</option>
-                {approvedTemplates.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.name}
-                  </option>
-                ))}
-              </Select>
-            ) : (
-              <Textarea
-                label="Message"
-                rows={5}
-                value={messageTemplate}
-                onChange={(e) => setMessageTemplate(e.target.value)}
-                placeholder="Hi {{name}}, we've just listed a new 2BHK in Wakad..."
-                hint={
-                  <>
-                    Use <code>{"{{name}}"}</code> to personalize with each contact&apos;s name.
-                  </>
-                }
-              />
-            )}
-
-            <Button onClick={createCampaign} loading={status === "saving"} disabled={!canSend} className="w-fit">
-              {status === "saving" ? "Sending..." : "Send now"}
+      <PageHeader
+        title="Campaigns"
+        description="Send a message to every contact reachable on a channel."
+      >
+        {isAgentOrAbove(role) && (
+          <Link href="/campaigns/new">
+            <Button>
+              <Plus className="mr-1.5 h-4 w-4" aria-hidden="true" />
+              New campaign
             </Button>
-            {error && <p className="text-sm text-danger">{error}</p>}
-          </Card>
-        </div>
+          </Link>
+        )}
+      </PageHeader>
 
-        <div className="flex-1">
-          <h2 className="mb-3 text-sm font-medium text-text">History</h2>
-          {!loaded ? (
-            <p className="text-sm text-text-secondary">Loading...</p>
-          ) : campaigns.length === 0 ? (
-            <EmptyState icon={Megaphone} title="No campaigns sent yet" />
-          ) : (
-            <ul className="flex flex-col gap-2">
+      <div className="p-6">
+        {!loaded ? (
+          <div className="flex flex-col gap-2">
+            <SkeletonCard />
+            <SkeletonCard />
+            <SkeletonCard />
+          </div>
+        ) : campaigns.length === 0 ? (
+          <EmptyState
+            icon={Megaphone}
+            title="No campaigns yet"
+            description="Create your first campaign to reach all your contacts at once."
+            action={
+              isAgentOrAbove(role) ? (
+                <Link href="/campaigns/new">
+                  <Button>
+                    <Plus className="mr-1.5 h-4 w-4" aria-hidden="true" />
+                    New campaign
+                  </Button>
+                </Link>
+              ) : undefined
+            }
+          />
+        ) : (
+          <Table>
+            <TableHead>
+              <TableRow>
+                <TableHeader>Campaign</TableHeader>
+                <TableHeader>Channel</TableHeader>
+                <TableHeader>Audience</TableHeader>
+                <TableHeader>Status</TableHeader>
+                <TableHeader>Scheduled</TableHeader>
+                <TableHeader>Results</TableHeader>
+                <TableHeader className="text-right">Actions</TableHeader>
+              </TableRow>
+            </TableHead>
+            <TableBody>
               {campaigns.map((c) => (
-                <li key={c.id}>
-                  <Link href={`/campaigns/${c.id}`}>
-                    <Card className="flex cursor-pointer items-center justify-between px-4 py-3 transition-colors hover:bg-hover">
-                      <div>
-                        <p className="text-sm font-medium text-text">{c.name}</p>
-                        <p className="text-xs text-text-secondary">
-                          {c.channel.type} · {c.totalRecipients} recipients
-                        </p>
-                      </div>
-                      <div className="flex flex-col items-end gap-1 text-right text-xs">
-                        <Badge variant={statusVariant(c.status)}>{c.status}</Badge>
-                        <p className="text-text-secondary">
-                          {c.sentCount} sent
-                          {c.failedCount > 0 ? ` · ${c.failedCount} failed` : ""}
-                        </p>
-                      </div>
-                    </Card>
-                  </Link>
-                </li>
+                <TableRow key={c.id}>
+                  <TableCell>
+                    <Link href={`/campaigns/${c.id}`} className="font-medium text-text hover:text-primary">
+                      {c.name}
+                    </Link>
+                    {c.description && <p className="max-w-xs truncate text-xs text-text-secondary">{c.description}</p>}
+                  </TableCell>
+                  <TableCell className="text-text-secondary">{c.channel.type}</TableCell>
+                  <TableCell className="text-text-secondary">{c.totalRecipients}</TableCell>
+                  <TableCell>
+                    <Badge variant={statusVariant(c.status)}>{c.status}</Badge>
+                  </TableCell>
+                  <TableCell className="text-text-secondary">
+                    <div className="flex items-center gap-1.5">
+                      {c.scheduledAt && <Clock className="h-3.5 w-3.5" aria-hidden="true" />}
+                      {formatDate(c.scheduledAt)}
+                    </div>
+                  </TableCell>
+                  <TableCell className="text-xs text-text-secondary">
+                    {c.sentCount} sent · {c.failedCount} failed
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <div className="flex items-center justify-end gap-2">
+                      {isAgentOrAbove(role) && (
+                        <>
+                          {(c.status === "SENDING" || c.status === "SCHEDULED") && (
+                            <Button size="sm" variant="ghost" onClick={() => action(c.id, "pause")} title="Pause">
+                              <Pause className="h-4 w-4" aria-hidden="true" />
+                            </Button>
+                          )}
+                          {c.status === "PAUSED" && (
+                            <Button size="sm" variant="ghost" onClick={() => action(c.id, "resume")} title="Resume">
+                              <Play className="h-4 w-4" aria-hidden="true" />
+                            </Button>
+                          )}
+                          {c.status !== "CANCELLED" && c.status !== "COMPLETED" && c.status !== "FAILED" && (
+                            <Button size="sm" variant="ghost" onClick={() => action(c.id, "cancel")} title="Cancel">
+                              <X className="h-4 w-4" aria-hidden="true" />
+                            </Button>
+                          )}
+                          <Button size="sm" variant="ghost" onClick={() => action(c.id, "duplicate")} title="Duplicate">
+                            <Copy className="h-4 w-4" aria-hidden="true" />
+                          </Button>
+                        </>
+                      )}
+                      <Link href={`/campaigns/${c.id}`}>
+                        <Button size="sm" variant="secondary">
+                          Report <ArrowRight className="ml-1 h-3 w-3" aria-hidden="true" />
+                        </Button>
+                      </Link>
+                    </div>
+                  </TableCell>
+                </TableRow>
               ))}
-            </ul>
-          )}
-        </div>
+            </TableBody>
+          </Table>
+        )}
       </div>
     </div>
   );

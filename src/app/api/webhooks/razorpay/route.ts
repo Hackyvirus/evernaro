@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
+import { InvoiceType, OrganizationStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { verifyRazorpayWebhookSignature } from "@/lib/razorpay";
+import { creditWallet } from "@/lib/whatsapp-wallet";
 
 interface RazorpayWebhookPayload {
   event: string;
@@ -38,11 +40,26 @@ export async function POST(req: Request) {
     const payment = body.payload?.payment?.entity;
     if (payment?.order_id && payment.id) {
       const invoice = await prisma.invoice.findUnique({ where: { razorpayOrderId: payment.order_id } });
-      if (invoice && invoice.status !== "PAID") {
-        await prisma.invoice.update({
-          where: { id: invoice.id },
-          data: { status: "PAID", razorpayPaymentId: payment.id, paidAt: new Date() },
-        });
+      if (invoice) {
+        if (invoice.status !== "PAID") {
+          await prisma.invoice.update({
+            where: { id: invoice.id },
+            data: { status: "PAID", razorpayPaymentId: payment.id, paidAt: new Date() },
+          });
+        }
+        // Subscription payment reactivates the organization.
+        if (invoice.type === InvoiceType.SUBSCRIPTION) {
+          await prisma.organization.update({
+            where: { id: invoice.orgId },
+            data: { status: OrganizationStatus.ACTIVE },
+          });
+        }
+        // Razorpay retries webhook delivery and the client-side confirm route
+        // can also fire for the same invoice — creditWallet is idempotent per
+        // invoiceId regardless of which path reaches PAID first or twice.
+        if (invoice.type === InvoiceType.WALLET_TOPUP) {
+          await creditWallet(invoice.orgId, invoice.amountInr * 100, "TOPUP", { invoiceId: invoice.id });
+        }
       }
     }
   }

@@ -30,13 +30,13 @@ export interface ReminderSendJob {
   reminderId: string;
 }
 
-export async function enqueueCampaignRecipient(campaignRecipientId: string) {
+export async function enqueueCampaignRecipient(campaignRecipientId: string, delayMs?: number) {
   // One attempt: on failure the recipient is marked FAILED immediately
   // (visible in the campaign's stats) rather than silently retried.
   await campaignQueue.add(
     "send",
     { campaignRecipientId } satisfies CampaignSendJob,
-    { jobId: campaignRecipientId }
+    { jobId: campaignRecipientId, delay: delayMs && delayMs > 0 ? delayMs : undefined }
   );
 }
 
@@ -55,6 +55,17 @@ export async function enqueueReminder(reminderId: string, scheduledFor: Date) {
 // warn the user the in-flight send may complete anyway.
 export async function cancelReminderJob(reminderId: string): Promise<{ removed: boolean }> {
   const job = await reminderQueue.getJob(reminderId);
+  if (!job) return { removed: true };
+  try {
+    await job.remove();
+    return { removed: true };
+  } catch {
+    return { removed: false };
+  }
+}
+
+export async function cancelCampaignRecipientJob(recipientId: string): Promise<{ removed: boolean }> {
+  const job = await campaignQueue.getJob(recipientId);
   if (!job) return { removed: true };
   try {
     await job.remove();
