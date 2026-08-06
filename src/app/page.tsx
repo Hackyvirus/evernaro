@@ -157,6 +157,9 @@ export default async function Home() {
         <div className="mx-auto flex w-full max-w-6xl items-center justify-between px-6 py-4">
           <Logo width={150} />
           <nav className="flex items-center gap-3">
+            <Link href="/contact" className="cursor-pointer text-sm text-text-secondary hover:text-text">
+              Contact
+            </Link>
             <Link href="/login" className="cursor-pointer text-sm text-text-secondary hover:text-text">
               Log in
             </Link>
@@ -473,9 +476,9 @@ export default async function Home() {
               <Link href="/privacy" className="cursor-pointer hover:text-text-secondary">
                 Privacy
               </Link>
-              <a href="mailto:contact@evernaro.com" className="cursor-pointer hover:text-text-secondary">
+              <Link href="/contact" className="cursor-pointer hover:text-text-secondary">
                 Contact
-              </a>
+              </Link>
             </div>
           </div>
         </div>
