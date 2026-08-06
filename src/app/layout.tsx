@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { Plus_Jakarta_Sans } from "next/font/google";
 import "./globals.css";
 import { themeInitScript } from "@/lib/theme-script";
-import { ChatWidget } from "@/components/chatbot";
+import { ChatWidgetLoader } from "@/components/chatbot";
 
 const jakarta = Plus_Jakarta_Sans({
   variable: "--font-sans",
@@ -39,7 +39,7 @@ export default function RootLayout({
       </head>
       <body className="min-h-full flex flex-col bg-bg text-text">
         {children}
-        <ChatWidget />
+        <ChatWidgetLoader />
       </body>
     </html>
   );
