@@ -155,7 +155,7 @@ export default async function Home() {
     <div className="flex flex-1 flex-col bg-surface">
       <header className="sticky top-0 z-30 border-b border-border/60 bg-surface/80 backdrop-blur-md">
         <div className="mx-auto flex w-full max-w-6xl items-center justify-between px-6 py-4">
-          <Logo />
+          <Logo width={150} />
           <nav className="flex items-center gap-3">
             <Link href="/login" className="cursor-pointer text-sm text-text-secondary hover:text-text">
               Log in

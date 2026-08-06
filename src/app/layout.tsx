@@ -12,6 +12,9 @@ const jakarta = Plus_Jakarta_Sans({
 export const metadata: Metadata = {
   title: "Evernaro",
   description: "One inbox for every customer channel — by Eversity Tech LLP",
+  icons: {
+    icon: { url: "/favicon.svg", type: "image/svg+xml" },
+  },
 };
 
 export default function RootLayout({
@@ -23,6 +26,7 @@ export default function RootLayout({
     <html lang="en" className={`${jakarta.variable} h-full antialiased`} suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
+        <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
       </head>
       <body className="min-h-full flex flex-col bg-bg text-text">
         {children}
