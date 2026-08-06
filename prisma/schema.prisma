@@ -39,6 +39,23 @@ model Organization {
   invoices        Invoice[]
   wallet          WhatsAppWallet?
   auditLogs       AuditLog[]
+
+  // Multi-industry core
+  industryTemplateId String?
+  industryTemplate   IndustryTemplate?         @relation(fields: [industryTemplateId], references: [id])
+  industryConfig     OrganizationIndustryConfig?
+  services           Service[]
+  staffProfiles      StaffProfile[]
+  resources          Resource[]
+  appointments       Appointment[]
+  queues             Queue[]
+  queueEntries       QueueEntry[]
+  jobCards           JobCard[]
+  memberships        Membership[]
+  reviews            Review[]
+  customerEvents     CustomerEvent[]
+  automations        Automation[]
+  notificationPrefs  NotificationPreference[]
 }
 
 // ---------- Billing (Razorpay) ----------
@@ -272,6 +289,7 @@ model User {
   closedConversations   Conversation[] @relation("ClosedBy")
   reminders             Reminder[]
   auditLogs             AuditLog[]
+  staffProfile          StaffProfile?
 }
 
 enum UserRole {
@@ -426,6 +444,13 @@ model Contact {
   campaignRecipients CampaignRecipient[]
   reminders          Reminder[]
   callLogs           CallLog[]
+  appointments       Appointment[]
+  queueEntries       QueueEntry[]
+  jobCards           JobCard[]
+  memberships        Membership[]
+  reviews            Review[]
+  customerEvents     CustomerEvent[]
+  notificationPrefs  NotificationPreference[]
 
   @@index([orgId])
 }
@@ -639,4 +664,386 @@ model CallLog {
   updatedAt     DateTime     @updatedAt
 
   @@index([orgId])
+}
+
+// ---------- Multi-industry platform ----------
+
+enum IndustryCode {
+  REAL_ESTATE
+  SALON
+  CLINIC
+  DENTAL
+  RESTAURANT
+  AUTO_SERVICE
+  HOME_SERVICES
+  EDUCATION
+  LEGAL
+  WELLNESS
+  OTHER
+}
+
+model IndustryTemplate {
+  id          String       @id @default(cuid())
+  code        IndustryCode @unique
+  name        String
+  description String
+  isActive    Boolean      @default(true)
+  config      Json         // default terminology, features, workflows, dashboard, services, automations
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  organizations          Organization[]
+  organizationConfigs    OrganizationIndustryConfig[]
+}
+
+model OrganizationIndustryConfig {
+  id         String           @id @default(cuid())
+  orgId      String           @unique
+  org        Organization     @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  templateId String
+  template   IndustryTemplate @relation(fields: [templateId], references: [id])
+  config     Json             // org-specific overrides
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
+}
+
+model Service {
+  id          String       @id @default(cuid())
+  orgId       String
+  org         Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  name        String
+  description String?
+  durationMin Int?         // default duration in minutes
+  priceInr    Int?         // whole rupees for simplicity; use 0 for free services
+  color       String?
+  isActive    Boolean      @default(true)
+  metadata    Json         @default("{}") // industry-specific extras
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  appointments Appointment[]
+  queueEntries QueueEntry[]
+  queues       Queue[]
+  staff        ServiceStaff[]
+  jobCards     JobCard[]
+
+  @@index([orgId, isActive])
+}
+
+model StaffProfile {
+  id           String       @id @default(cuid())
+  orgId        String
+  org          Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  userId       String?      @unique
+  user         User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
+  name         String
+  role         String       // industry-specific label: Stylist / Doctor / Technician / Lawyer
+  phone        String?
+  email        String?
+  color        String?
+  isActive     Boolean      @default(true)
+  workingHours Json         @default("[]")
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  appointments Appointment[]
+  services     ServiceStaff[]
+  queueEntries QueueEntry[]   @relation("AssignedStaff")
+  jobCards     JobCard[]
+
+  @@index([orgId, isActive])
+}
+
+model ServiceStaff {
+  id        String       @id @default(cuid())
+  serviceId String
+  service   Service      @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  staffId   String
+  staff     StaffProfile @relation(fields: [staffId], references: [id], onDelete: Cascade)
+
+  @@unique([serviceId, staffId])
+}
+
+enum ResourceType {
+  TABLE
+  BAY
+  ROOM
+  MACHINE
+  DESK
+  OTHER
+}
+
+model Resource {
+  id         String       @id @default(cuid())
+  orgId      String
+  org        Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  name       String
+  type       ResourceType @default(OTHER)
+  capacity   Int          @default(1)
+  isActive   Boolean      @default(true)
+  metadata   Json         @default("{}")
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+
+  appointments Appointment[]
+
+  @@index([orgId, type, isActive])
+}
+
+enum AppointmentStatus {
+  BOOKED
+  CONFIRMED
+  ARRIVED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+}
+
+model Appointment {
+  id             String            @id @default(cuid())
+  orgId          String
+  org            Organization      @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  contactId      String
+  contact        Contact           @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  serviceId      String?
+  service        Service?          @relation(fields: [serviceId], references: [id], onDelete: SetNull)
+  staffId        String?
+  staff          StaffProfile?     @relation(fields: [staffId], references: [id], onDelete: SetNull)
+  resourceId     String?
+  resource       Resource?         @relation(fields: [resourceId], references: [id], onDelete: SetNull)
+  startsAt       DateTime
+  endsAt         DateTime
+  status         AppointmentStatus @default(BOOKED)
+  notes          String?           @db.Text
+  depositInr     Int?
+  reminderSentAt DateTime?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  @@index([orgId, startsAt])
+  @@index([orgId, status])
+  @@index([contactId])
+}
+
+enum QueueEntryStatus {
+  WAITING
+  CALLED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+}
+
+model Queue {
+  id        String       @id @default(cuid())
+  orgId     String
+  org       Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  name      String       @default("Main Queue")
+  serviceId String?
+  service   Service?     @relation(fields: [serviceId], references: [id], onDelete: SetNull)
+  isActive  Boolean      @default(true)
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  entries QueueEntry[]
+
+  @@index([orgId, isActive])
+}
+
+model QueueEntry {
+  id                String           @id @default(cuid())
+  orgId             String
+  org               Organization     @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  queueId           String
+  queue             Queue            @relation(fields: [queueId], references: [id], onDelete: Cascade)
+  contactId         String
+  contact           Contact          @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  serviceId         String?
+  service           Service?         @relation(fields: [serviceId], references: [id], onDelete: SetNull)
+  staffId           String?
+  staff             StaffProfile?    @relation("AssignedStaff", fields: [staffId], references: [id], onDelete: SetNull)
+  token             String
+  position          Int              @default(0)
+  estimatedWaitMin  Int?
+  status            QueueEntryStatus @default(WAITING)
+  calledAt          DateTime?
+  startedAt         DateTime?
+  completedAt       DateTime?
+  cancelledAt       DateTime?
+  noShowAt          DateTime?
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+
+  @@index([queueId, status])
+  @@index([queueId, position])
+  @@index([contactId])
+}
+
+enum JobCardStatus {
+  RECEIVED
+  INSPECTION
+  ESTIMATE
+  APPROVED
+  IN_PROGRESS
+  QUALITY_CHECK
+  READY
+  DELIVERED
+}
+
+model JobCard {
+  id          String        @id @default(cuid())
+  orgId       String
+  org         Organization  @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  contactId   String
+  contact     Contact       @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  serviceId   String?
+  service     Service?      @relation(fields: [serviceId], references: [id], onDelete: SetNull)
+  staffId     String?
+  staff       StaffProfile? @relation(fields: [staffId], references: [id], onDelete: SetNull)
+  title       String
+  description String?       @db.Text
+  status      JobCardStatus @default(RECEIVED)
+  estimateInr Int?
+  approvedAt  DateTime?
+  completedAt DateTime?
+  deliveredAt DateTime?
+  metadata    Json          @default("{}")
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@index([orgId, status])
+  @@index([contactId])
+}
+
+enum MembershipStatus {
+  ACTIVE
+  EXPIRED
+  CANCELLED
+}
+
+model Membership {
+  id            String           @id @default(cuid())
+  orgId         String
+  org           Organization     @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  contactId     String
+  contact       Contact          @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  name          String
+  sessionsTotal Int?
+  sessionsUsed  Int              @default(0)
+  expiresAt     DateTime?
+  status        MembershipStatus @default(ACTIVE)
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+
+  @@index([orgId, contactId, status])
+}
+
+model Review {
+  id        String       @id @default(cuid())
+  orgId     String
+  org       Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  contactId String
+  contact   Contact      @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  rating    Int
+  comment   String?      @db.Text
+  metadata  Json         @default("{}")
+  createdAt DateTime     @default(now())
+
+  @@index([orgId, createdAt])
+  @@index([contactId])
+}
+
+enum CustomerEventType {
+  REGISTERED
+  APPOINTMENT_BOOKED
+  APPOINTMENT_CHANGED
+  QUEUE_JOINED
+  QUEUE_CALLED
+  SERVICE_STARTED
+  SERVICE_COMPLETED
+  PAYMENT_RECEIVED
+  REVIEW_RECEIVED
+  FOLLOW_UP_DUE
+  MEMBERSHIP_EXPIRING
+}
+
+model CustomerEvent {
+  id         String          @id @default(cuid())
+  orgId      String
+  org        Organization    @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  contactId  String
+  contact    Contact         @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  type       CustomerEventType
+  entityType String?         // "appointment", "queueEntry", "jobCard", "invoice"
+  entityId   String?
+  metadata   Json            @default("{}")
+  createdAt  DateTime        @default(now())
+
+  @@index([orgId, contactId, createdAt])
+  @@index([orgId, type, createdAt])
+}
+
+enum AutomationTrigger {
+  APPOINTMENT_CREATED
+  APPOINTMENT_DUE_SOON
+  APPOINTMENT_CANCELLED
+  QUEUE_JOINED
+  QUEUE_POSITION_CHANGED
+  QUEUE_TURN_READY
+  SERVICE_COMPLETED
+  PAYMENT_OVERDUE
+  CUSTOMER_INACTIVE
+  FOLLOW_UP_DUE
+}
+
+enum AutomationActionType {
+  SEND_MESSAGE
+  SEND_EMAIL
+  CREATE_TASK
+  CREATE_REMINDER
+  NOTIFY_STAFF
+  REQUEST_REVIEW
+}
+
+model Automation {
+  id         String              @id @default(cuid())
+  orgId      String
+  org        Organization        @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  name       String
+  trigger    AutomationTrigger
+  conditions Json                @default("[]")
+  actions    Json
+  isActive   Boolean             @default(true)
+  createdAt  DateTime            @default(now())
+  updatedAt  DateTime            @updatedAt
+
+  executions AutomationExecution[]
+
+  @@index([orgId, isActive])
+}
+
+model AutomationExecution {
+  id           String     @id @default(cuid())
+  automationId String
+  automation   Automation @relation(fields: [automationId], references: [id], onDelete: Cascade)
+  status       String     // SUCCESS / FAILED / SKIPPED
+  error        String?
+  metadata     Json       @default("{}")
+  createdAt    DateTime   @default(now())
+
+  @@index([automationId, createdAt])
+}
+
+model NotificationPreference {
+  id        String       @id @default(cuid())
+  orgId     String
+  org       Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  contactId String
+  contact   Contact      @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  channel   String       // WHATSAPP / EMAIL / SMS
+  enabled   Boolean      @default(true)
+  events    String[]
+
+  @@unique([orgId, contactId, channel])
 }

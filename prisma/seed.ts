@@ -1,5 +1,6 @@
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
+import { INDUSTRY_TEMPLATES } from "../src/lib/industry-templates";
 
 // Use the direct (non-pooled) database URL when available so the seed can run
 // while the dev server is holding pooled connections.
@@ -11,23 +12,62 @@ const prisma = new PrismaClient({
   },
 });
 
+async function seedIndustryTemplates() {
+  for (const template of INDUSTRY_TEMPLATES) {
+    await prisma.industryTemplate.upsert({
+      where: { code: template.code },
+      update: {
+        name: template.name,
+        description: template.description,
+        config: template.config as never,
+      },
+      create: {
+        code: template.code,
+        name: template.name,
+        description: template.description,
+        config: template.config as never,
+      },
+    });
+  }
+  console.log(`Seeded ${INDUSTRY_TEMPLATES.length} industry templates.`);
+}
+
 async function main() {
   if (process.env.NODE_ENV === "production") {
     console.log("Seeding skipped in production.");
     return;
   }
 
+  await seedIndustryTemplates();
+
+  const salonTemplate = await prisma.industryTemplate.findUniqueOrThrow({
+    where: { code: "SALON" },
+  });
+
   const clientPassword = await bcrypt.hash("DemoClient1234", 12);
   const adminPassword = await bcrypt.hash("DemoAdmin1234", 12);
 
   const org = await prisma.organization.upsert({
     where: { slug: "demo-co" },
-    update: {},
+    update: {
+      industryTemplateId: salonTemplate.id,
+    },
     create: {
-      name: "Demo Co",
+      name: "Demo Salon",
       slug: "demo-co",
       monthlyFeeInr: 3999,
       status: "ACTIVE",
+      industryTemplateId: salonTemplate.id,
+    },
+  });
+
+  await prisma.organizationIndustryConfig.upsert({
+    where: { orgId: org.id },
+    update: {},
+    create: {
+      orgId: org.id,
+      templateId: salonTemplate.id,
+      config: {},
     },
   });
 
@@ -49,9 +89,9 @@ async function main() {
     update: {},
     create: {
       orgId: org.id,
-      businessName: "Demo Co",
-      industry: "Services",
-      description: "A demo business for testing Evernaro.",
+      businessName: "Demo Salon",
+      industry: "Salon / Beauty",
+      description: "A demo salon for testing Evernaro.",
     },
   });
 
