@@ -19,6 +19,7 @@ RUN npm ci --omit=dev
 FROM deps AS builder
 ENV NODE_ENV=development
 ENV NEXT_TELEMETRY_DISABLED=1
+ENV DOCKER_BUILD=true
 # We need the full source and devDependencies to build.
 COPY . .
 RUN npm ci

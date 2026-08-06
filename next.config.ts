@@ -2,7 +2,8 @@ import type { NextConfig } from "next";
 import { withSentryConfig } from "@sentry/nextjs";
 
 const nextConfig: NextConfig = {
-  output: "standalone",
+  // Standalone output is for Docker builds only. Vercel needs the default output.
+  output: process.env.DOCKER_BUILD === "true" ? "standalone" : undefined,
   poweredByHeader: false,
 };
 
