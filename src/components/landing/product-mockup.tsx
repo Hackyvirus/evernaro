@@ -9,6 +9,7 @@ import {
   Sparkles,
   Users,
 } from "lucide-react";
+import { Logo } from "@/components/ui";
 
 const NAV = [
   { icon: MessageSquare, label: "Inbox", active: true },
@@ -65,14 +66,9 @@ export function ProductMockup() {
         <div className="flex min-w-0">
           {/* Sidebar */}
           <div className="hidden min-w-0 w-40 flex-col border-r border-border bg-surface p-3 lg:flex">
-            <div className="mb-4 flex items-center gap-2 px-1">
-              <span className="flex h-6 w-6 items-center justify-center rounded-md bg-primary text-white">
-                <MessageSquare className="h-3.5 w-3.5" aria-hidden="true" />
-              </span>
-              <div>
-                <p className="text-xs font-extrabold tracking-tight text-primary">Evernaro</p>
-                <p className="text-[10px] text-text-muted">Skyline Realty</p>
-              </div>
+            <div className="mb-4 flex flex-col gap-0.5 px-1">
+              <Logo height={20} />
+              <p className="text-[10px] text-text-muted">Skyline Realty</p>
             </div>
             <nav className="flex flex-col gap-0.5">
               {NAV.map((item) => (

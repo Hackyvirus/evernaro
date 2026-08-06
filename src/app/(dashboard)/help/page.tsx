@@ -26,8 +26,8 @@ export default function HelpPage() {
           <h2 className="mb-1 text-sm font-semibold text-text">Email support</h2>
           <p className="text-sm text-text-secondary">
             Reach us at{" "}
-            <a href="mailto:hello@evernaro.com" className="text-primary hover:underline">
-              hello@evernaro.com
+            <a href="mailto:support@evernaro.com" className="text-primary hover:underline">
+              support@evernaro.com
             </a>{" "}
             for account, billing, or setup questions. We typically reply within one business day.
           </p>

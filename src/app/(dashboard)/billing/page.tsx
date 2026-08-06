@@ -291,7 +291,7 @@ function BillingPageContent() {
             </div>
             <p className="mt-4 text-[10px] text-text-muted">
               Plans are managed by Eversity. Contact{" "}
-              <a href="mailto:hello@evernaro.com" className="text-primary hover:underline">hello@evernaro.com</a>{" "}
+              <a href="mailto:support@evernaro.com" className="text-primary hover:underline">support@evernaro.com</a>{" "}
               to upgrade or change your plan.
             </p>
           </Card>

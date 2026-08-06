@@ -142,7 +142,7 @@ const PRICING_TIERS = [
 ];
 
 const FAQ_BLURB =
-  "Answers to the questions we get most. Anything else — hello@evernaro.com.";
+  "Answers to the questions we get most. Anything else — support@evernaro.com.";
 
 // This page reads the session, so it must be rendered dynamically.
 export const dynamic = "force-dynamic";
@@ -204,7 +204,7 @@ export default async function Home() {
                   </Button>
                 </Link>
                 <a
-                  href={process.env.NEXT_PUBLIC_DEMO_BOOKING_URL ?? "mailto:hello@evernaro.com?subject=Book%20a%20demo"}
+                  href={process.env.NEXT_PUBLIC_DEMO_BOOKING_URL ?? "mailto:contact@evernaro.com?subject=Book%20a%20demo"}
                   className="flex h-12 items-center justify-center px-4 text-sm font-medium text-text-secondary hover:text-text sm:justify-start"
                 >
                   Book a demo 
@@ -382,7 +382,7 @@ export default async function Home() {
                       </li>
                     ))}
                   </ul>
-                  <Link href={tier.name === "Scale" ? "mailto:hello@evernaro.com?subject=Evernaro%20Scale%20plan" : "/signup"}>
+                  <Link href={tier.name === "Scale" ? "mailto:contact@evernaro.com?subject=Evernaro%20Scale%20plan" : "/signup"}>
                     <Button variant={tier.highlighted ? "primary" : "secondary"} className="w-full">
                       {tier.name === "Starter" && "Start free"}
                       {tier.name === "Growth" && "Start free trial"}
@@ -397,7 +397,7 @@ export default async function Home() {
             <p className="text-center text-sm text-text-muted">
               WhatsApp send costs billed separately at Meta&apos;s per-conversation rates, capped by your
               prepaid wallet. Need a custom plan?{" "}
-              <a href="mailto:hello@evernaro.com" className="cursor-pointer text-primary hover:text-primary-hover">
+              <a href="mailto:contact@evernaro.com" className="cursor-pointer text-primary hover:text-primary-hover">
                 Talk to us
               </a>
               .
@@ -436,7 +436,7 @@ export default async function Home() {
                   <Button size="lg">Start free</Button>
                 </Link>
                 <a
-                  href={process.env.NEXT_PUBLIC_DEMO_BOOKING_URL ?? "mailto:hello@evernaro.com?subject=Book%20a%20demo"}
+                  href={process.env.NEXT_PUBLIC_DEMO_BOOKING_URL ?? "mailto:contact@evernaro.com?subject=Book%20a%20demo"}
                   className="relative"
                 >
                   <Button variant="secondary" size="lg">Book a demo</Button>
@@ -450,7 +450,7 @@ export default async function Home() {
       <footer className="border-t border-border px-6 py-8">
         <div className="mx-auto flex w-full max-w-6xl flex-col gap-4">
           <div className="flex flex-col items-center justify-between gap-4 sm:flex-row">
-            <Logo textClassName="text-sm" />
+            <Logo height={24} />
             <div className="flex flex-wrap justify-center gap-2">
               {CHANNELS.map((c) => (
                 <span
@@ -472,7 +472,7 @@ export default async function Home() {
               <Link href="/privacy" className="cursor-pointer hover:text-text-secondary">
                 Privacy
               </Link>
-              <a href="mailto:hello@evernaro.com" className="cursor-pointer hover:text-text-secondary">
+              <a href="mailto:contact@evernaro.com" className="cursor-pointer hover:text-text-secondary">
                 Contact
               </a>
             </div>

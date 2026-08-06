@@ -1,7 +1,7 @@
 import { Prisma } from "@prisma/client";
 import type { WalletTransaction, WalletReferenceType, WalletTransactionType, WhatsAppMessageCategory } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { sendEmail } from "@/lib/email";
+import { sendBillingEmail } from "@/lib/email-categories";
 
 export class InsufficientWalletBalanceError extends Error {
   constructor(orgId: string) {
@@ -255,9 +255,6 @@ async function maybeAlertLowBalance(walletId: string, orgId: string) {
   if (wallet.balancePaise > wallet.lowBalanceThresholdPaise) return;
   if (wallet.lowBalanceAlertSentAt) return; // already alerted for this crossing
 
-  const from = process.env.FROM_EMAIL;
-  if (!from) return; // no platform email configured — skip the alert, never let it block a send
-
   const [owner, org] = await Promise.all([
     prisma.user.findFirst({ where: { orgId, role: "OWNER" } }),
     prisma.organization.findUnique({ where: { id: orgId } }),
@@ -265,8 +262,7 @@ async function maybeAlertLowBalance(walletId: string, orgId: string) {
   if (!owner || !org) return;
 
   try {
-    await sendEmail({
-      from: `Evernaro <${from}>`,
+    await sendBillingEmail({
       to: owner.email,
       subject: `${org.name}: WhatsApp balance is low`,
       text: `Your Evernaro WhatsApp wallet balance is ₹${(wallet.balancePaise / 100).toFixed(2)}, at or below your alert threshold of ₹${(wallet.lowBalanceThresholdPaise / 100).toFixed(2)}. Top up from your Billing page to avoid interruptions to WhatsApp sending.`,

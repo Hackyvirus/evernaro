@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { requirePlatformAdminId, UnauthorizedError } from "@/lib/session";
 import { createRazorpayOrder, isRazorpayConfigured } from "@/lib/razorpay";
+import { sendInvoiceCreatedEmail } from "@/lib/billing-email";
 
 const bodySchema = z.object({
   amountInr: z.number().int().positive().optional(), // defaults to the org's monthlyFeeInr
@@ -50,6 +51,18 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     const invoice = await prisma.invoice.create({
       data: { orgId: id, amountInr, status: "PENDING" },
     });
+
+    const owner = await prisma.user.findFirst({
+      where: { orgId: id, role: "OWNER" },
+      select: { email: true },
+    });
+    if (owner) {
+      try {
+        await sendInvoiceCreatedEmail(owner.email, org.name, invoice.id, amountInr);
+      } catch (err) {
+        console.error("Failed to send invoice created email:", err);
+      }
+    }
 
     if (!isRazorpayConfigured()) {
       return NextResponse.json({

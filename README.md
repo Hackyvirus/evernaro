@@ -203,7 +203,6 @@ Add these to **Vercel** → Project → Settings → Environment Variables.
 | `ENCRYPTION_KEY` | From `npm run secrets` |
 | `NEXT_PUBLIC_BASE_URL` | `https://evernaro.com` |
 | `REDIS_URL` | Upstash Redis URL |
-| `FROM_EMAIL` | `hello@evernaro.com` (after verifying domain in Resend) |
 | `RESEND_API_KEY` | Resend API key |
 | `INBOUND_EMAIL_WEBHOOK_SECRET` | From `npm run secrets` |
 | `AI_PROVIDER` | `openai` or `anthropic` |
@@ -299,7 +298,15 @@ Once verified, Vercel will issue an SSL certificate automatically.
 1. Add `evernaro.com` as a domain in Resend.
 2. Resend will give you DNS records (SPF, DKIM, DMARC).
 3. Add those records in GoDaddy DNS.
-4. After verification, set `FROM_EMAIL=hello@evernaro.com` in Vercel.
+4. After verification, create and verify these sender addresses in Resend:
+   - `auth@evernaro.com`
+   - `billing@evernaro.com`
+   - `support@evernaro.com`
+   - `contact@evernaro.com`
+   - `notifications@evernaro.com`
+   - `security@evernaro.com`
+   - `updates@evernaro.com`
+5. Set `RESEND_API_KEY` in Vercel and the worker service.
 
 ### Step 10: Configure Razorpay
 
@@ -347,7 +354,7 @@ If you add a new page that uses `auth()`, `prisma`, `queue`, or `redisConnection
 
 1. **Make the repo private** if it contains real secrets in commit history.
 2. Generate fresh `AUTH_SECRET` and `ENCRYPTION_KEY` (`npm run secrets`). Store them in Vercel and the worker service.
-3. Set a real `FROM_EMAIL` on `evernaro.com` and verify it in Resend.
+3. Verify `evernaro.com` in Resend and create the required sender addresses listed in Step 9.
 4. Set `NEXT_PUBLIC_BASE_URL=https://evernaro.com` before connecting any channel.
 5. Set all Razorpay keys and webhook.
 6. Run a small test payment and confirm the invoice becomes `PAID`.

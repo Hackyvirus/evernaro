@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { requireOrgMember, UnauthorizedError, ForbiddenError } from "@/lib/session";
 import { logAudit } from "@/lib/audit";
 import { seatLimit, activeSeatsUsed } from "@/lib/usage-limits";
+import { sendTeamInviteEmail } from "@/lib/auth-email";
 import bcrypt from "bcryptjs";
 import { randomBytes } from "node:crypto";
 
@@ -72,17 +73,20 @@ export async function POST(req: Request) {
     const tempPassword = generateTempPassword();
     const passwordHash = await bcrypt.hash(tempPassword, 12);
 
-    const user = await prisma.user.create({
-      data: {
-        orgId,
-        name,
-        email: email.toLowerCase(),
-        passwordHash,
-        role,
-        isActive: true,
-      },
-      select: { id: true, name: true, email: true, role: true, isActive: true, createdAt: true },
-    });
+    const [user, org] = await Promise.all([
+      prisma.user.create({
+        data: {
+          orgId,
+          name,
+          email: email.toLowerCase(),
+          passwordHash,
+          role,
+          isActive: true,
+        },
+        select: { id: true, name: true, email: true, role: true, isActive: true, createdAt: true },
+      }),
+      prisma.organization.findUnique({ where: { id: orgId }, select: { name: true } }),
+    ]);
 
     await logAudit({
       orgId,
@@ -92,6 +96,14 @@ export async function POST(req: Request) {
       targetId: user.id,
       metadata: { role },
     });
+
+    try {
+      await sendTeamInviteEmail(user.email, user.name, org?.name ?? "your organization", tempPassword);
+    } catch {
+      // Don't fail the invite if email is misconfigured; the admin can still
+      // share the temporary password manually.
+      console.error("Failed to send team invite email to", user.email);
+    }
 
     return NextResponse.json({ ok: true, user, tempPassword });
   } catch (err) {

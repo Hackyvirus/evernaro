@@ -13,6 +13,7 @@ function getClient(apiKeyOverride?: string | null) {
 export async function sendEmail(opts: {
   apiKeyOverride?: string | null;
   from: string;
+  replyTo?: string | string[];
   to: string;
   subject: string;
   text: string;
@@ -23,6 +24,7 @@ export async function sendEmail(opts: {
   }
   const { error } = await resend.emails.send({
     from: opts.from,
+    replyTo: opts.replyTo,
     to: opts.to,
     subject: opts.subject,
     text: opts.text,

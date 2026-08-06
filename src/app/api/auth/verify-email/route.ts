@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
+import { sendWelcomeEmail } from "@/lib/auth-email";
 
 const schema = z.object({ token: z.string().min(1) });
 
@@ -26,6 +27,13 @@ export async function POST(req: Request) {
       emailVerificationTokenExpiresAt: null,
     },
   });
+
+  try {
+    await sendWelcomeEmail(user.email, user.name);
+  } catch {
+    // Don't fail verification if the welcome email is misconfigured.
+    console.error("Failed to send welcome email to", user.email);
+  }
 
   return NextResponse.json({ ok: true });
 }

@@ -3,6 +3,7 @@ import { InvoiceType, OrganizationStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { verifyRazorpayWebhookSignature } from "@/lib/razorpay";
 import { creditWallet } from "@/lib/whatsapp-wallet";
+import { sendPaymentSuccessEmail, sendPaymentFailedEmail } from "@/lib/billing-email";
 
 interface RazorpayWebhookPayload {
   event: string;
@@ -15,6 +16,16 @@ interface RazorpayWebhookPayload {
       };
     };
   };
+}
+
+async function billingContactForOrg(orgId: string) {
+  const org = await prisma.organization.findUnique({ where: { id: orgId }, select: { name: true } });
+  const owner = await prisma.user.findFirst({
+    where: { orgId, role: "OWNER" },
+    select: { email: true },
+  });
+  if (!org || !owner) return null;
+  return { orgName: org.name, email: owner.email };
 }
 
 // Server-to-server confirmation, independent of whether the paying browser
@@ -41,7 +52,8 @@ export async function POST(req: Request) {
     if (payment?.order_id && payment.id) {
       const invoice = await prisma.invoice.findUnique({ where: { razorpayOrderId: payment.order_id } });
       if (invoice) {
-        if (invoice.status !== "PAID") {
+        const wasAlreadyPaid = invoice.status === "PAID";
+        if (!wasAlreadyPaid) {
           await prisma.invoice.update({
             where: { id: invoice.id },
             data: { status: "PAID", razorpayPaymentId: payment.id, paidAt: new Date() },
@@ -60,6 +72,23 @@ export async function POST(req: Request) {
         if (invoice.type === InvoiceType.WALLET_TOPUP) {
           await creditWallet(invoice.orgId, invoice.amountInr * 100, "TOPUP", { invoiceId: invoice.id });
         }
+        // Send receipt on the first transition to PAID only.
+        if (!wasAlreadyPaid) {
+          const contact = await billingContactForOrg(invoice.orgId);
+          if (contact) {
+            try {
+              await sendPaymentSuccessEmail(
+                contact.email,
+                contact.orgName,
+                invoice.id,
+                invoice.amountInr,
+                payment.id
+              );
+            } catch (err) {
+              console.error("Failed to send payment success email:", err);
+            }
+          }
+        }
       }
     }
   }
@@ -70,6 +99,14 @@ export async function POST(req: Request) {
       const invoice = await prisma.invoice.findUnique({ where: { razorpayOrderId: payment.order_id } });
       if (invoice && invoice.status === "PENDING") {
         await prisma.invoice.update({ where: { id: invoice.id }, data: { status: "FAILED" } });
+        const contact = await billingContactForOrg(invoice.orgId);
+        if (contact) {
+          try {
+            await sendPaymentFailedEmail(contact.email, contact.orgName, invoice.id, invoice.amountInr);
+          } catch (err) {
+            console.error("Failed to send payment failed email:", err);
+          }
+        }
       }
     }
   }

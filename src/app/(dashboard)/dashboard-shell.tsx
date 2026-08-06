@@ -20,7 +20,7 @@ import {
   Users,
   X,
 } from "lucide-react";
-import { NavItem, ThemeToggle, useSidebarCollapsed, IconButton } from "@/components/ui";
+import { NavItem, ThemeToggle, useSidebarCollapsed, IconButton, Logo } from "@/components/ui";
 import { SignOutButton } from "./sign-out-button";
 
 function EmailVerificationBanner({ email }: { email: string }) {
@@ -110,13 +110,14 @@ function SidebarContent({
   return (
     <>
       <div className={`mb-6 flex items-center ${collapsed ? "justify-center" : "justify-between px-2"}`}>
-        {!collapsed && (
+        {!collapsed ? (
           <div>
-            <p className="text-base font-extrabold tracking-tight text-primary">Evernaro</p>
+            <Logo height={28} />
             <p className="text-xs text-text-secondary">{orgName}</p>
           </div>
+        ) : (
+          <Logo iconOnly height={32} aria-label="Evernaro" />
         )}
-        {collapsed && <span className="sr-only">Evernaro</span>}
         {onToggleCollapse && (
           <IconButton
             label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
@@ -208,7 +209,7 @@ export function DashboardShell({
         <IconButton label="Open navigation menu" onClick={() => setMobileOpen(true)}>
           <Menu className="h-[18px] w-[18px]" aria-hidden="true" />
         </IconButton>
-        <p className="text-base font-extrabold tracking-tight text-primary">Evernaro</p>
+        <Logo height={24} />
         <ThemeToggle />
       </div>
 

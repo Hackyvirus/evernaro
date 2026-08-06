@@ -93,8 +93,8 @@ export default function PrivacyPage() {
           <h2 className="text-base font-semibold">8. Contact</h2>
           <p className="mt-2 text-text-secondary">
             Questions or data requests: email us at{" "}
-            <a href="mailto:hello@evernaro.com" className="text-primary hover:text-primary-hover">
-              hello@evernaro.com
+            <a href="mailto:support@evernaro.com" className="text-primary hover:text-primary-hover">
+              support@evernaro.com
             </a>
             .
           </p>

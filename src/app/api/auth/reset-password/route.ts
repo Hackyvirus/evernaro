@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { checkRateLimit, clientIp } from "@/lib/rate-limit";
+import { sendPasswordChangedEmail } from "@/lib/auth-email";
 
 const schema = z.object({
   token: z.string().min(1),
@@ -46,6 +47,13 @@ export async function POST(req: Request) {
       emailVerificationTokenExpiresAt: null,
     },
   });
+
+  try {
+    await sendPasswordChangedEmail(user.email);
+  } catch {
+    // Don't fail password reset if the notification email is misconfigured.
+    console.error("Failed to send password-changed email to", user.email);
+  }
 
   return NextResponse.json({ ok: true });
 }

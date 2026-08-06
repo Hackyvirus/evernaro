@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { BarChart3, Building2, Menu, PanelLeftClose, PanelLeftOpen, Receipt, Shield, UserPlus, Wallet } from "lucide-react";
-import { NavItem, ThemeToggle, useSidebarCollapsed } from "@/components/ui";
+import { NavItem, ThemeToggle, useSidebarCollapsed, Logo } from "@/components/ui";
 import { PlatformSignOutButton } from "./sign-out-button";
 
 const NAV_ITEMS = [
@@ -26,11 +26,13 @@ function SidebarContent({
   return (
     <>
       <div className={`mb-6 flex items-center ${collapsed ? "justify-center" : "justify-between px-2"}`}>
-        {!collapsed && (
+        {!collapsed ? (
           <div>
-            <p className="text-base font-extrabold tracking-tight text-primary">Evernaro</p>
+            <Logo height={28} />
             <p className="text-xs text-text-secondary">Platform · {adminName}</p>
           </div>
+        ) : (
+          <Logo iconOnly height={32} aria-label="Evernaro" />
         )}
         {onToggleCollapse && (
           <button
@@ -81,7 +83,7 @@ export function PlatformShell({
         >
           <Menu className="h-[18px] w-[18px]" aria-hidden="true" />
         </button>
-        <p className="text-base font-extrabold tracking-tight text-primary">Evernaro</p>
+        <Logo height={24} />
         <ThemeToggle />
       </div>
 

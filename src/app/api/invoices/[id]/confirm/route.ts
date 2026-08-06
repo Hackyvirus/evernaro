@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { requireOrgMember, UnauthorizedError, ForbiddenError } from "@/lib/session";
 import { verifyRazorpayPaymentSignature } from "@/lib/razorpay";
 import { creditWallet } from "@/lib/whatsapp-wallet";
+import { sendPaymentSuccessEmail } from "@/lib/billing-email";
 
 const bodySchema = z.object({
   razorpayOrderId: z.string().min(1),
@@ -55,6 +56,30 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     // creditWallet no-ops on a second call for the same invoiceId.
     if (invoice.type === InvoiceType.WALLET_TOPUP) {
       await creditWallet(invoice.orgId, invoice.amountInr * 100, "TOPUP", { invoiceId: invoice.id });
+    }
+
+    // Best-effort receipt email. The webhook path also sends this, so this
+    // handles the case where the browser returns faster than the webhook.
+    const owner = await prisma.user.findFirst({
+      where: { orgId: invoice.orgId, role: "OWNER" },
+      select: { email: true },
+    });
+    const org = await prisma.organization.findUnique({
+      where: { id: invoice.orgId },
+      select: { name: true },
+    });
+    if (owner && org) {
+      try {
+        await sendPaymentSuccessEmail(
+          owner.email,
+          org.name,
+          invoice.id,
+          invoice.amountInr,
+          razorpayPaymentId
+        );
+      } catch (err) {
+        console.error("Failed to send payment success email:", err);
+      }
     }
 
     return NextResponse.json({ ok: true });
