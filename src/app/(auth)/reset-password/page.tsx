@@ -3,7 +3,7 @@
 import { useState, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { Button, Card, Input, Logo } from "@/components/ui";
+import { Button, Card, Input, AuthHeader } from "@/components/ui";
 
 function ResetPasswordForm() {
   const router = useRouter();
@@ -53,20 +53,17 @@ function ResetPasswordForm() {
       <div className="pointer-events-none absolute -top-24 -right-24 h-72 w-72 rounded-full bg-primary-lighter blur-3xl" aria-hidden="true" />
       <div className="pointer-events-none absolute -bottom-24 -left-24 h-72 w-72 rounded-full bg-accent-light blur-3xl" aria-hidden="true" />
       <Card className="relative w-full max-w-sm p-8">
-        <div className="mb-6 flex justify-center">
-          <Logo />
-        </div>
-        <h1 className="text-2xl font-bold text-text">Set a new password</h1>
-        <p className="mt-1 text-sm text-text-secondary">Choose a strong password for your account.</p>
+        <AuthHeader title="Set a new password" />
+        <p className="mb-4 text-center text-sm text-text-secondary">Choose a strong password for your account.</p>
 
         {done ? (
-          <div className="mt-6">
+          <div>
             <p className="text-sm text-text-secondary">
               Your password has been updated. Redirecting you to log in...
             </p>
           </div>
         ) : (
-          <form onSubmit={onSubmit} className="mt-6 flex flex-col gap-4">
+          <form onSubmit={onSubmit} className="flex flex-col gap-4">
             <Input
               label="New password"
               type="password"

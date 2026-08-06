@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Button, Card, Input, Logo } from "@/components/ui";
+import { Button, Card, Input, AuthHeader } from "@/components/ui";
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState("");
@@ -38,14 +38,11 @@ export default function ForgotPasswordPage() {
       <div className="pointer-events-none absolute -top-24 -right-24 h-72 w-72 rounded-full bg-primary-lighter blur-3xl" aria-hidden="true" />
       <div className="pointer-events-none absolute -bottom-24 -left-24 h-72 w-72 rounded-full bg-accent-light blur-3xl" aria-hidden="true" />
       <Card className="relative w-full max-w-sm p-8">
-        <div className="mb-6 flex justify-center">
-          <Logo />
-        </div>
-        <h1 className="text-2xl font-bold text-text">Reset your password</h1>
-        <p className="mt-1 text-sm text-text-secondary">We&apos;ll email you a secure reset link.</p>
+        <AuthHeader title="Reset your password" />
+        <p className="mb-4 text-center text-sm text-text-secondary">We&apos;ll email you a secure reset link.</p>
 
         {sent ? (
-          <div className="mt-6">
+          <div>
             <p className="text-sm text-text-secondary">
               If an account exists for <strong className="text-text">{email}</strong>, you&apos;ll
               receive a reset link shortly.
@@ -57,7 +54,7 @@ export default function ForgotPasswordPage() {
             </p>
           </div>
         ) : (
-          <form onSubmit={onSubmit} className="mt-6 flex flex-col gap-4">
+          <form onSubmit={onSubmit} className="flex flex-col gap-4">
             <Input
               label="Email"
               type="email"

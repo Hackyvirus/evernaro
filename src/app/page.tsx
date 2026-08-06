@@ -451,7 +451,7 @@ export default async function Home() {
       <footer className="border-t border-border px-6 py-8">
         <div className="mx-auto flex w-full max-w-6xl flex-col gap-4">
           <div className="flex flex-col items-center justify-between gap-4 sm:flex-row">
-            <Logo height={24} />
+            <Logo width={130} />
             <div className="flex flex-wrap justify-center gap-2">
               {CHANNELS.map((c) => (
                 <span

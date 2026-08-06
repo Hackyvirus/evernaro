@@ -3,7 +3,7 @@
 import { useEffect, useState, Suspense, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { Card, Logo } from "@/components/ui";
+import { Card, AuthHeader } from "@/components/ui";
 
 function VerifyEmailForm() {
   const searchParams = useSearchParams();
@@ -39,14 +39,9 @@ function VerifyEmailForm() {
     <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-surface px-4">
       <div className="pointer-events-none absolute -top-24 -right-24 h-72 w-72 rounded-full bg-primary-lighter blur-3xl" aria-hidden="true" />
       <div className="pointer-events-none absolute -bottom-24 -left-24 h-72 w-72 rounded-full bg-accent-light blur-3xl" aria-hidden="true" />
-      <Card className="relative w-full max-w-sm p-8 text-center">
-        <div className="mb-6 flex justify-center">
-          <Logo />
-        </div>
-        <h1 className="text-2xl font-bold text-text">
-          {status === "success" ? "Email verified" : "Verifying your email"}
-        </h1>
-        {status === "loading" && <p className="mt-3 text-sm text-text-secondary">Please wait...</p>}
+        <Card className="relative w-full max-w-sm p-8 text-center">
+          <AuthHeader title={status === "success" ? "Email verified" : "Verifying your email"} />
+        {status === "loading" && <p className="text-sm text-text-secondary">Please wait...</p>}
         {status === "success" && (
           <>
             <p className="mt-3 text-sm text-text-secondary">
