@@ -12,9 +12,6 @@ const jakarta = Plus_Jakarta_Sans({
 export const metadata: Metadata = {
   title: "Evernaro",
   description: "One inbox for every customer channel — by Eversity Tech LLP",
-  icons: {
-    icon: "/evernaro-icon.svg",
-  },
 };
 
 export default function RootLayout({

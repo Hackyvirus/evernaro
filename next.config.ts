@@ -9,7 +9,18 @@ const nextConfig: NextConfig = {
 
 // Source-map upload only runs when these are set — safe to leave Sentry
 // fully unconfigured (no DSN, no org/project) without breaking the build.
-export default process.env.SENTRY_ORG && process.env.SENTRY_PROJECT
+//
+// Sentry client instrumentation can conflict with Next.js 16 static prerender
+// in Docker/standalone builds, so we skip the Sentry wrapper there. Errors are
+// still captured at runtime by src/instrumentation.ts on Vercel and by the
+// worker's Sentry.init in the background worker.
+const enableSentry =
+  process.env.SENTRY_ORG &&
+  process.env.SENTRY_PROJECT &&
+  process.env.SENTRY_AUTH_TOKEN &&
+  process.env.DOCKER_BUILD !== "true";
+
+export default enableSentry
   ? withSentryConfig(nextConfig, {
       org: process.env.SENTRY_ORG,
       project: process.env.SENTRY_PROJECT,

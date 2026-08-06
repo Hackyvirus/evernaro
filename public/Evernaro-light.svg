@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="360" viewBox="0 0 1200 360">
+<defs><linearGradient id="g" x1="0%" y1="100%" x2="100%" y2="0%">
+<stop offset="0%" stop-color="#6D28D9"/><stop offset="52%" stop-color="#2563EB"/><stop offset="100%" stop-color="#06B6D4"/>
+</linearGradient></defs>
+<g transform="translate(35,38)">
+<path d="M142 12C76 12 24 60 24 126c0 65 51 114 116 114 26 0 50-8 69-22l34 19-9-39c15-20 24-45 24-72C258 62 208 12 142 12Z" fill="url(#g)"/>
+<path d="M75 129c13-42 51-67 88-67 28 0 52 10 70 28-22-5-42-2-58 8-13 8-23 20-29 34 17-9 37-11 56-6 16 4 29 13 39 25-13 33-44 55-82 55-35 0-65-18-84-47Z" fill="white"/>
+<circle cx="102" cy="151" r="7" fill="#2563EB"/><circle cx="126" cy="151" r="7" fill="#2563EB"/><circle cx="150" cy="151" r="7" fill="#2563EB"/>
+</g>
+<text x="335" y="250" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="170" font-weight="700" letter-spacing="-4" fill="#0B1533">Evernaro</text>
+</svg>

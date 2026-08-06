@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
-import { Button, Card, Logo } from "@/components/ui";
+import { Button, Card, Logo, ThemeToggle } from "@/components/ui";
 import { ProductMockup } from "@/components/landing/product-mockup";
 import { Reveal } from "@/components/landing/reveal";
 import { Faq } from "@/components/landing/faq";
@@ -163,6 +163,7 @@ export default async function Home() {
             <Link href="/signup">
               <Button size="sm">Get started</Button>
             </Link>
+            <ThemeToggle />
           </nav>
         </div>
       </header>
@@ -464,7 +465,7 @@ export default async function Home() {
             </div>
           </div>
           <div className="flex flex-col items-center justify-between gap-3 border-t border-border pt-4 text-xs text-text-muted sm:flex-row">
-            <span>Â© 2026 Eversity Tech LLP</span>
+            <span>&copy; 2026 Eversity Tech LLP</span>
             <div className="flex items-center gap-4">
               <Link href="/terms" className="cursor-pointer hover:text-text-secondary">
                 Terms
