@@ -102,6 +102,7 @@ const PRICING_TIERS = [
   {
     name: "Starter",
     price: "₹1,499",
+    trial: "Free 14-day trial, then",
     tagline: "For a single team getting started.",
     features: [
       "Up to 2 channels",
@@ -155,7 +156,7 @@ export default async function Home() {
     <div className="flex flex-1 flex-col bg-surface">
       <header className="sticky top-0 z-30 border-b border-border/60 bg-surface/80 backdrop-blur-md">
         <div className="mx-auto flex w-full max-w-6xl items-center justify-between px-6 py-4">
-          <Logo width={150} />
+          <Logo width={150} className="w-[120px] sm:w-[150px]" />
           <nav className="flex items-center gap-3">
             <Link href="/contact" className="cursor-pointer text-sm text-text-secondary hover:text-text">
               Contact
@@ -166,7 +167,6 @@ export default async function Home() {
             <Link href="/signup">
               <Button size="sm">Get started</Button>
             </Link>
-            <ThemeToggle />
           </nav>
         </div>
       </header>
@@ -354,7 +354,7 @@ export default async function Home() {
             <p className="text-xs font-medium tracking-wide text-primary uppercase">Pricing</p>
             <h2 className="text-3xl font-extrabold text-text">Simple pricing that grows with you.</h2>
             <p className="max-w-md text-sm text-text-secondary">
-              Prices in INR, billed monthly. Start free, no credit card required, cancel anytime.
+              Prices in INR, billed monthly. Start with a 14-day free trial — no credit card required, cancel anytime.
             </p>
           </Reveal>
           <div className="grid gap-6 lg:grid-cols-3">
@@ -374,10 +374,15 @@ export default async function Home() {
                     <h3 className="text-base font-bold text-text">{tier.name}</h3>
                     <p className="mt-1 text-sm text-text-secondary">{tier.tagline}</p>
                   </div>
-                  <p className="text-3xl font-extrabold text-text">
-                    {tier.price}
-                    <span className="text-sm font-medium text-text-muted">/month</span>
-                  </p>
+                  <div>
+                    {tier.trial && (
+                      <p className="text-xs font-medium text-success">{tier.trial}</p>
+                    )}
+                    <p className="text-3xl font-extrabold text-text">
+                      {tier.price}
+                      <span className="text-sm font-medium text-text-muted">/month</span>
+                    </p>
+                  </div>
                   <ul className="flex flex-1 flex-col gap-2">
                     {tier.features.map((feature) => (
                       <li key={feature} className="flex items-start gap-2 text-sm text-text-secondary">
@@ -388,7 +393,7 @@ export default async function Home() {
                   </ul>
                   <Link href={tier.name === "Scale" ? "mailto:contact@evernaro.com?subject=Evernaro%20Scale%20plan" : "/signup"}>
                     <Button variant={tier.highlighted ? "primary" : "secondary"} className="w-full">
-                      {tier.name === "Starter" && "Start free"}
+                      {tier.name === "Starter" && "Start free trial"}
                       {tier.name === "Growth" && "Start free trial"}
                       {tier.name === "Scale" && "Contact sales"}
                     </Button>
@@ -454,7 +459,7 @@ export default async function Home() {
       <footer className="border-t border-border px-6 py-8">
         <div className="mx-auto flex w-full max-w-6xl flex-col gap-4">
           <div className="flex flex-col items-center justify-between gap-4 sm:flex-row">
-            <Logo width={150} />
+            <Logo width={150} className="w-[120px] sm:w-[150px]" />
             <div className="flex flex-wrap justify-center gap-2">
               {CHANNELS.map((c) => (
                 <span
@@ -479,6 +484,7 @@ export default async function Home() {
               <Link href="/contact" className="cursor-pointer hover:text-text-secondary">
                 Contact
               </Link>
+              <ThemeToggle />
             </div>
           </div>
         </div>

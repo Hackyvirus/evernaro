@@ -11,7 +11,7 @@ export default function ContactPage() {
       <header className="sticky top-0 z-30 border-b border-border/60 bg-surface/80 backdrop-blur-md">
         <div className="mx-auto flex w-full max-w-6xl items-center justify-between px-6 py-4">
           <Link href="/">
-            <Logo width={150} />
+            <Logo width={150} className="w-[120px] sm:w-[150px]" />
           </Link>
           <nav className="flex items-center gap-3">
             <Link href="/login" className="cursor-pointer text-sm text-text-secondary hover:text-text">
@@ -68,7 +68,7 @@ export default function ContactPage() {
 
       <footer className="border-t border-border px-6 py-8">
         <div className="mx-auto flex w-full max-w-6xl flex-col items-center justify-between gap-4 sm:flex-row">
-          <Logo width={150} />
+          <Logo width={150} className="w-[120px] sm:w-[150px]" />
           <div className="flex items-center gap-4 text-xs text-text-muted">
             <Link href="/terms" className="cursor-pointer hover:text-text-secondary">
               Terms

@@ -4,7 +4,7 @@ export function AuthHeader({ title }: { title: string }) {
   return (
     <div className="mb-6 text-center">
       <div className="flex justify-center">
-        <Logo width={150} />
+        <Logo width={150} className="w-[120px] sm:w-[150px]" />
       </div>
       <h1 className="mt-4 text-2xl font-bold text-text">{title}</h1>
     </div>

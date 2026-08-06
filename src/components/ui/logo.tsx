@@ -39,8 +39,16 @@ export function Logo({
     logoHeight = height ?? 32;
     logoWidth = width ?? logoHeight;
     return (
-      <span className={`inline-flex items-center ${className}`}>
-        <Image src="/favicon.svg" alt="Evernaro" height={logoHeight} width={logoWidth} unoptimized priority />
+      <span className={`${className ? "inline-block" : "inline-flex items-center"} ${className}`}>
+        <Image
+          src="/favicon.svg"
+          alt="Evernaro"
+          height={logoHeight}
+          width={logoWidth}
+          unoptimized
+          priority
+          className={className ? "h-auto w-full" : ""}
+        />
       </span>
     );
   }
@@ -55,8 +63,16 @@ export function Logo({
 
   const src = theme === "dark" ? "/Evernaro-dark.svg" : "/Evernaro-light.svg";
   return (
-    <span className={`inline-flex items-center ${className}`}>
-      <Image src={src} alt="Evernaro" height={logoHeight} width={logoWidth} unoptimized priority />
+    <span className={`${className ? "inline-block" : "inline-flex items-center"} ${className}`}>
+      <Image
+        src={src}
+        alt="Evernaro"
+        height={logoHeight}
+        width={logoWidth}
+        unoptimized
+        priority
+        className={className ? "h-auto w-full" : ""}
+      />
     </span>
   );
 }
