@@ -9,17 +9,18 @@ const globalForQueues = globalThis as unknown as {
   reminderQueue: Queue | undefined;
 };
 
-export const campaignQueue =
-  globalForQueues.campaignQueue ??
-  new Queue(CAMPAIGN_SEND_QUEUE, { connection: redisConnection });
+function getCampaignQueue(): Queue {
+  if (!globalForQueues.campaignQueue) {
+    globalForQueues.campaignQueue = new Queue(CAMPAIGN_SEND_QUEUE, { connection: redisConnection });
+  }
+  return globalForQueues.campaignQueue;
+}
 
-export const reminderQueue =
-  globalForQueues.reminderQueue ??
-  new Queue(REMINDER_SEND_QUEUE, { connection: redisConnection });
-
-if (process.env.NODE_ENV !== "production") {
-  globalForQueues.campaignQueue = campaignQueue;
-  globalForQueues.reminderQueue = reminderQueue;
+function getReminderQueue(): Queue {
+  if (!globalForQueues.reminderQueue) {
+    globalForQueues.reminderQueue = new Queue(REMINDER_SEND_QUEUE, { connection: redisConnection });
+  }
+  return globalForQueues.reminderQueue;
 }
 
 export interface CampaignSendJob {
@@ -33,7 +34,7 @@ export interface ReminderSendJob {
 export async function enqueueCampaignRecipient(campaignRecipientId: string, delayMs?: number) {
   // One attempt: on failure the recipient is marked FAILED immediately
   // (visible in the campaign's stats) rather than silently retried.
-  await campaignQueue.add(
+  await getCampaignQueue().add(
     "send",
     { campaignRecipientId } satisfies CampaignSendJob,
     { jobId: campaignRecipientId, delay: delayMs && delayMs > 0 ? delayMs : undefined }
@@ -42,7 +43,7 @@ export async function enqueueCampaignRecipient(campaignRecipientId: string, dela
 
 export async function enqueueReminder(reminderId: string, scheduledFor: Date) {
   const delay = Math.max(0, scheduledFor.getTime() - Date.now());
-  await reminderQueue.add(
+  await getReminderQueue().add(
     "send",
     { reminderId } satisfies ReminderSendJob,
     { jobId: reminderId, delay }
@@ -54,7 +55,7 @@ export async function enqueueReminder(reminderId: string, scheduledFor: Date) {
 // caller still marks the reminder CANCELLED in the DB either way, but should
 // warn the user the in-flight send may complete anyway.
 export async function cancelReminderJob(reminderId: string): Promise<{ removed: boolean }> {
-  const job = await reminderQueue.getJob(reminderId);
+  const job = await getReminderQueue().getJob(reminderId);
   if (!job) return { removed: true };
   try {
     await job.remove();
@@ -65,7 +66,7 @@ export async function cancelReminderJob(reminderId: string): Promise<{ removed: 
 }
 
 export async function cancelCampaignRecipientJob(recipientId: string): Promise<{ removed: boolean }> {
-  const job = await campaignQueue.getJob(recipientId);
+  const job = await getCampaignQueue().getJob(recipientId);
   if (!job) return { removed: true };
   try {
     await job.remove();
