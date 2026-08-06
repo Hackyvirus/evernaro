@@ -144,6 +144,9 @@ const PRICING_TIERS = [
 const FAQ_BLURB =
   "Answers to the questions we get most. Anything else — hello@evernaro.com.";
 
+// This page reads the session, so it must be rendered dynamically.
+export const dynamic = "force-dynamic";
+
 export default async function Home() {
   const session = await auth();
   if (session) redirect("/dashboard");

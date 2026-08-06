@@ -322,6 +322,27 @@ For WhatsApp, verify inbound webhooks reach:
 https://evernaro.com/api/whatsapp/webhook/[channelId]
 ```
 
+## Troubleshooting
+
+### `output: "standalone"` breaks Vercel builds
+
+`next.config.ts` uses `output: "standalone"` only when `DOCKER_BUILD=true`. Vercel builds use the default Next.js output. If you see an error about `.next/next-server.js.nft.json`, make sure `DOCKER_BUILD` is not set in Vercel.
+
+### Docker build fails with Redis or database errors during static generation
+
+This project uses lazy initialization for external connections:
+
+- `src/lib/queue.ts` creates BullMQ queues only when a job is scheduled.
+- Pages that read sessions or query the database export `dynamic = "force-dynamic"` so they are never statically generated at build time.
+
+If you add a new page that uses `auth()`, `prisma`, `queue`, or `redisConnection`, either:
+- mark it with `export const dynamic = "force-dynamic"`, or
+- make sure it does not access external services during the build step.
+
+### CI now builds Docker images on every push
+
+`.github/workflows/ci.yml` runs both the Next.js build and a Docker build for `Dockerfile` and `Dockerfile.worker`. This catches Docker-only build failures before they reach production.
+
 ## Production launch checklist
 
 1. **Make the repo private** if it contains real secrets in commit history.

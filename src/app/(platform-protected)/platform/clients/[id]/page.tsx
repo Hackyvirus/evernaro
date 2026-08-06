@@ -5,6 +5,9 @@ import { getPlatformOrganization, getPlatformWallet } from "@/lib/platform-data"
 import { ClientDetail } from "./client-detail";
 import { refreshClients } from "../../actions";
 
+// Queries platform data, so it must be rendered dynamically.
+export const dynamic = "force-dynamic";
+
 async function ClientContent({ id }: { id: string }) {
   const [org, walletData] = await Promise.all([getPlatformOrganization(id), getPlatformWallet(id)]);
   if (!org) notFound();

@@ -34,6 +34,9 @@ function endOfDay(d = new Date()) {
   return date;
 }
 
+// Reads the session and queries the database — must be dynamic.
+export const dynamic = "force-dynamic";
+
 export default async function DashboardPage() {
   const session = await auth();
   if (!session?.user) redirect("/login");
