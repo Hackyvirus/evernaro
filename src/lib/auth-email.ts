@@ -1,6 +1,6 @@
 import { sendEmail } from "@/lib/email";
 
-const FROM = process.env.FROM_EMAIL || "Evernaro <noreply@resend.dev>";
+const FROM = process.env.FROM_EMAIL || "Evernaro <hello@evernaro.com>";
 const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
 
 export async function sendVerificationEmail(email: string, token: string) {
