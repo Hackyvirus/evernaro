@@ -17,15 +17,29 @@ export function PlatformLoginForm() {
     setError(null);
     setLoading(true);
     try {
-      const res = await signIn("platform-admin", { email, password, redirect: false });
+      const res = await signIn("platform-admin", {
+        email: email.trim().toLowerCase(),
+        password,
+        redirect: false,
+      });
       setLoading(false);
-      if (res?.error) {
-        setError("Invalid email or password");
+      if (!res) {
+        setError("Login request failed — no response from server.");
         return;
       }
-      router.push("/platform");
-      router.refresh();
-    } catch {
+      if (res.error) {
+        console.error("Platform login error:", res.error, res.code, res.status);
+        setError(res.error === "CredentialsSignin" ? "Invalid email or password" : `Login failed: ${res.error}`);
+        return;
+      }
+      if (res.ok) {
+        router.push("/platform");
+        router.refresh();
+        return;
+      }
+      setError("Login failed — please try again.");
+    } catch (err) {
+      console.error("Platform login exception:", err);
       setError("Network error — check your connection and try again.");
       setLoading(false);
     }

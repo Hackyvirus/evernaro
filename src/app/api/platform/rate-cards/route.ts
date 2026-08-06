@@ -13,7 +13,14 @@ export async function GET() {
   try {
     await requirePlatformAdminId();
     const rateCards = await prisma.whatsAppRateCard.findMany({ orderBy: { category: "asc" } });
-    return NextResponse.json({ rateCards });
+    return NextResponse.json(
+      { rateCards },
+      {
+        headers: {
+          "Cache-Control": "public, max-age=60, s-maxage=300, stale-while-revalidate=86400",
+        },
+      }
+    );
   } catch (err) {
     if (err instanceof UnauthorizedError) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

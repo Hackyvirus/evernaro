@@ -25,7 +25,7 @@ export function SignOutButton({ collapsed = false }: { collapsed?: boolean }) {
   return (
     <button
       onClick={() => signOut({ callbackUrl: "/login" })}
-      className="cursor-pointer rounded-md px-2 py-1.5 text-left text-sm text-text-secondary transition-colors hover:bg-hover hover:text-text"
+      className="cursor-pointer rounded-md px-2 py-1.5 text-start text-sm text-text-secondary transition-colors hover:bg-hover hover:text-text"
     >
       Log out
     </button>

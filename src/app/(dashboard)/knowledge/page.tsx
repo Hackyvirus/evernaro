@@ -161,7 +161,7 @@ function KnowledgePageContent() {
         <Input label="Business name" value={businessName} onChange={(e) => setBusinessName(e.target.value)} />
         <Input label="Phone" value={phone} onChange={(e) => setPhone(e.target.value)} />
         <Input label="Website" value={website} onChange={(e) => setWebsite(e.target.value)} />
-        <Input label="Working hours" value={workingHours} onChange={(e) => setWorkingHours(e.target.value)} placeholder="e.g. Mon–Sat 9am–7pm" />
+        <Input label="Working hours" value={workingHours} onChange={(e) => setWorkingHours(e.target.value)} placeholder="e.g. MonSat 9am7pm" />
       </div>
       <Input label="Address" value={address} onChange={(e) => setAddress(e.target.value)} />
       <Textarea label="Description" value={description} onChange={(e) => setDescription(e.target.value)} rows={4} />
@@ -175,7 +175,7 @@ function KnowledgePageContent() {
         </Select>
         <Input label="Language" value={language} onChange={(e) => setLanguage(e.target.value)} placeholder="en" />
       </div>
-      <Input label="Sign-off" value={signOff} onChange={(e) => setSignOff(e.target.value)} placeholder="Best, Team EverReach" />
+      <Input label="Sign-off" value={signOff} onChange={(e) => setSignOff(e.target.value)} placeholder="Best, Team Evernaro" />
     </div>
   );
 

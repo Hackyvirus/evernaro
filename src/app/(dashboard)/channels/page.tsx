@@ -136,7 +136,7 @@ export default function ChannelsPage() {
         )}
 
         {isAdmin(role) && (
-          <Card className="flex flex-col items-start gap-3 p-5 sm:flex-row sm:items-center sm:justify-between">
+          <Card className="flex flex-col items-center gap-3 p-5 text-center sm:flex-row sm:items-center sm:justify-between sm:text-start">
             <div>
               <p className="text-sm font-medium text-text">Need help connecting a channel?</p>
               <p className="text-xs text-text-secondary">

@@ -33,7 +33,14 @@ export async function GET(req: Request) {
       prisma.auditLog.count({ where }),
     ]);
 
-    return NextResponse.json({ logs, total, page, limit });
+    return NextResponse.json(
+      { logs, total, page, limit },
+      {
+        headers: {
+          "Cache-Control": "public, max-age=0, s-maxage=5, stale-while-revalidate=30",
+        },
+      }
+    );
   } catch (err) {
     if (err instanceof UnauthorizedError) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

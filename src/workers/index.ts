@@ -6,6 +6,7 @@
 
 import * as Sentry from "@sentry/node";
 import { Worker, type Job } from "bullmq";
+import fs from "node:fs";
 import { redisConnection } from "../lib/redis";
 import { prisma } from "../lib/prisma";
 import { sendViaChannel } from "../lib/send";
@@ -39,7 +40,49 @@ process.on("unhandledRejection", (err) => {
   console.error("Unhandled rejection in worker:", err);
 });
 
+const SHUTDOWN_SIGNALS: NodeJS.Signals[] = ["SIGTERM", "SIGINT"];
+let isShuttingDown = false;
+
+const healthFile = process.env.WORKER_HEALTH_FILE || "/tmp/worker.health";
+const heartbeat = setInterval(() => {
+  try {
+    fs.writeFileSync(healthFile, String(Date.now()));
+  } catch (err) {
+    console.error("Failed to write worker heartbeat:", err);
+  }
+}, 5000);
+
+async function shutdown(signal: NodeJS.Signals) {
+  if (isShuttingDown) return;
+  isShuttingDown = true;
+  console.log(`Received ${signal}, shutting down worker gracefully...`);
+
+  clearInterval(heartbeat);
+  try {
+    fs.unlinkSync(healthFile);
+  } catch {}
+
+  try {
+    await Promise.all([campaignWorker.close(), reminderWorker.close()]);
+  } catch (err) {
+    console.error("Error closing BullMQ workers:", err);
+  }
+
+  try {
+    await redisConnection.quit();
+    await prisma.$disconnect();
+  } catch (err) {
+    console.error("Error during worker cleanup:", err);
+  }
+
+  process.exit(0);
+}
+
+SHUTDOWN_SIGNALS.forEach((signal) => process.on(signal, shutdown));
+
 const CAMPAIGN_RATE_PER_SECOND = Number(process.env.CAMPAIGN_RATE_PER_SECOND || 5);
+const CAMPAIGN_WORKER_CONCURRENCY = Number(process.env.CAMPAIGN_WORKER_CONCURRENCY || 5);
+const REMINDER_WORKER_CONCURRENCY = Number(process.env.REMINDER_WORKER_CONCURRENCY || 10);
 
 function renderTemplate(template: string, name: string | null) {
   return template.replace(/\{\{\s*name\s*\}\}/gi, name?.trim() || "there");
@@ -66,6 +109,7 @@ async function processCampaignJob(job: Job<CampaignSendJob>) {
   const text = renderTemplate(recipient.campaign.messageTemplate, recipient.contact.name);
   const wat = recipient.campaign.whatsappTemplate;
 
+  let sendError: string | null = null;
   try {
     if (wat && !wat.gupshupTemplateId) {
       throw new Error("Template was never confirmed by Gupshup — check its status in Settings");
@@ -84,40 +128,42 @@ async function processCampaignJob(job: Job<CampaignSendJob>) {
         : undefined,
       { type: "CAMPAIGN_RECIPIENT", id: recipient.id }
     );
-    await prisma.campaignRecipient.update({
-      where: { id: recipient.id },
-      data: { status: "SENT", sentAt: new Date() },
-    });
-    await prisma.campaign.update({
-      where: { id: recipient.campaignId },
-      data: { sentCount: { increment: 1 } },
-    });
   } catch (err) {
-    const message =
+    sendError =
       err instanceof InsufficientWalletBalanceError
         ? "Insufficient WhatsApp balance — top up the wallet from Billing"
         : err instanceof Error
           ? err.message
           : "Send failed";
-    await prisma.campaignRecipient.update({
-      where: { id: recipient.id },
-      data: { status: "FAILED", error: message },
-    });
-    await prisma.campaign.update({
-      where: { id: recipient.campaignId },
-      data: { failedCount: { increment: 1 } },
-    });
+    console.error(`Campaign recipient ${recipient.id} failed:`, err);
   }
 
-  const remaining = await prisma.campaignRecipient.count({
-    where: { campaignId: recipient.campaignId, status: "PENDING" },
-  });
-  if (remaining === 0) {
-    await prisma.campaign.update({
-      where: { id: recipient.campaignId },
-      data: { status: "COMPLETED" },
+  // Atomic update: mark the recipient, increment the campaign counter, and
+  // finalize the campaign if no pending recipients remain. This prevents race
+  // conditions when multiple workers process the same campaign concurrently.
+  await prisma.$transaction(async (tx) => {
+    await tx.campaignRecipient.update({
+      where: { id: recipient.id },
+      data: sendError
+        ? { status: "FAILED", error: sendError }
+        : { status: "SENT", sentAt: new Date() },
     });
-  }
+
+    await tx.campaign.update({
+      where: { id: recipient.campaignId },
+      data: sendError ? { failedCount: { increment: 1 } } : { sentCount: { increment: 1 } },
+    });
+
+    const remaining = await tx.campaignRecipient.count({
+      where: { campaignId: recipient.campaignId, status: "PENDING" },
+    });
+    if (remaining === 0) {
+      await tx.campaign.update({
+        where: { id: recipient.campaignId },
+        data: { status: "COMPLETED" },
+      });
+    }
+  });
 }
 
 // Places the actual call for a VOICE-channel reminder and logs it to
@@ -245,11 +291,13 @@ async function processReminderJob(job: Job<ReminderSendJob>) {
 
 const campaignWorker = new Worker<CampaignSendJob>(CAMPAIGN_SEND_QUEUE, processCampaignJob, {
   connection: redisConnection,
+  concurrency: CAMPAIGN_WORKER_CONCURRENCY,
   limiter: { max: CAMPAIGN_RATE_PER_SECOND, duration: 1000 },
 });
 
 const reminderWorker = new Worker<ReminderSendJob>(REMINDER_SEND_QUEUE, processReminderJob, {
   connection: redisConnection,
+  concurrency: REMINDER_WORKER_CONCURRENCY,
 });
 
 campaignWorker.on("failed", (job, err) => {
@@ -261,4 +309,4 @@ reminderWorker.on("failed", (job, err) => {
   console.error(`Reminder job ${job?.id} failed:`, err);
 });
 
-console.log("EverReach worker running — listening for campaign-send and reminder-send jobs.");
+console.log("Evernaro worker running — listening for campaign-send and reminder-send jobs.");

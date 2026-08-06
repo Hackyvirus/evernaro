@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import * as OTPAuth from "otpauth";
 import { generateTotpSecret, verifyTotpCode, generateBackupCodes } from "./totp";
 
 describe("totp", () => {
@@ -12,8 +13,8 @@ describe("totp", () => {
 
   it("verifies a TOTP code generated from the same secret", () => {
     const { secret } = generateTotpSecret("test@example.com");
-    const totp = new (require("otpauth").TOTP)({
-      secret: require("otpauth").Secret.fromBase32(secret),
+    const totp = new OTPAuth.TOTP({
+      secret: OTPAuth.Secret.fromBase32(secret),
       digits: 6,
       period: 30,
     });

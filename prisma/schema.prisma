@@ -1,4 +1,4 @@
-// EverReach — multi-tenant omnichannel inbox
+// Evernaro — multi-tenant omnichannel inbox
 // learn more about Prisma schema: https://pris.ly/d/prisma-schema
 
 generator client {

@@ -11,7 +11,7 @@ interface PageHeaderProps {
 
 export function PageHeader({ title, description, backHref, children }: PageHeaderProps) {
   return (
-    <header className="flex flex-col gap-1 border-b border-border px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
+    <header className="flex flex-col items-center gap-2 border-b border-border px-6 py-4 text-center sm:flex-row sm:items-center sm:justify-between sm:text-start">
       <div className="flex items-center gap-3">
         {backHref && (
           <Link href={backHref} className="rounded-md p-1 text-text-secondary hover:bg-hover hover:text-text" aria-label="Back">
@@ -23,7 +23,7 @@ export function PageHeader({ title, description, backHref, children }: PageHeade
           {description && <p className="text-sm text-text-secondary">{description}</p>}
         </div>
       </div>
-      {children && <div className="flex items-center gap-2">{children}</div>}
+      {children && <div className="flex flex-wrap items-center justify-center gap-2 sm:justify-end">{children}</div>}
     </header>
   );
 }

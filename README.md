@@ -1,4 +1,4 @@
-# EverReach
+# Evernaro
 
 Omnichannel customer messaging for small businesses, built by Eversity Tech LLP.
 One inbox for Telegram, Email, WhatsApp, Instagram, and Voice reminders, with
@@ -40,6 +40,22 @@ npm run secrets        # prints ready-to-paste values — copy into .env, never 
 Redis must be running locally for the worker (`REDIS_URL`, defaults to
 `redis://localhost:6379`).
 
+### Demo accounts (local development only)
+
+After running migrations, seed the local database with demo accounts:
+
+```bash
+npx prisma db seed   # or: npm run db:seed
+```
+
+These accounts are created only when `NODE_ENV` is not `production` and are
+**not valid in production**. Rotate or remove them before going live.
+
+| URL | Email | Password |
+|---|---|---|---|
+| `/login` | `client@demo.com` | `DemoClient1234` |
+| `/platform/login` | `admin@demo.com` | `DemoAdmin1234` |
+
 ### Required environment variables
 
 See the comments in `.env` for the full list and what each one is for —
@@ -51,19 +67,6 @@ Sentry/rate-limit knobs. The two that will bite you if wrong:
 - `ENCRYPTION_KEY` must be a 32-byte key, base64-encoded (generate with
   `node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"`).
   Losing it makes every stored channel credential unrecoverable.
-
-## Test logins (local development only)
-
-These accounts are seeded in the dev database only. They are **not valid in
-production**, and they must not be used once real customer data exists.
-
-| | URL | Email | Password |
-|---|---|---|---|
-| Client dashboard (org: Design Test Co) | `/login` | `uitest@example.com` | `TestPass1234` |
-| Platform admin | `/platform/login` | `sushant@eversitytech.com` | `TestAdmin1234` |
-
-**Before going live:** rotate the platform admin password, remove or disable
-these seeded accounts, and make the repository private.
 
 ## Testing
 

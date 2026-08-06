@@ -1,15 +1,25 @@
 import { NextResponse } from "next/server";
 import { UserRole } from "@prisma/client";
+import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { requireOrgMember, UnauthorizedError, ForbiddenError } from "@/lib/session";
 import { logAudit } from "@/lib/audit";
+import { seatLimit, activeSeatsUsed } from "@/lib/usage-limits";
 import bcrypt from "bcryptjs";
+import { randomBytes } from "node:crypto";
+
+const inviteSchema = z.object({
+  name: z.string().min(1),
+  email: z.string().email(),
+  role: z.enum(["OWNER", "ADMIN", "AGENT", "VIEWER"]),
+});
 
 function generateTempPassword() {
   const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*";
+  const bytes = randomBytes(12);
   let pass = "";
   for (let i = 0; i < 12; i++) {
-    pass += chars.charAt(Math.floor(Math.random() * chars.length));
+    pass += chars.charAt(bytes[i] % chars.length);
   }
   return pass;
 }
@@ -37,15 +47,26 @@ export async function GET() {
 export async function POST(req: Request) {
   try {
     const { orgId, userId: adminId } = await requireOrgMember(UserRole.ADMIN);
-    const body = await req.json().catch(() => ({}));
-    const { name, email, role } = body;
-    if (!name || !email || !role || !Object.values(UserRole).includes(role)) {
-      return NextResponse.json({ error: "Name, email and role are required" }, { status: 400 });
+    const parsed = inviteSchema.safeParse(await req.json().catch(() => ({})));
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: parsed.error.issues[0]?.message ?? "Invalid input" },
+        { status: 400 }
+      );
     }
+    const { name, email, role } = parsed.data;
 
     const existing = await prisma.user.findUnique({ where: { email: email.toLowerCase() } });
     if (existing) {
       return NextResponse.json({ error: "A user with this email already exists" }, { status: 409 });
+    }
+
+    const usedSeats = await activeSeatsUsed(orgId);
+    if (usedSeats >= seatLimit()) {
+      return NextResponse.json(
+        { error: `You've reached the ${seatLimit()} active-user limit. Contact support to add more seats.` },
+        { status: 429 }
+      );
     }
 
     const tempPassword = generateTempPassword();

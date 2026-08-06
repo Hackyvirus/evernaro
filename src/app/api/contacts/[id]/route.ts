@@ -1,9 +1,19 @@
 import { NextResponse } from "next/server";
 import { UserRole } from "@prisma/client";
+import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { requireOrgMember, UnauthorizedError, ForbiddenError } from "@/lib/session";
 import { logAudit } from "@/lib/audit";
 import { normalizePhone } from "@/lib/phone";
+
+const contactPatchSchema = z.object({
+  name: z.string().min(1).optional(),
+  email: z.union([z.string().email(), z.literal("")]).optional(),
+  phone: z.string().optional(),
+  notes: z.string().optional(),
+  company: z.string().optional(),
+  tags: z.array(z.string()).optional(),
+}).strict();
 
 export async function GET(
   _request: Request,
@@ -43,8 +53,14 @@ export async function PATCH(
     const { orgId, userId } = await requireOrgMember(UserRole.AGENT);
     const { id } = await params;
 
-    const body = await request.json().catch(() => ({}));
-    const { name, email, phone, notes, tags, company } = body;
+    const parsed = contactPatchSchema.safeParse(await request.json().catch(() => ({})));
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: parsed.error.issues[0]?.message ?? "Invalid input" },
+        { status: 400 }
+      );
+    }
+    const { name, email, phone, notes, tags, company } = parsed.data;
 
     const existing = await prisma.contact.findFirst({
       where: { id, orgId },
@@ -61,7 +77,7 @@ export async function PATCH(
     if (notes !== undefined) updateData.notes = notes;
     if (company !== undefined) updateData.company = company;
     if (tags !== undefined) {
-      updateData.tags = Array.isArray(tags) ? tags.filter((t: unknown) => typeof t === "string" && t.trim()).map((t: string) => t.trim()) : [];
+      updateData.tags = tags.filter((t) => t.trim()).map((t) => t.trim());
     }
 
     if (Object.keys(updateData).length === 0) {

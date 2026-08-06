@@ -12,17 +12,17 @@ const FAQS = [
   {
     question: "How does the AI draft replies?",
     answer:
-      "Every incoming message gets an AI-drafted response pulled from your business profile and knowledge base (pricing, FAQs, policies you write once in Settings). A human on your team reviews, edits, and sends it — EverReach never sends anything on its own.",
+      "Every incoming message gets an AI-drafted response pulled from your business profile and knowledge base (pricing, FAQs, policies you write once in Settings). A human on your team reviews, edits, and sends it — Evernaro never sends anything on its own.",
   },
   {
     question: "Why is WhatsApp different from the other channels?",
     answer:
-      "Meta only lets businesses send free-form messages within 24 hours of a customer's last message. Outside that window you must use a pre-approved template. EverReach handles both paths for you and warns you before you hit send into a rejection.",
+      "Meta only lets businesses send free-form messages within 24 hours of a customer's last message. Outside that window you must use a pre-approved template. Evernaro handles both paths for you and warns you before you hit send into a rejection.",
   },
   {
     question: "Can I use Voice for bulk calling?",
     answer:
-      "No — and that's deliberate. India's TRAI/DND rules restrict unsolicited automated calling, so Voice in EverReach is wired only into individually-scheduled reminders to contacts already in your system. It is never available as a bulk campaign channel.",
+      "No — and that's deliberate. India's TRAI/DND rules restrict unsolicited automated calling, so Voice in Evernaro is wired only into individually-scheduled reminders to contacts already in your system. It is never available as a bulk campaign channel.",
   },
   {
     question: "What does it cost?",
@@ -49,7 +49,7 @@ export function Faq() {
               type="button"
               onClick={() => setOpen(isOpen ? null : i)}
               aria-expanded={isOpen}
-              className="flex w-full cursor-pointer items-center justify-between gap-4 px-5 py-4 text-left"
+              className="flex w-full cursor-pointer items-center justify-between gap-4 px-5 py-4 text-start"
             >
               <span className="text-sm font-semibold text-text">{item.question}</span>
               <ChevronDown

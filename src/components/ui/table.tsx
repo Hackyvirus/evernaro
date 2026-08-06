@@ -3,7 +3,7 @@ import { ReactNode, TableHTMLAttributes, TdHTMLAttributes, ThHTMLAttributes } fr
 export function Table({ className = "", children, ...props }: TableHTMLAttributes<HTMLTableElement>) {
   return (
     <div className="overflow-x-auto rounded-md border border-border">
-      <table className={`w-full text-left text-sm ${className}`} {...props}>
+      <table className={`w-full text-start text-sm ${className}`} {...props}>
         {children}
       </table>
     </div>

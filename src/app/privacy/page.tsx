@@ -1,12 +1,12 @@
 import Link from "next/link";
 
-export const metadata = { title: "Privacy Policy — EverReach" };
+export const metadata = { title: "Privacy Policy — Evernaro" };
 
 export default function PrivacyPage() {
   return (
     <div className="mx-auto max-w-2xl px-6 py-12 text-sm leading-relaxed text-text">
       <Link href="/" className="text-primary hover:text-primary-hover">
-        ← EverReach
+        ← Evernaro
       </Link>
 
       <h1 className="mt-6 text-2xl font-semibold">Privacy Policy</h1>
@@ -75,7 +75,7 @@ export default function PrivacyPage() {
         <section>
           <h2 className="text-base font-semibold">6. Your customers&apos; rights</h2>
           <p className="mt-2 text-text-secondary">
-            If one of your customers wants their data removed from EverReach, that request should go
+            If one of your customers wants their data removed from Evernaro, that request should go
             through you (the business they messaged) — you can delete a contact and their conversation
             history from your dashboard, or contact us for help.
           </p>
@@ -92,7 +92,11 @@ export default function PrivacyPage() {
         <section>
           <h2 className="text-base font-semibold">8. Contact</h2>
           <p className="mt-2 text-text-secondary">
-            Questions or data requests: reach Eversity Tech LLP through your onboarding contact.
+            Questions or data requests: email us at{" "}
+            <a href="mailto:hello@evernaro.com" className="text-primary hover:text-primary-hover">
+              hello@evernaro.com
+            </a>
+            .
           </p>
         </section>
       </div>
@@ -102,7 +106,7 @@ export default function PrivacyPage() {
       </p>
 
       <p className="mt-6 text-xs text-text-muted">
-        This policy describes what EverReach does with data today. It should still be reviewed by a
+        This policy describes what Evernaro does with data today. It should still be reviewed by a
         lawyer familiar with Indian data-protection law and any other jurisdiction you sell into
         before being relied on as a final legal document.
       </p>

@@ -1,11 +1,18 @@
 import { NextResponse } from "next/server";
 import { UserRole, type ConversationPriority, type ConversationStatus } from "@prisma/client";
+import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { requireOrgMember, UnauthorizedError, ForbiddenError } from "@/lib/session";
 import { logAudit } from "@/lib/audit";
 
 const validPriorities: ConversationPriority[] = ["LOW", "MEDIUM", "HIGH", "URGENT"];
 const validStatuses: ConversationStatus[] = ["OPEN", "CLOSED"];
+
+const conversationPatchSchema = z.object({
+  assignedToId: z.union([z.string().cuid2(), z.literal(null), z.literal("")]).optional(),
+  priority: z.enum(["LOW", "MEDIUM", "HIGH", "URGENT"]).optional(),
+  status: z.enum(["OPEN", "CLOSED"]).optional(),
+}).strict();
 
 export async function GET(
   _request: Request,
@@ -57,8 +64,14 @@ export async function PATCH(
     const { orgId, userId, role } = await requireOrgMember(UserRole.AGENT);
     const { id } = await params;
 
-    const body = await request.json().catch(() => ({}));
-    const { assignedToId, priority, status } = body;
+    const parsed = conversationPatchSchema.safeParse(await request.json().catch(() => ({})));
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: parsed.error.issues[0]?.message ?? "Invalid input" },
+        { status: 400 }
+      );
+    }
+    const { assignedToId, priority, status } = parsed.data;
 
     const existing = await prisma.conversation.findFirst({
       where: { id, orgId },

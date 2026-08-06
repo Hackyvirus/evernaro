@@ -50,7 +50,7 @@ function VerifyEmailForm() {
         {status === "success" && (
           <>
             <p className="mt-3 text-sm text-text-secondary">
-              Your email is verified. You can now log in to EverReach.
+              Your email is verified. You can now log in to Evernaro.
             </p>
             <p className="mt-4 text-sm">
               <Link href="/login" className="font-medium text-primary hover:text-primary-hover">

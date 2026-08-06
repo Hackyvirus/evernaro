@@ -1,9 +1,14 @@
 import { NextResponse } from "next/server";
 import { UserRole } from "@prisma/client";
+import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { requireOrgMember, UnauthorizedError, ForbiddenError } from "@/lib/session";
 import { logAudit } from "@/lib/audit";
 import { cancelCampaignRecipientJob } from "@/lib/queue";
+
+const campaignPatchSchema = z.object({
+  action: z.enum(["pause", "resume", "cancel", "duplicate"]),
+}).strict();
 
 export async function GET(
   _req: Request,
@@ -44,8 +49,14 @@ export async function PATCH(
     const { orgId, userId } = await requireOrgMember(UserRole.AGENT);
     const { id } = await params;
 
-    const body = await request.json().catch(() => ({}));
-    const { action } = body;
+    const parsed = campaignPatchSchema.safeParse(await request.json().catch(() => ({})));
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: parsed.error.issues[0]?.message ?? "Invalid input" },
+        { status: 400 }
+      );
+    }
+    const { action } = parsed.data;
 
     const campaign = await prisma.campaign.findFirst({ where: { id, orgId } });
     if (!campaign) {

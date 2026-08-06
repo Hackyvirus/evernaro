@@ -275,7 +275,7 @@ function BusinessProfileTab() {
         label="Sign-off"
         value={form.signOff}
         onChange={(e) => setForm({ ...form, signOff: e.target.value })}
-        placeholder="e.g. — Team EverReach"
+        placeholder="e.g. — Team Evernaro"
       />
 
       <Button onClick={save} loading={status === "saving"} className="mt-2 w-fit">
@@ -989,7 +989,7 @@ function VoiceTab({
       <div className="rounded-md border border-warning bg-warning-light px-3 py-2.5 text-sm text-text">
         <p className="font-medium">Reminder calls only — not for bulk or cold calling.</p>
         <p className="mt-1 text-xs text-text-secondary">
-          India&apos;s TRAI/DND rules restrict unsolicited automated calling. Voice in EverReach is
+          India&apos;s TRAI/DND rules restrict unsolicited automated calling. Voice in Evernaro is
           wired only into individually-scheduled Reminders to contacts already in your system — it
           is intentionally not available as a bulk Campaign channel. Confirm your own compliance
           obligations (consent, DND registry, calling hours) before using this with real customers.

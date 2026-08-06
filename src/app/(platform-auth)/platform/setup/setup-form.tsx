@@ -10,6 +10,7 @@ export function SetupForm() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [setupToken, setSetupToken] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -21,7 +22,7 @@ export function SetupForm() {
       const res = await fetch("/api/platform/setup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, email, password }),
+        body: JSON.stringify({ name, email, password, setupToken }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -55,6 +56,13 @@ export function SetupForm() {
         minLength={8}
         value={password}
         onChange={(e) => setPassword(e.target.value)}
+      />
+      <Input
+        label="Setup token"
+        type="password"
+        required
+        value={setupToken}
+        onChange={(e) => setSetupToken(e.target.value)}
       />
 
       {error && <p className="text-sm text-danger">{error}</p>}

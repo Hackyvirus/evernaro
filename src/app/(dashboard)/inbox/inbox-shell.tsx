@@ -555,7 +555,7 @@ function ConversationList({
           <li key={c.id}>
             <button
               onClick={() => onSelect(c.id)}
-              className={`flex w-full cursor-pointer items-start gap-3 px-4 py-3 text-left transition-colors ${
+              className={`flex w-full cursor-pointer items-start gap-3 px-4 py-3 text-start transition-colors ${
                 isSelected ? "bg-hover" : "hover:bg-hover"
               }`}
               aria-selected={isSelected}

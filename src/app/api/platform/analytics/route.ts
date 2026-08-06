@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requirePlatformAdminId, UnauthorizedError } from "@/lib/session";
-import { dailyCampaignRecipientLimit, dailyCampaignRecipientsUsed } from "@/lib/usage-limits";
+import { dailyCampaignRecipientLimit } from "@/lib/usage-limits";
 
 const ACTIVE_WITHIN_DAYS = 7;
 
@@ -36,24 +36,31 @@ export async function GET() {
     ).length;
 
     const limit = dailyCampaignRecipientLimit();
-    const usageEntries = await Promise.all(
-      orgs.map(async (o) => ({
-        orgId: o.id,
-        orgName: o.name,
-        used: await dailyCampaignRecipientsUsed(o.id),
-      }))
-    );
-    const nearCapClients = usageEntries
-      .filter((e) => e.used >= limit * 0.8)
-      .map((e) => ({ orgId: e.orgId, orgName: e.orgName, used: e.used, limit }));
-
-    return NextResponse.json({
-      totalClients: orgs.length,
-      activeClientCount,
-      messagesSent: messageCounts.find((m) => m.direction === "OUTBOUND")?._count._all ?? 0,
-      messagesReceived: messageCounts.find((m) => m.direction === "INBOUND")?._count._all ?? 0,
-      nearCapClients,
+    const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const usageAgg = await prisma.campaign.groupBy({
+      by: ["orgId"],
+      where: { createdAt: { gte: since } },
+      _sum: { totalRecipients: true },
     });
+    const usageByOrg = new Map(usageAgg.map((u) => [u.orgId, u._sum.totalRecipients ?? 0]));
+    const nearCapClients = orgs
+      .filter((o) => (usageByOrg.get(o.id) ?? 0) >= limit * 0.8)
+      .map((o) => ({ orgId: o.id, orgName: o.name, used: usageByOrg.get(o.id) ?? 0, limit }));
+
+    return NextResponse.json(
+      {
+        totalClients: orgs.length,
+        activeClientCount,
+        messagesSent: messageCounts.find((m) => m.direction === "OUTBOUND")?._count._all ?? 0,
+        messagesReceived: messageCounts.find((m) => m.direction === "INBOUND")?._count._all ?? 0,
+        nearCapClients,
+      },
+      {
+        headers: {
+          "Cache-Control": "public, max-age=15, s-maxage=30, stale-while-revalidate=120",
+        },
+      }
+    );
   } catch (err) {
     if (err instanceof UnauthorizedError) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

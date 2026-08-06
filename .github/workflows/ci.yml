@@ -34,8 +34,8 @@ jobs:
         run: npm run build
         env:
           # Minimal env vars required for a production build without real secrets.
-          DATABASE_URL: postgresql://localhost:5432/everreach
-          DIRECT_URL: postgresql://localhost:5432/everreach
+          DATABASE_URL: postgresql://localhost:5432/evernaro
+          DIRECT_URL: postgresql://localhost:5432/evernaro
           AUTH_SECRET: ${{ secrets.AUTH_SECRET || 'ci-auth-secret-not-for-production-ci-only' }}
           ENCRYPTION_KEY: ${{ secrets.ENCRYPTION_KEY || 'ci-encryption-key-not-for-production-ci-only' }}
           NEXT_PUBLIC_BASE_URL: http://localhost:3000

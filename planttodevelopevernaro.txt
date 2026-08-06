@@ -1,10 +1,10 @@
-# EverReach — Complete Product UX, Dashboard & Implementation Specification
+# Evernaro — Complete Product UX, Dashboard & Implementation Specification
 
 ## Role
 
 You are a senior SaaS product architect, UX designer, and full-stack engineer.
 
-You are working on **EverReach**, an omnichannel customer messaging SaaS built by Eversity Tech LLP.
+You are working on **Evernaro**, an omnichannel customer messaging SaaS built by Eversity Tech LLP.
 
 Your task is to transform the current application into a polished, production-ready SaaS product.
 
@@ -22,7 +22,7 @@ Do not create mock pages that only look good. Pages should be connected to the e
 
 # 1. Current Product
 
-EverReach provides:
+Evernaro provides:
 
 > One inbox for every customer conversation.
 
@@ -55,7 +55,7 @@ Core capabilities:
 
 AI replies are ALWAYS drafts.
 
-EverReach must never autonomously send an AI-generated customer reply.
+Evernaro must never autonomously send an AI-generated customer reply.
 
 Human review and explicit send action are required.
 
@@ -95,7 +95,7 @@ Architecture:
 
 # 3. Product Design Direction
 
-EverReach should look like a modern premium B2B SaaS.
+Evernaro should look like a modern premium B2B SaaS.
 
 Design inspiration:
 
@@ -135,7 +135,7 @@ Avoid:
 * dashboard pages filled with meaningless statistics
 * generic AI-looking UI
 
-EverReach should feel like a serious business product.
+Evernaro should feel like a serious business product.
 
 ---
 
@@ -221,7 +221,7 @@ Show actionable items:
 
 ### Recent conversations
 
-Show 5–10 latest conversations.
+Show 510 latest conversations.
 
 ### Upcoming reminders
 
@@ -269,7 +269,7 @@ Route:
 
 `/inbox`
 
-This is the most important page in EverReach.
+This is the most important page in Evernaro.
 
 Make this the best-designed screen in the application.
 
@@ -753,7 +753,7 @@ Route:
 
 `/channels`
 
-This should be separate from general settings because channels are core to EverReach.
+This should be separate from general settings because channels are core to Evernaro.
 
 Show cards:
 
@@ -1067,7 +1067,7 @@ Use a professional sidebar.
 
 Top:
 
-EverReach logo
+Evernaro logo
 
 Organization selector if user can belong to multiple organizations.
 
@@ -1107,7 +1107,7 @@ This is NOT a normal client dashboard.
 
 It is the internal control center for Eversity Tech LLP.
 
-The platform admin should be able to manage the EverReach SaaS.
+The platform admin should be able to manage the Evernaro SaaS.
 
 Recommended:
 
@@ -1135,7 +1135,7 @@ Route:
 
 Dashboard should answer:
 
-> "Is EverReach healthy and what is happening across the platform?"
+> "Is Evernaro healthy and what is happening across the platform?"
 
 KPI cards:
 
@@ -1599,7 +1599,7 @@ Use environment/secret management for credentials.
 
 Design:
 
-EverReach Platform
+Evernaro Platform
 
 Overview
 
@@ -1629,7 +1629,7 @@ Use a visually distinct but professional indication that this is the platform-ad
 
 # 36. TOTAL PAGE/AREA TARGET
 
-Do NOT create 40–50 separate routes unnecessarily.
+Do NOT create 4050 separate routes unnecessarily.
 
 Target approximately:
 
@@ -1693,7 +1693,7 @@ Do NOT try to force a three-column layout.
 
 Instead:
 
-Conversation list → conversation → customer information
+Conversation list  conversation  customer information
 
 using navigation/drawers.
 
@@ -1748,7 +1748,7 @@ Analytics:
 
 "Not enough data yet"
 
-"Analytics will appear once EverReach starts receiving and sending messages."
+"Analytics will appear once Evernaro starts receiving and sending messages."
 
 ---
 
@@ -1938,7 +1938,7 @@ Understand:
 
 Create a document:
 
-`EVERREACH_UI_AUDIT.md`
+`Evernaro_UI_AUDIT.md`
 
 Containing:
 
@@ -1988,7 +1988,7 @@ Build/upgrade:
 * Customer profile
 * Channels
 
-These are the core EverReach experience.
+These are the core Evernaro experience.
 
 ---
 
@@ -2120,7 +2120,7 @@ Only add database models when genuinely required.
 
 # 56. FINAL UX STANDARD
 
-After implementation, EverReach should feel like a mature SaaS product.
+After implementation, Evernaro should feel like a mature SaaS product.
 
 A business owner should be able to:
 
@@ -2166,7 +2166,7 @@ Do NOT make any changes yet.
 
 Create:
 
-`EVERREACH_UI_AUDIT.md`
+`Evernaro_UI_AUDIT.md`
 
 Include:
 

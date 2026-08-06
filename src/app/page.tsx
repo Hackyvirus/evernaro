@@ -141,29 +141,8 @@ const PRICING_TIERS = [
   },
 ];
 
-const TESTIMONIALS = [
-  {
-    quote:
-      "We were juggling Telegram and Instagram DMs on our phones. Now every customer conversation lives in one place and the AI drafts mean we reply in minutes, not hours.",
-    name: "Sales head",
-    role: "Real estate, Bengaluru",
-  },
-  {
-    quote:
-      "The WhatsApp template logic alone saved us from a compliance headache. I don't have to think about the 24-hour window — EverReach just handles it.",
-    name: "Owner",
-    role: "Dental clinic, Pune",
-  },
-  {
-    quote:
-      "Reminders cut our no-show rate noticeably in the first month. Patients get a WhatsApp nudge and a voice call — and it all happens automatically.",
-    name: "Founder",
-    role: "Salon chain, Delhi",
-  },
-];
-
 const FAQ_BLURB =
-  "Answers to the questions we get most. Anything else — hello@eversitytech.com.";
+  "Answers to the questions we get most. Anything else — hello@evernaro.com.";
 
 export default async function Home() {
   const session = await auth();
@@ -187,8 +166,8 @@ export default async function Home() {
 
       <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-20 px-6 pt-14 pb-24">
         {/* Hero */}
-        <section className="grid items-start gap-10 lg:grid-cols-[1fr_1.05fr] lg:gap-12">
-          <div className="flex flex-col items-start gap-5 pt-2 lg:pt-8">
+        <section className="grid items-center gap-10 text-center sm:items-start sm:text-start lg:grid-cols-[1fr_1.05fr] lg:gap-12">
+          <div className="flex flex-col items-center gap-5 pt-2 sm:items-start lg:pt-8">
             <Reveal>
               <p className="inline-flex items-center gap-2 rounded-full border border-primary-light bg-primary-lighter px-3 py-1 text-xs font-medium text-primary">
                 <span className="relative flex h-1.5 w-1.5">
@@ -212,7 +191,7 @@ export default async function Home() {
               </p>
             </Reveal>
             <Reveal delay={240}>
-              <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center">
+              <div className="flex flex-col items-center gap-2 sm:flex-row sm:items-start">
                 <Link href="/signup">
                   <Button size="lg" className="w-full sm:w-auto">Start free</Button>
                 </Link>
@@ -222,10 +201,10 @@ export default async function Home() {
                   </Button>
                 </Link>
                 <a
-                  href={process.env.NEXT_PUBLIC_DEMO_BOOKING_URL ?? "mailto:hello@eversitytech.com?subject=Book%20a%20demo"}
+                  href={process.env.NEXT_PUBLIC_DEMO_BOOKING_URL ?? "mailto:hello@evernaro.com?subject=Book%20a%20demo"}
                   className="flex h-12 items-center justify-center px-4 text-sm font-medium text-text-secondary hover:text-text sm:justify-start"
                 >
-                  Book a demo →
+                  Book a demo 
                 </a>
               </div>
             </Reveal>
@@ -349,7 +328,7 @@ export default async function Home() {
           <div className="grid gap-6 sm:grid-cols-3">
             {HOW_IT_WORKS.map((step, i) => (
               <Reveal key={step.title} delay={i * 80}>
-                <div className="flex flex-col items-start gap-3">
+                <div className="flex flex-col items-center gap-3 text-center sm:items-start sm:text-start">
                   <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary-lighter">
                     <step.icon className="h-5 w-5 text-primary" aria-hidden="true" />
                   </div>
@@ -400,9 +379,11 @@ export default async function Home() {
                       </li>
                     ))}
                   </ul>
-                  <Link href="/signup">
+                  <Link href={tier.name === "Scale" ? "mailto:hello@evernaro.com?subject=Evernaro%20Scale%20plan" : "/signup"}>
                     <Button variant={tier.highlighted ? "primary" : "secondary"} className="w-full">
-                      Start free
+                      {tier.name === "Starter" && "Start free"}
+                      {tier.name === "Growth" && "Start free trial"}
+                      {tier.name === "Scale" && "Contact sales"}
                     </Button>
                   </Link>
                 </Card>
@@ -413,40 +394,12 @@ export default async function Home() {
             <p className="text-center text-sm text-text-muted">
               WhatsApp send costs billed separately at Meta&apos;s per-conversation rates, capped by your
               prepaid wallet. Need a custom plan?{" "}
-              <a href="mailto:hello@eversitytech.com" className="cursor-pointer text-primary hover:text-primary-hover">
+              <a href="mailto:hello@evernaro.com" className="cursor-pointer text-primary hover:text-primary-hover">
                 Talk to us
               </a>
               .
             </p>
           </Reveal>
-        </section>
-
-        {/* Testimonials */}
-        <section className="flex flex-col gap-8">
-          <Reveal className="flex flex-col items-center gap-2 text-center">
-            <p className="text-xs font-medium tracking-wide text-primary uppercase">Trusted by teams</p>
-            <h2 className="text-3xl font-extrabold text-text">Businesses that stopped juggling tabs.</h2>
-          </Reveal>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {TESTIMONIALS.map((t, i) => (
-              <Reveal key={t.quote} delay={i * 80}>
-                <Card className="flex h-full flex-col gap-4 p-5">
-                  <div className="flex gap-1" aria-hidden="true">
-                    {Array.from({ length: 5 }).map((_, s) => (
-                      <svg key={s} viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4 text-accent">
-                        <path d="M9.05 2.93c.3-.92 1.6-.92 1.9 0l1.28 3.94a1 1 0 0 0 .95.69h4.15c.97 0 1.37 1.24.59 1.81l-3.36 2.44a1 1 0 0 0-.36 1.12l1.28 3.94c.3.92-.76 1.69-1.54 1.12l-3.36-2.44a1 1 0 0 0-1.18 0l-3.36 2.44c-.78.57-1.84-.2-1.54-1.12l1.28-3.94a1 1 0 0 0-.36-1.12L2.08 9.37c-.78-.57-.38-1.81.59-1.81h4.15a1 1 0 0 0 .95-.69l1.28-3.94Z" />
-                      </svg>
-                    ))}
-                  </div>
-                  <p className="flex-1 text-sm leading-relaxed text-text">“{t.quote}”</p>
-                  <div>
-                    <p className="text-sm font-semibold text-text">{t.name}</p>
-                    <p className="text-xs text-text-muted">{t.role}</p>
-                  </div>
-                </Card>
-              </Reveal>
-            ))}
-          </div>
         </section>
 
         {/* FAQ */}
@@ -464,26 +417,28 @@ export default async function Home() {
         {/* Final CTA */}
         <section>
           <Reveal>
-            <Card className="relative flex flex-col items-start gap-3 overflow-hidden p-6 sm:flex-row sm:items-center sm:justify-between sm:p-8">
+            <Card className="relative flex flex-col items-center gap-3 overflow-hidden p-6 text-center sm:flex-row sm:items-center sm:justify-between sm:text-start sm:p-8">
               <div className="pointer-events-none absolute -top-16 -right-16 h-48 w-48 rounded-full bg-primary-lighter blur-2xl" aria-hidden="true" />
-              <div className="relative">
+              <div className="relative flex flex-col items-center sm:items-start">
                 <h2 className="text-xl font-bold text-text sm:text-2xl">
                   Ready to bring every channel into one inbox?
                 </h2>
-                <p className="mt-1 flex items-center gap-1.5 text-sm text-text-secondary">
+                <p className="mt-1 flex flex-col items-center gap-1.5 text-sm text-text-secondary sm:flex-row sm:items-center">
                   <Bell className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
-                  Set up takes a few minutes — connect your first channel right after signing up.
+                  <span>Set up takes a few minutes — connect your first channel right after signing up.</span>
                 </p>
               </div>
-              <Link href="/signup" className="relative">
-                <Button size="lg">Start free</Button>
-              </Link>
-              <a
-                href={process.env.NEXT_PUBLIC_DEMO_BOOKING_URL ?? "mailto:hello@eversitytech.com?subject=Book%20a%20demo"}
-                className="relative"
-              >
-                <Button variant="secondary" size="lg">Book a demo</Button>
-              </a>
+              <div className="relative flex flex-col items-center gap-2 sm:flex-row">
+                <Link href="/signup" className="relative">
+                  <Button size="lg">Start free</Button>
+                </Link>
+                <a
+                  href={process.env.NEXT_PUBLIC_DEMO_BOOKING_URL ?? "mailto:hello@evernaro.com?subject=Book%20a%20demo"}
+                  className="relative"
+                >
+                  <Button variant="secondary" size="lg">Book a demo</Button>
+                </a>
+              </div>
             </Card>
           </Reveal>
         </section>
@@ -506,7 +461,7 @@ export default async function Home() {
             </div>
           </div>
           <div className="flex flex-col items-center justify-between gap-3 border-t border-border pt-4 text-xs text-text-muted sm:flex-row">
-            <span>© 2026 Eversity Tech LLP</span>
+            <span>Â© 2026 Eversity Tech LLP</span>
             <div className="flex items-center gap-4">
               <Link href="/terms" className="cursor-pointer hover:text-text-secondary">
                 Terms
@@ -514,7 +469,7 @@ export default async function Home() {
               <Link href="/privacy" className="cursor-pointer hover:text-text-secondary">
                 Privacy
               </Link>
-              <a href="mailto:hello@eversitytech.com" className="cursor-pointer hover:text-text-secondary">
+              <a href="mailto:hello@evernaro.com" className="cursor-pointer hover:text-text-secondary">
                 Contact
               </a>
             </div>

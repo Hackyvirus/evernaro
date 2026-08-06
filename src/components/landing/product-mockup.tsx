@@ -58,7 +58,7 @@ export function ProductMockup() {
           <span className="h-2.5 w-2.5 rounded-full bg-success/60" />
           <div className="mx-auto flex w-full max-w-xs items-center justify-center gap-1.5 rounded-md bg-card px-3 py-1 text-xs text-text-muted">
             <span className="h-1.5 w-1.5 rounded-full bg-success" />
-            everreach.app/inbox
+            evernaro.com/inbox
           </div>
         </div>
 
@@ -70,7 +70,7 @@ export function ProductMockup() {
                 <MessageSquare className="h-3.5 w-3.5" aria-hidden="true" />
               </span>
               <div>
-                <p className="text-xs font-extrabold tracking-tight text-primary">EverReach</p>
+                <p className="text-xs font-extrabold tracking-tight text-primary">Evernaro</p>
                 <p className="text-[10px] text-text-muted">Skyline Realty</p>
               </div>
             </div>

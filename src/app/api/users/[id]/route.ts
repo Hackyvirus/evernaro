@@ -1,8 +1,14 @@
 import { NextResponse } from "next/server";
 import { UserRole } from "@prisma/client";
+import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { requireOrgMember, UnauthorizedError, ForbiddenError } from "@/lib/session";
 import { logAudit } from "@/lib/audit";
+
+const userPatchSchema = z.object({
+  role: z.enum(["OWNER", "ADMIN", "AGENT", "VIEWER"]).optional(),
+  isActive: z.boolean().optional(),
+}).strict();
 
 export async function PATCH(
   request: Request,
@@ -25,17 +31,23 @@ export async function PATCH(
       return NextResponse.json({ error: "Only the owner can modify the owner" }, { status: 403 });
     }
 
-    const body = await request.json().catch(() => ({}));
-    const { role, isActive } = body;
+    const parsed = userPatchSchema.safeParse(await request.json().catch(() => ({})));
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: parsed.error.issues[0]?.message ?? "Invalid input" },
+        { status: 400 }
+      );
+    }
+    const { role, isActive } = parsed.data;
     const updateData: { role?: UserRole; isActive?: boolean } = {};
 
-    if (role && Object.values(UserRole).includes(role)) {
+    if (role !== undefined) {
       if (role === UserRole.OWNER && adminRole !== UserRole.OWNER) {
         return NextResponse.json({ error: "Only the owner can assign the owner role" }, { status: 403 });
       }
       updateData.role = role;
     }
-    if (typeof isActive === "boolean") {
+    if (isActive !== undefined) {
       updateData.isActive = isActive;
     }
 

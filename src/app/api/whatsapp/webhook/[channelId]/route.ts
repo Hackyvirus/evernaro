@@ -5,6 +5,7 @@ import { parseGupshupInbound, type GupshupInboundPayload } from "@/lib/whatsapp"
 import { generateDraftReply } from "@/lib/ai";
 import { normalizePhone } from "@/lib/phone";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { keepAlive } from "@/lib/lifecycle";
 
 export async function POST(
   req: Request,
@@ -69,9 +70,7 @@ export async function POST(
       data: { lastMessageAt: new Date() },
     });
 
-    generateDraftReply(conversation.id).catch((err) =>
-      console.error("AI draft generation failed", err)
-    );
+    keepAlive(generateDraftReply(conversation.id), "AI draft generation");
 
     return NextResponse.json({ ok: true });
   } catch (err) {

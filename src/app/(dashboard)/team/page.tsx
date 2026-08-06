@@ -273,7 +273,10 @@ function TeamPageContent() {
                     Copy
                   </Button>
                 </div>
-                <p className="text-xs text-text-muted">They can log in with their email and this password. A password reset flow will be added soon.</p>
+                <p className="text-xs text-text-muted">
+                  Share this temporary password securely — it is shown only once. They can change it
+                  from Settings &gt; Security after logging in.
+                </p>
                 <div className="flex justify-end">
                   <Button onClick={() => { setShowInvite(false); setTempPassword(null); }}>Done</Button>
                 </div>

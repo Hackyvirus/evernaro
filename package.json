@@ -1,5 +1,5 @@
 {
-  "name": "everreach",
+  "name": "evernaro",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -11,7 +11,14 @@
     "worker:start": "tsx src/workers/index.ts",
     "secrets": "node scripts/generate-secrets.mjs",
     "verify-env": "node scripts/verify-env.mjs",
-    "test": "vitest run"
+    "test": "vitest run",
+    "db:seed": "tsx prisma/seed.ts",
+    "docker:build": "docker build -t evernaro-app . && docker build -f Dockerfile.worker -t evernaro-worker .",
+    "docker:up": "docker compose up --build",
+    "docker:down": "docker compose down -v"
+  },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.115.0",
@@ -26,6 +33,7 @@
     "next-auth": "^5.0.0-beta.32",
     "openai": "^7.3.0",
     "otpauth": "^9.5.1",
+    "papaparse": "^5.5.4",
     "prisma": "^6.19.3",
     "qrcode": "^1.5.4",
     "qrcode.react": "^4.2.0",
@@ -38,6 +46,7 @@
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
+    "@types/papaparse": "^5.5.2",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",

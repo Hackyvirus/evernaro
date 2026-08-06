@@ -99,7 +99,7 @@ export default function CampaignDetailPage({ params }: { params: Promise<{ id: s
 
   return (
     <div className="flex flex-1 flex-col overflow-y-auto">
-      <header className="flex flex-col gap-3 border-b border-border px-6 py-4 sm:flex-row sm:items-start sm:justify-between">
+      <header className="flex flex-col gap-3 border-b border-border px-6 py-4 text-center sm:flex-row sm:items-center sm:justify-between sm:text-start">
         <div>
           <Link href="/campaigns" className="mb-1 inline-flex items-center gap-1 text-xs text-text-secondary hover:text-text">
             <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" /> Campaigns
@@ -146,7 +146,7 @@ export default function CampaignDetailPage({ params }: { params: Promise<{ id: s
         </p>
 
         <div className="overflow-x-auto rounded-md border border-border">
-          <table className="w-full text-left text-sm">
+          <table className="w-full text-start text-sm">
             <thead>
               <tr className="border-b border-border bg-surface text-text-secondary">
                 <th className="px-3 py-2.5 text-xs font-semibold tracking-wide uppercase">Contact</th>

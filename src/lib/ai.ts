@@ -2,15 +2,10 @@ import Anthropic from "@anthropic-ai/sdk";
 import OpenAI from "openai";
 import { prisma } from "@/lib/prisma";
 
-// generateDraftReply is always invoked unawaited (fire-and-forget) from
-// webhook routes so the inbound webhook can respond immediately. This is
-// safe on a long-lived Node process (the assumed deployment model here —
-// `next start` / a persistent container), where the process stays alive to
-// finish the promise after the HTTP response is sent. It is NOT safe on a
-// serverless/edge runtime that freezes execution the instant the response is
-// returned — there, wrap these call sites in that platform's request-
-// lifecycle extension (e.g. Vercel's `waitUntil`) or drafts will silently
-// stop appearing with nothing logged.
+// generateDraftReply is invoked via keepAlive() from webhook routes so the
+// inbound webhook can respond immediately while the draft is generated in the
+// background. keepAlive uses Vercel's waitUntil when available, and falls back
+// to fire-and-forget with logging on long-lived Node processes.
 
 type ChatMessage = { role: "user" | "assistant"; content: string };
 

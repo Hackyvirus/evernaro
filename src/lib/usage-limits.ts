@@ -19,3 +19,15 @@ export async function dailyCampaignRecipientsUsed(orgId: string): Promise<number
   });
   return result._sum.totalRecipients ?? 0;
 }
+
+const DEFAULT_SEAT_LIMIT = 5;
+
+export function seatLimit(): number {
+  const raw = process.env.SEAT_LIMIT;
+  const parsed = raw ? Number(raw) : NaN;
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_SEAT_LIMIT;
+}
+
+export async function activeSeatsUsed(orgId: string): Promise<number> {
+  return prisma.user.count({ where: { orgId, isActive: true } });
+}

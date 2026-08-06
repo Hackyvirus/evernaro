@@ -4,23 +4,32 @@ import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { requirePlatformAdminId, UnauthorizedError } from "@/lib/session";
 
-export async function GET() {
+export async function GET(req: Request) {
   try {
     await requirePlatformAdminId();
+    const { searchParams } = new URL(req.url);
+    const page = Math.max(1, Number(searchParams.get("page") ?? "1"));
+    const limit = Math.min(100, Math.max(1, Number(searchParams.get("limit") ?? "50")));
+    const skip = (page - 1) * limit;
 
-    const organizations = await prisma.organization.findMany({
-      orderBy: { createdAt: "desc" },
-      include: {
-        users: { where: { role: "OWNER" }, take: 1, select: { name: true, email: true } },
-        channels: { select: { type: true, isActive: true } },
-        _count: { select: { contacts: true, conversations: true } },
-        conversations: {
-          orderBy: { lastMessageAt: "desc" },
-          take: 1,
-          select: { lastMessageAt: true },
+    const [organizations, total] = await Promise.all([
+      prisma.organization.findMany({
+        orderBy: { createdAt: "desc" },
+        skip,
+        take: limit,
+        include: {
+          users: { where: { role: "OWNER" }, take: 1, select: { name: true, email: true } },
+          channels: { select: { type: true, isActive: true } },
+          _count: { select: { contacts: true, conversations: true } },
+          conversations: {
+            orderBy: { lastMessageAt: "desc" },
+            take: 1,
+            select: { lastMessageAt: true },
+          },
         },
-      },
-    });
+      }),
+      prisma.organization.count(),
+    ]);
 
     const result = organizations.map((org) => ({
       id: org.id,
@@ -35,7 +44,14 @@ export async function GET() {
       lastActivityAt: org.conversations[0]?.lastMessageAt ?? null,
     }));
 
-    return NextResponse.json({ organizations: result });
+    return NextResponse.json(
+      { organizations: result, total, page, limit },
+      {
+        headers: {
+          "Cache-Control": "public, max-age=0, s-maxage=15, stale-while-revalidate=60",
+        },
+      }
+    );
   } catch (err) {
     if (err instanceof UnauthorizedError) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

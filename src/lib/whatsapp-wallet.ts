@@ -266,10 +266,10 @@ async function maybeAlertLowBalance(walletId: string, orgId: string) {
 
   try {
     await sendEmail({
-      from: `EverReach <${from}>`,
+      from: `Evernaro <${from}>`,
       to: owner.email,
       subject: `${org.name}: WhatsApp balance is low`,
-      text: `Your EverReach WhatsApp wallet balance is ₹${(wallet.balancePaise / 100).toFixed(2)}, at or below your alert threshold of ₹${(wallet.lowBalanceThresholdPaise / 100).toFixed(2)}. Top up from your Billing page to avoid interruptions to WhatsApp sending.`,
+      text: `Your Evernaro WhatsApp wallet balance is ₹${(wallet.balancePaise / 100).toFixed(2)}, at or below your alert threshold of ₹${(wallet.lowBalanceThresholdPaise / 100).toFixed(2)}. Top up from your Billing page to avoid interruptions to WhatsApp sending.`,
     });
     await prisma.whatsAppWallet.update({ where: { id: walletId }, data: { lowBalanceAlertSentAt: new Date() } });
   } catch (err) {

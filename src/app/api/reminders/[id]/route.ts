@@ -1,9 +1,19 @@
 import { NextResponse } from "next/server";
 import { UserRole } from "@prisma/client";
+import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { requireOrgMember, UnauthorizedError, ForbiddenError } from "@/lib/session";
 import { cancelReminderJob, enqueueReminder } from "@/lib/queue";
 import { logAudit } from "@/lib/audit";
+
+const reminderPatchSchema = z.object({
+  title: z.string().min(1).optional(),
+  type: z.enum(["APPOINTMENT", "PAYMENT", "FOLLOW_UP", "CALLBACK", "CUSTOM"]).optional(),
+  message: z.string().optional(),
+  scheduledFor: z.string().datetime().optional(),
+  assignedToId: z.union([z.string().cuid2(), z.literal(null), z.literal("")]).optional(),
+  recurrence: z.enum(["NONE", "DAILY", "WEEKLY", "MONTHLY"]).optional(),
+}).strict();
 
 export async function PATCH(
   request: Request,
@@ -18,8 +28,14 @@ export async function PATCH(
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 
-    const body = await request.json().catch(() => ({}));
-    const { title, type, message, scheduledFor, assignedToId, recurrence } = body;
+    const parsed = reminderPatchSchema.safeParse(await request.json().catch(() => ({})));
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: parsed.error.issues[0]?.message ?? "Invalid input" },
+        { status: 400 }
+      );
+    }
+    const { title, type, message, scheduledFor, assignedToId, recurrence } = parsed.data;
     const updateData: {
       title?: string | null;
       type?: "APPOINTMENT" | "PAYMENT" | "FOLLOW_UP" | "CALLBACK" | "CUSTOM";
@@ -29,16 +45,10 @@ export async function PATCH(
       recurrence?: "NONE" | "DAILY" | "WEEKLY" | "MONTHLY";
     } = {};
 
-    if (title !== undefined) updateData.title = title || null;
+    if (title !== undefined) updateData.title = title;
     if (type !== undefined) updateData.type = type;
     if (message !== undefined) updateData.message = message;
-    if (scheduledFor !== undefined) {
-      const date = new Date(scheduledFor);
-      if (Number.isNaN(date.getTime())) {
-        return NextResponse.json({ error: "Invalid scheduled time" }, { status: 400 });
-      }
-      updateData.scheduledFor = date;
-    }
+    if (scheduledFor !== undefined) updateData.scheduledFor = new Date(scheduledFor);
     if (assignedToId !== undefined) updateData.assignedToId = assignedToId || null;
     if (recurrence !== undefined) updateData.recurrence = recurrence;
 

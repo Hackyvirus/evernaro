@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { UserRole } from "@prisma/client";
+import { parse } from "papaparse";
 import { prisma } from "@/lib/prisma";
 import { requireOrgMember, UnauthorizedError, ForbiddenError } from "@/lib/session";
 import { normalizePhone } from "@/lib/phone";
@@ -16,30 +17,43 @@ interface ImportRow {
   notes?: string;
 }
 
-function parseCsv(text: string): ImportRow[] {
-  const lines = text.trim().split(/\r?\n/).filter(Boolean);
-  if (lines.length < 2) return [];
-  const headers = lines[0].split(",").map((h) => h.trim().toLowerCase());
+function parseCsv(text: string): { rows: ImportRow[]; errors: { row: number; error: string }[] } {
+  const parsed = parse<Record<string, string>>(text, {
+    header: true,
+    skipEmptyLines: true,
+    transformHeader: (header) => header.trim().toLowerCase(),
+  });
+
+  const parseErrors: { row: number; error: string }[] = parsed.errors.map((e) => ({
+    row: e.row ? e.row + 2 : 0,
+    error: e.message,
+  }));
+
   const rows: ImportRow[] = [];
-  for (let i = 1; i < lines.length; i++) {
-    const values = lines[i].split(",").map((v) => v.trim());
-    const row: Record<string, string> = {};
-    headers.forEach((h, idx) => {
-      row[h] = values[idx] ?? "";
-    });
-    if (!row.email && !row.phone && !row.telegramchatid && !row.instagramuserid) continue;
+  parsed.data.forEach((row, idx) => {
+    const email = row.email?.trim();
+    const phone = row.phone?.trim();
+    const telegramChatId = row.telegramchatid?.trim();
+    const instagramUserId = row.instagramuserid?.trim();
+
+    if (!email && !phone && !telegramChatId && !instagramUserId) {
+      parseErrors.push({ row: idx + 2, error: "At least one channel identifier is required" });
+      return;
+    }
+
     rows.push({
-      name: row.name || undefined,
-      email: row.email || undefined,
-      phone: row.phone || undefined,
-      telegramChatId: row.telegramchatid || undefined,
-      instagramUserId: row.instagramuserid || undefined,
-      company: row.company || undefined,
-      tags: row.tags || undefined,
-      notes: row.notes || undefined,
+      name: row.name?.trim() || undefined,
+      email: email || undefined,
+      phone: phone || undefined,
+      telegramChatId: telegramChatId || undefined,
+      instagramUserId: instagramUserId || undefined,
+      company: row.company?.trim() || undefined,
+      tags: row.tags?.trim() || undefined,
+      notes: row.notes?.trim() || undefined,
     });
-  }
-  return rows;
+  });
+
+  return { rows, errors: parseErrors };
 }
 
 export async function POST(req: Request) {
@@ -52,13 +66,13 @@ export async function POST(req: Request) {
     }
 
     const text = await file.text();
-    const rows = parseCsv(text);
-    if (rows.length === 0) {
+    const { rows, errors: parseErrors } = parseCsv(text);
+    if (rows.length === 0 && parseErrors.length === 0) {
       return NextResponse.json({ error: "CSV is empty or has no valid rows" }, { status: 400 });
     }
 
     const created: string[] = [];
-    const errors: { row: number; error: string }[] = [];
+    const errors: { row: number; error: string }[] = [...parseErrors];
 
     for (let i = 0; i < rows.length; i++) {
       const row = rows[i];

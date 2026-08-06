@@ -101,7 +101,7 @@ async function payInvoice(
       order_id: invoice.razorpayOrderId,
       amount: invoice.amountInr * 100,
       currency: "INR",
-      name: "EverReach",
+      name: "Evernaro",
       description,
       handler: async (response: {
         razorpay_order_id: string;
@@ -251,7 +251,7 @@ function BillingPageContent() {
 
       <div className="flex flex-col gap-6 p-6">
         {latestInvoice && latestInvoice.status === "PENDING" && (
-          <Card className="flex items-start gap-3 border border-warning bg-warning-light p-4">
+          <Card className="flex flex-col items-center gap-3 border border-warning bg-warning-light p-4 text-center sm:flex-row sm:items-start sm:text-start">
             <AlertCircle className="mt-0.5 h-5 w-5 flex-shrink-0 text-warning" aria-hidden="true" />
             <div>
               <p className="text-sm font-medium text-text">Subscription payment pending</p>
@@ -291,7 +291,7 @@ function BillingPageContent() {
             </div>
             <p className="mt-4 text-[10px] text-text-muted">
               Plans are managed by Eversity. Contact{" "}
-              <a href="mailto:hello@eversitytech.com" className="text-primary hover:underline">hello@eversitytech.com</a>{" "}
+              <a href="mailto:hello@evernaro.com" className="text-primary hover:underline">hello@evernaro.com</a>{" "}
               to upgrade or change your plan.
             </p>
           </Card>

@@ -1,12 +1,12 @@
 import Link from "next/link";
 
-export const metadata = { title: "Terms of Service — EverReach" };
+export const metadata = { title: "Terms of Service — Evernaro" };
 
 export default function TermsPage() {
   return (
     <div className="mx-auto max-w-2xl px-6 py-12 text-sm leading-relaxed text-text">
       <Link href="/" className="text-primary hover:text-primary-hover">
-        ← EverReach
+        ← Evernaro
       </Link>
 
       <h1 className="mt-6 text-2xl font-semibold">Terms of Service</h1>
@@ -16,16 +16,16 @@ export default function TermsPage() {
         <section>
           <h2 className="text-base font-semibold">1. Who this agreement is with</h2>
           <p className="mt-2 text-text-secondary">
-            EverReach is operated by Eversity Tech LLP (&quot;Eversity&quot;, &quot;we&quot;). These
+            Evernaro is operated by Eversity Tech LLP (&quot;Eversity&quot;, &quot;we&quot;). These
             terms govern any business (&quot;you&quot;, the &quot;Customer&quot;) that creates an
-            account to send and receive messages with its own customers through EverReach.
+            account to send and receive messages with its own customers through Evernaro.
           </p>
         </section>
 
         <section>
-          <h2 className="text-base font-semibold">2. What EverReach does</h2>
+          <h2 className="text-base font-semibold">2. What Evernaro does</h2>
           <p className="mt-2 text-text-secondary">
-            EverReach is a unified inbox that connects your Telegram, Email, WhatsApp, Instagram, and
+            Evernaro is a unified inbox that connects your Telegram, Email, WhatsApp, Instagram, and
             Voice channels, and can draft AI-generated replies for you to review, edit, and send. You
             remain responsible for every message sent from your account, whether written by you or
             sent from an AI-drafted suggestion you approved.
@@ -36,13 +36,13 @@ export default function TermsPage() {
           <h2 className="text-base font-semibold">3. Your responsibilities</h2>
           <ul className="mt-2 list-disc space-y-1.5 pl-5 text-text-secondary">
             <li>
-              You must have a lawful basis to message every contact you add — EverReach does not
+              You must have a lawful basis to message every contact you add — Evernaro does not
               verify consent on your behalf.
             </li>
             <li>
               WhatsApp messaging is governed by Meta&apos;s policies via our BSP partner (Gupshup);
               violating those policies can get your WhatsApp number suspended independent of anything
-              EverReach does.
+              Evernaro does.
             </li>
             <li>
               Voice calling is available only through individually-scheduled Reminders to contacts
@@ -68,7 +68,7 @@ export default function TermsPage() {
           <p className="mt-2 text-text-secondary">
             Your subscription fee is set out in your onboarding agreement or order form. Third-party
             costs charged directly by WhatsApp/Meta, Twilio, or your own email provider (when you use
-            your own API keys) are your responsibility, separate from your EverReach subscription.
+            your own API keys) are your responsibility, separate from your Evernaro subscription.
           </p>
         </section>
 
@@ -85,7 +85,7 @@ export default function TermsPage() {
         <section>
           <h2 className="text-base font-semibold">7. Disclaimers &amp; liability</h2>
           <p className="mt-2 text-text-secondary">
-            EverReach is provided &quot;as is&quot;. We are not liable for message delivery failures,
+            Evernaro is provided &quot;as is&quot;. We are not liable for message delivery failures,
             third-party provider outages, or account suspensions imposed by Meta, Twilio, or other
             channel providers.
           </p>
@@ -102,7 +102,11 @@ export default function TermsPage() {
         <section>
           <h2 className="text-base font-semibold">9. Contact</h2>
           <p className="mt-2 text-text-secondary">
-            Questions about these terms: reach Eversity Tech LLP through your onboarding contact.
+            Questions about these terms: email us at{" "}
+            <a href="mailto:hello@evernaro.com" className="text-primary hover:text-primary-hover">
+              hello@evernaro.com
+            </a>
+            .
           </p>
         </section>
       </div>
@@ -112,7 +116,7 @@ export default function TermsPage() {
       </p>
 
       <p className="mt-6 text-xs text-text-muted">
-        These terms are accurate to how EverReach works today. They should still be reviewed by a
+        These terms are accurate to how Evernaro works today. They should still be reviewed by a
         lawyer familiar with Indian contract and IT law before being relied on as final legal
         documents for paid customers.
       </p>

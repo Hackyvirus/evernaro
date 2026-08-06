@@ -25,7 +25,7 @@ export function PlatformSignOutButton({ collapsed = false }: { collapsed?: boole
   return (
     <button
       onClick={() => signOut({ callbackUrl: "/platform/login" })}
-      className="cursor-pointer rounded-md px-2 py-1.5 text-left text-sm text-text-secondary transition-colors hover:bg-hover hover:text-text"
+      className="cursor-pointer rounded-md px-2 py-1.5 text-start text-sm text-text-secondary transition-colors hover:bg-hover hover:text-text"
     >
       Log out
     </button>

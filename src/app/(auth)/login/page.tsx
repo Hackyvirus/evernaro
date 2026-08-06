@@ -55,7 +55,7 @@ export default function LoginPage() {
         <div className="mb-6 flex justify-center">
           <Logo />
         </div>
-        <h1 className="text-2xl font-bold text-text">Log in to EverReach</h1>
+        <h1 className="text-2xl font-bold text-text">Log in to Evernaro</h1>
         <p className="mt-1 text-sm text-text-secondary">One inbox for every customer channel.</p>
 
         <form onSubmit={onSubmit} className="mt-6 flex flex-col gap-4">

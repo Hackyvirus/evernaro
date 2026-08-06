@@ -191,7 +191,7 @@ export default function AnalyticsPage() {
           </div>
 
           {data.campaigns.totalFailed > 0 && (
-            <Card className="flex items-start gap-3 border-warning bg-warning-light p-4">
+            <Card className="flex flex-col items-center gap-3 border-warning bg-warning-light p-4 text-center sm:flex-row sm:items-start sm:text-start">
               <AlertTriangle className="mt-0.5 h-5 w-5 text-warning" aria-hidden="true" />
               <div>
                 <p className="text-sm font-medium text-text">Campaign delivery issues</p>

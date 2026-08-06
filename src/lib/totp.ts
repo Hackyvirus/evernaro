@@ -1,7 +1,7 @@
 import * as OTPAuth from "otpauth";
 import { randomBytes } from "node:crypto";
 
-const ISSUER = "EverReach";
+const ISSUER = "Evernaro";
 
 export interface TotpSetup {
   secret: string;

@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { generateDraftReply } from "@/lib/ai";
 import { secureCompare } from "@/lib/webhook-secret";
+import { keepAlive } from "@/lib/lifecycle";
 
 // Generic inbound-email webhook contract. Point your provider's inbound
 // parse webhook (Postmark, Mailgun, SendGrid inbound parse, etc.) here,
@@ -72,9 +73,7 @@ export async function POST(req: Request) {
       data: { lastMessageAt: new Date() },
     });
 
-    generateDraftReply(conversation.id).catch((err) =>
-      console.error("AI draft generation failed", err)
-    );
+    keepAlive(generateDraftReply(conversation.id), "AI draft generation");
 
     return NextResponse.json({ ok: true });
   } catch (err) {

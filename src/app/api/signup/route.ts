@@ -39,43 +39,52 @@ export async function POST(req: Request) {
   const { orgName, name, email, password } = parsed.data;
   const normalizedEmail = email.toLowerCase();
 
-  const existing = await prisma.user.findUnique({ where: { email: normalizedEmail } });
-  if (existing) {
-    return NextResponse.json({ error: "An account with that email already exists" }, { status: 409 });
-  }
-
-  const baseSlug = slugify(orgName);
-  let slug = baseSlug;
-  let suffix = 1;
-  while (await prisma.organization.findUnique({ where: { slug } })) {
-    slug = `${baseSlug}-${++suffix}`;
-  }
-
   const passwordHash = await bcrypt.hash(password, 12);
   const verificationToken = generateSecureToken();
 
-  await prisma.organization.create({
-    data: {
-      name: orgName,
-      slug,
-      users: {
-        create: {
-          email: normalizedEmail,
-          passwordHash,
-          name,
-          role: "OWNER",
-          emailVerificationToken: verificationToken,
-          emailVerificationTokenExpiresAt: hoursFromNow(24),
+  try {
+    await prisma.$transaction(async (tx) => {
+      const existing = await tx.user.findUnique({ where: { email: normalizedEmail } });
+      if (existing) {
+        throw new Error("EMAIL_EXISTS");
+      }
+
+      const baseSlug = slugify(orgName);
+      let slug = baseSlug;
+      let suffix = 1;
+      while (await tx.organization.findUnique({ where: { slug } })) {
+        slug = `${baseSlug}-${++suffix}`;
+      }
+
+      await tx.organization.create({
+        data: {
+          name: orgName,
+          slug,
+          users: {
+            create: {
+              email: normalizedEmail,
+              passwordHash,
+              name,
+              role: "OWNER",
+              emailVerificationToken: verificationToken,
+              emailVerificationTokenExpiresAt: hoursFromNow(24),
+            },
+          },
+          businessProfile: {
+            create: {
+              businessName: orgName,
+              description: "",
+            },
+          },
         },
-      },
-      businessProfile: {
-        create: {
-          businessName: orgName,
-          description: "",
-        },
-      },
-    },
-  });
+      });
+    });
+  } catch (err) {
+    if (err instanceof Error && err.message === "EMAIL_EXISTS") {
+      return NextResponse.json({ error: "An account with that email already exists" }, { status: 409 });
+    }
+    throw err;
+  }
 
   try {
     await sendVerificationEmail(normalizedEmail, verificationToken);

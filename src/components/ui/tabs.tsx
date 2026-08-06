@@ -21,7 +21,7 @@ export function Tabs({ tabs, defaultTab, onChange }: TabsProps) {
   return (
     <div>
       <div className="border-b border-border">
-        <nav aria-label="Tabs" className="flex gap-6 overflow-x-auto">
+        <nav aria-label="Tabs" className="flex justify-center gap-6 overflow-x-auto sm:justify-start">
           {tabs.map((tab) => (
             <button
               key={tab.id}

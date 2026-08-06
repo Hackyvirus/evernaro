@@ -1,0 +1,67 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: evernaro
+      POSTGRES_PASSWORD: evernaro
+      POSTGRES_DB: evernaro
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U evernaro -d evernaro"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://evernaro:evernaro@postgres:5432/evernaro?schema=public
+      DIRECT_URL: postgresql://evernaro:evernaro@postgres:5432/evernaro?schema=public
+      REDIS_URL: redis://redis:6379
+      NEXT_PUBLIC_BASE_URL: http://localhost:3000
+      RUN_MIGRATIONS: "true"
+    ports:
+      - "3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://evernaro:evernaro@postgres:5432/evernaro?schema=public
+      DIRECT_URL: postgresql://evernaro:evernaro@postgres:5432/evernaro?schema=public
+      REDIS_URL: redis://redis:6379
+      NEXT_PUBLIC_BASE_URL: http://localhost:3000
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+  redis_data:

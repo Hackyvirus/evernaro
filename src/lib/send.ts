@@ -74,9 +74,9 @@ export async function sendViaChannel(
     }
     await sendEmail({
       apiKeyOverride: decryptSecretOrNull(channel.resendApiKey),
-      from: `${channel.emailFromName ?? "EverReach"} <${channel.emailAddress}>`,
+      from: `${channel.emailFromName ?? "Evernaro"} <${channel.emailAddress}>`,
       to: contact.email,
-      subject: subject ?? "Message from " + (channel.emailFromName ?? "EverReach"),
+      subject: subject ?? "Message from " + (channel.emailFromName ?? "Evernaro"),
       text,
     });
     return;

@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { channelWebhookSecret, secureCompare } from "@/lib/webhook-secret";
-import { parseInstagramInboundBatch, type InstagramWebhookPayload } from "@/lib/instagram";
 import { generateDraftReply } from "@/lib/ai";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { keepAlive } from "@/lib/lifecycle";
+import { type InstagramWebhookPayload, parseInstagramInboundBatch } from "@/lib/instagram";
 
 // Meta's webhook verification handshake — configure this exact URL (with the
 // query param below) as the callback URL in the Meta App's Webhooks product,
@@ -83,9 +84,7 @@ export async function POST(
         data: { lastMessageAt: new Date() },
       });
 
-      generateDraftReply(conversation.id).catch((err) =>
-        console.error("AI draft generation failed", err)
-      );
+      keepAlive(generateDraftReply(conversation.id), "AI draft generation");
     }
 
     return NextResponse.json({ ok: true });
