@@ -5,6 +5,7 @@ import { Plus_Jakarta_Sans } from "next/font/google";
 import Script from "next/script";
 import "./globals.css";
 import { themeInitScript } from "@/lib/theme-script";
+import { Providers } from "./providers";
 import { ChatWidgetLoader } from "@/components/chatbot";
 
 const jakarta = Plus_Jakarta_Sans({
@@ -34,7 +35,7 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${jakarta.variable} h-full antialiased`} suppressHydrationWarning>
       <body className="min-h-full flex flex-col bg-bg text-text">
-        {children}
+        <Providers>{children}</Providers>
         <ChatWidgetLoader />
         <Script id="theme-init" strategy="beforeInteractive">
           {themeInitScript}

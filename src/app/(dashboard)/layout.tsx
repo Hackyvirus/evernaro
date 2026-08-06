@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
-import { ClientProviders } from "@/app/client-providers";
+import { Providers } from "@/app/providers";
 import { DashboardShell } from "./dashboard-shell";
 import { RoleProvider } from "./role";
 
@@ -15,7 +15,7 @@ export default async function DashboardLayout({
   const role = (session.user.role ?? "AGENT") as "OWNER" | "ADMIN" | "AGENT" | "VIEWER";
 
   return (
-    <ClientProviders>
+    <Providers>
       <RoleProvider role={role}>
         <DashboardShell
           orgName={session.user.orgName ?? ""}
@@ -27,6 +27,6 @@ export default async function DashboardLayout({
           {children}
         </DashboardShell>
       </RoleProvider>
-    </ClientProviders>
+    </Providers>
   );
 }

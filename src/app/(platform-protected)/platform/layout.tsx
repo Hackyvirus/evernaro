@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
-import { ClientProviders } from "@/app/client-providers";
+import { Providers } from "@/app/providers";
 import { PlatformShell } from "./platform-shell";
 
 export default async function PlatformLayout({
@@ -12,8 +12,8 @@ export default async function PlatformLayout({
   if (!session?.user?.isPlatformAdmin) redirect("/platform/login");
 
   return (
-    <ClientProviders>
+    <Providers>
       <PlatformShell adminName={session.user.name ?? ""}>{children}</PlatformShell>
-    </ClientProviders>
+    </Providers>
   );
 }

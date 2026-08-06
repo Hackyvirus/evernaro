@@ -102,7 +102,7 @@ const PRICING_TIERS = [
   {
     name: "Starter",
     price: "₹1,499",
-    trial: "Free 14-day trial, then",
+    trial: "Free 14-day trial starts automatically, then",
     tagline: "For a single team getting started.",
     features: [
       "Up to 2 channels",
@@ -156,12 +156,15 @@ export default async function Home() {
     <div className="flex flex-1 flex-col bg-surface">
       <header className="sticky top-0 z-30 border-b border-border/60 bg-surface/80 backdrop-blur-md">
         <div className="mx-auto flex w-full max-w-6xl items-center justify-between px-6 py-4">
-          <Logo width={150} className="w-[120px] sm:w-[150px]" />
+            <Logo width={150} className="w-[130px] sm:w-[150px]" />
           <nav className="flex items-center gap-3">
             <Link href="/contact" className="cursor-pointer text-sm text-text-secondary hover:text-text">
               Contact
             </Link>
-            <Link href="/login" className="cursor-pointer text-sm text-text-secondary hover:text-text">
+            <Link
+              href="/login"
+              className="hidden cursor-pointer text-sm text-text-secondary hover:text-text sm:block"
+            >
               Log in
             </Link>
             <Link href="/signup">
@@ -459,7 +462,7 @@ export default async function Home() {
       <footer className="border-t border-border px-6 py-8">
         <div className="mx-auto flex w-full max-w-6xl flex-col gap-4">
           <div className="flex flex-col items-center justify-between gap-4 sm:flex-row">
-            <Logo width={150} className="w-[120px] sm:w-[150px]" />
+          <Logo width={150} className="w-[130px] sm:w-[150px]" />
             <div className="flex flex-wrap justify-center gap-2">
               {CHANNELS.map((c) => (
                 <span

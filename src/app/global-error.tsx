@@ -7,38 +7,19 @@ export default function GlobalError({
   reset: () => void;
 }) {
   return (
-    <html lang="en" suppressHydrationWarning>
-      <body suppressHydrationWarning>
-        <div
-          style={{
-            display: "flex",
-            minHeight: "100vh",
-            flexDirection: "column",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: "12px",
-            fontFamily: "system-ui, sans-serif",
-            padding: "24px",
-            textAlign: "center",
-          }}
+    <html lang="en">
+      <body className="flex min-h-screen flex-col items-center justify-center gap-4 p-6 text-center font-sans">
+        <h1 className="text-lg font-semibold text-text">Something went wrong.</h1>
+        <p className="text-sm text-text-secondary">
+          The error has been reported. Try reloading the page.
+        </p>
+        <button
+          type="button"
+          onClick={reset}
+          className="rounded-md border border-border bg-card px-4 py-2 text-sm font-medium text-text hover:bg-hover"
         >
-          <p style={{ fontSize: "16px", fontWeight: 600 }}>Something went wrong.</p>
-          <p style={{ fontSize: "14px", color: "#666" }}>
-            The error has been reported. Try reloading the page.
-          </p>
-          <button
-            onClick={reset}
-            style={{
-              cursor: "pointer",
-              borderRadius: "8px",
-              border: "1px solid #ccc",
-              padding: "8px 16px",
-              fontSize: "14px",
-            }}
-          >
-            Try again
-          </button>
-        </div>
+          Try again
+        </button>
       </body>
     </html>
   );
