@@ -20,6 +20,9 @@ FROM deps AS builder
 ENV NODE_ENV=development
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV DOCKER_BUILD=true
+# Pin Prisma to the engine matching node:22-slim (Debian Bookworm / OpenSSL 3)
+# so `prisma generate` doesn't spend time resolving/downloading other binaries.
+ENV PRISMA_CLI_BINARY_TARGETS=debian-openssl-3.0.x
 # We need the full source and devDependencies to build.
 COPY . .
 RUN npm ci
