@@ -1,4 +1,3 @@
-import "server-only";
 import { prisma } from "@/lib/prisma";
 import { BillingFrequency, InvoiceItemType } from "@prisma/client";
 import type { CalculateQuoteInput, Quote, QuoteAddOn, QuoteItem, AddOnSelection } from "./types";

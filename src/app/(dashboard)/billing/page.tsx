@@ -2,15 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { Badge, Button, Card, EmptyState, Input, PageHeader, Skeleton } from "@/components/ui";
-import { Receipt, Wallet, AlertCircle, CheckCircle, Sparkles } from "lucide-react";
+import { Receipt, Wallet, AlertCircle, Sparkles } from "lucide-react";
 import { RoleAwareAdminGuard } from "../role";
-
-interface OrgSummary {
-  id: string;
-  name: string;
-  status: string;
-  monthlyFeeInr: number | null;
-}
+import Link from "next/link";
 
 interface LatestInvoice {
   id: string;
@@ -41,6 +35,30 @@ interface WalletTx {
   amountPaise: number;
   note: string | null;
   createdAt: string;
+}
+
+interface Subscription {
+  id: string;
+  status: string;
+  frequency: string;
+  currentPeriodStart: string;
+  currentPeriodEnd: string;
+  trialEnd: string | null;
+  cancelAtPeriodEnd: boolean;
+  totalAmountInr: number;
+  plan: { name: string; description: string | null };
+  items: { addOn: { name: string } | null; quantity: number; totalPriceInr: number }[];
+}
+
+interface UsageItem {
+  serviceName: string;
+  unit: string;
+  included: number;
+  used: number;
+  remaining: number;
+  overage: number;
+  overageCostInr: number;
+  percentUsed: number;
 }
 
 declare global {
@@ -136,21 +154,6 @@ async function payInvoice(
   }
 }
 
-function planNameFromFee(monthlyFeeInr: number | null) {
-  if (monthlyFeeInr === 1499) return "Starter";
-  if (monthlyFeeInr === 3999) return "Growth";
-  if (monthlyFeeInr === 8999) return "Scale";
-  if (monthlyFeeInr) return "Custom";
-  return "Free";
-}
-
-function planFeatures(monthlyFeeInr: number | null) {
-  if (monthlyFeeInr === 1499) return ["Up to 2 channels", "1 team seat", "500 sends/day", "Email support"];
-  if (monthlyFeeInr === 3999) return ["All 5 channels", "Up to 5 seats", "2,000 sends/day", "WhatsApp templates", "Priority support"];
-  if (monthlyFeeInr === 8999) return ["Unlimited seats", "Custom limits", "Vertical packs", "Dedicated onboarding"];
-  return ["Basic access", "Contact support to upgrade"];
-}
-
 export default function BillingPage() {
   return (
     <RoleAwareAdminGuard>
@@ -165,7 +168,6 @@ function BillingPageContent() {
   const [payingId, setPayingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const [org, setOrg] = useState<OrgSummary | null>(null);
   const [latestInvoice, setLatestInvoice] = useState<LatestInvoice | null>(null);
 
   const [wallet, setWallet] = useState<WalletData | null>(null);
@@ -173,6 +175,11 @@ function BillingPageContent() {
   const [topupAmount, setTopupAmount] = useState("1000");
   const [toppingUp, setToppingUp] = useState(false);
   const [walletError, setWalletError] = useState<string | null>(null);
+
+  const [subscription, setSubscription] = useState<Subscription | null>(null);
+  const [usage, setUsage] = useState<UsageItem[]>([]);
+  const [subscriptionLoading, setSubscriptionLoading] = useState(true);
+  const [cancelling, setCancelling] = useState(false);
 
   function refresh() {
     fetch("/api/invoices")
@@ -182,9 +189,18 @@ function BillingPageContent() {
     fetch("/api/organization")
       .then((r) => r.json())
       .then((d) => {
-        setOrg(d.org ?? null);
         setLatestInvoice(d.latestSubscriptionInvoice ?? null);
       });
+    fetch("/api/billing/subscription")
+      .then((r) => r.json())
+      .then((d) => {
+        setSubscription(d.subscription ?? null);
+        setSubscriptionLoading(false);
+      })
+      .catch(() => setSubscriptionLoading(false));
+    fetch("/api/billing/usage")
+      .then((r) => r.json())
+      .then((d) => setUsage(d.usage ?? []));
   }
 
   function refreshWallet() {
@@ -242,6 +258,25 @@ function BillingPageContent() {
     }
   }
 
+  async function cancelSubscription() {
+    if (!confirm("Are you sure you want to cancel your subscription?")) return;
+    setCancelling(true);
+    try {
+      const res = await fetch("/api/billing/subscription", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ cancelAtPeriodEnd: true }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Failed to cancel");
+      refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to cancel");
+    } finally {
+      setCancelling(false);
+    }
+  }
+
   return (
     <div className="flex flex-1 flex-col overflow-y-auto">
       <PageHeader
@@ -269,31 +304,55 @@ function BillingPageContent() {
                 <Sparkles className="h-4 w-4 text-primary" aria-hidden="true" />
                 <h2 className="text-sm font-bold text-text">Current plan</h2>
               </div>
-              {!org ? (
+              {subscriptionLoading ? (
                 <Skeleton className="h-16" />
-              ) : (
+              ) : subscription ? (
                 <>
                   <div className="mb-3 flex items-baseline gap-2">
-                    <p className="text-2xl font-extrabold text-text">{planNameFromFee(org.monthlyFeeInr)}</p>
-                    <p className="text-sm text-text-secondary">
-                      {org.monthlyFeeInr ? `₹${org.monthlyFeeInr.toLocaleString("en-IN")}/month` : "No active plan"}
-                    </p>
+                    <p className="text-2xl font-extrabold text-text">{subscription.plan.name}</p>
+                    <Badge variant={subscription.status === "ACTIVE" || subscription.status === "TRIALING" ? "success" : "warning"}>
+                      {subscription.status}
+                    </Badge>
                   </div>
-                  <ul className="flex flex-col gap-1">
-                    {planFeatures(org.monthlyFeeInr).map((f) => (
-                      <li key={f} className="flex items-center gap-2 text-xs text-text-secondary">
-                        <CheckCircle className="h-3 w-3 text-success" aria-hidden="true" /> {f}
-                      </li>
-                    ))}
-                  </ul>
+                  <p className="text-sm text-text-secondary">
+                    ₹{subscription.totalAmountInr.toLocaleString("en-IN")}/{subscription.frequency.toLowerCase()}
+                  </p>
+                  {subscription.trialEnd && (
+                    <p className="mt-1 text-xs text-text-muted">
+                      Trial ends {new Date(subscription.trialEnd).toLocaleDateString()}
+                    </p>
+                  )}
+                  {subscription.cancelAtPeriodEnd && (
+                    <p className="mt-1 text-xs text-danger">Cancels at period end</p>
+                  )}
+                  {subscription.items.length > 0 && (
+                    <ul className="mt-3 flex flex-col gap-1">
+                      {subscription.items.map((item) => (
+                        <li key={item.addOn?.name} className="text-xs text-text-secondary">
+                          {item.addOn?.name} x{item.quantity} — ₹{item.totalPriceInr.toLocaleString("en-IN")}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </>
+              ) : (
+                <>
+                  <p className="text-2xl font-extrabold text-text">No active plan</p>
+                  <p className="text-sm text-text-secondary">Subscribe to unlock more features.</p>
                 </>
               )}
             </div>
-            <p className="mt-4 text-[10px] text-text-muted">
-              Plans are managed by Eversity. Contact{" "}
-              <a href="mailto:support@evernaro.com" className="text-primary hover:underline">support@evernaro.com</a>{" "}
-              to upgrade or change your plan.
-            </p>
+            <div className="mt-4 flex flex-col gap-2">
+              <Link
+                href="/pricing"
+                className="inline-flex h-8 items-center justify-center rounded-md border border-border bg-card px-3 text-sm font-medium text-text transition-colors hover:bg-surface"
+              >
+                View plans
+              </Link>
+              {subscription && (subscription.status === "ACTIVE" || subscription.status === "TRIALING") && !subscription.cancelAtPeriodEnd && (
+                <Button variant="danger" size="sm" loading={cancelling} onClick={cancelSubscription}>Cancel subscription</Button>
+              )}
+            </div>
           </Card>
 
           <Card className="p-5">
@@ -336,6 +395,32 @@ function BillingPageContent() {
             )}
           </Card>
         </div>
+
+        {usage.length > 0 && (
+          <Card className="p-5">
+            <h2 className="mb-3 text-sm font-bold text-text">Usage this period</h2>
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {usage.map((u) => (
+                <div key={u.serviceName} className="rounded-lg bg-surface-secondary p-4">
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm font-medium text-text">{u.serviceName}</p>
+                    <span className="text-xs text-text-secondary">{u.percentUsed}%</span>
+                  </div>
+                  <div className="mt-2 h-2 w-full rounded-full bg-border">
+                    <div
+                      className={`h-2 rounded-full ${u.percentUsed >= 90 ? "bg-danger" : u.percentUsed >= 70 ? "bg-warning" : "bg-success"}`}
+                      style={{ width: `${u.percentUsed}%` }}
+                    />
+                  </div>
+                  <p className="mt-2 text-xs text-text-secondary">
+                    {u.used.toLocaleString("en-IN")} / {u.included.toLocaleString("en-IN")} {u.unit}
+                    {u.overage > 0 && <span className="ml-2 text-danger">+{u.overage} ({formatPaise(u.overageCostInr * 100)})</span>}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </Card>
+        )}
 
         {transactions.length > 0 && (
           <Card className="p-5">

@@ -1,4 +1,4 @@
-import type { BillingFrequency, BillingType, InvoiceItemType, CouponType } from "@prisma/client";
+import type { BillingFrequency, BillingType, InvoiceItemType } from "@prisma/client";
 
 export type QuoteItem = {
   type: InvoiceItemType;

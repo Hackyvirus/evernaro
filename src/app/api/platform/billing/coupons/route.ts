@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { requirePlatformAdminId, UnauthorizedError } from "@/lib/session";
-import { CouponType } from "@prisma/client";
+import { CouponType, CouponDuration } from "@prisma/client";
 
 export async function GET() {
   try {
@@ -25,6 +25,8 @@ const bodySchema = z.object({
   description: z.string().optional(),
   type: z.nativeEnum(CouponType),
   value: z.number().nonnegative(),
+  duration: z.nativeEnum(CouponDuration).default(CouponDuration.ONCE),
+  durationInMonths: z.number().int().nonnegative().nullable().default(null),
   maxRedemptions: z.number().int().nonnegative().nullable().default(null),
   validFrom: z.string().datetime().optional(),
   validUntil: z.string().datetime().optional(),
@@ -50,6 +52,8 @@ export async function POST(req: Request) {
         description: data.description,
         type: data.type,
         value: data.value,
+        duration: data.duration,
+        durationInMonths: data.durationInMonths,
         maxRedemptions: data.maxRedemptions,
         validFrom: data.validFrom ? new Date(data.validFrom) : new Date(),
         validUntil: data.validUntil ? new Date(data.validUntil) : null,

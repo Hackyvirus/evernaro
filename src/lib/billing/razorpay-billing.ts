@@ -1,6 +1,14 @@
-import "server-only";
 import Razorpay from "razorpay";
 import { isRazorpayConfigured } from "@/lib/razorpay";
+
+type RazorpaySubscriptionCreateParams = {
+  plan_id: string;
+  customer_id?: string;
+  total_count: number;
+  quantity?: number;
+  start_at?: number;
+  expire_by?: number;
+};
 
 export function getRazorpayBillingClient(): Razorpay {
   if (!isRazorpayConfigured()) {
@@ -48,14 +56,15 @@ export async function createRazorpaySubscription(opts: {
   expireBy?: number;
 }) {
   const client = getRazorpayBillingClient();
-  return client.subscriptions.create({
+  const params: RazorpaySubscriptionCreateParams = {
     plan_id: opts.planId,
     customer_id: opts.customerId,
     total_count: opts.totalCount,
     quantity: opts.quantity ?? 1,
     start_at: opts.startAt,
     expire_by: opts.expireBy,
-  });
+  };
+  return client.subscriptions.create(params);
 }
 
 export async function cancelRazorpaySubscription(razorpaySubscriptionId: string, cancelAtEnd: boolean) {

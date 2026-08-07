@@ -158,6 +158,9 @@ export default async function Home() {
         <div className="mx-auto flex w-full max-w-6xl items-center justify-between px-6 py-4">
             <Logo width={150} className="w-[130px] sm:w-[150px]" />
           <nav className="flex items-center gap-3">
+            <Link href="/pricing" className="cursor-pointer text-sm text-text-secondary hover:text-text">
+              Pricing
+            </Link>
             <Link href="/contact" className="cursor-pointer text-sm text-text-secondary hover:text-text">
               Contact
             </Link>

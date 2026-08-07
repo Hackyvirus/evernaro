@@ -6,10 +6,9 @@ export async function createInvoiceFromQuote(
   orgId: string,
   subscriptionId: string | null,
   quote: Quote,
-  opts?: { status?: "PENDING" | "DRAFT"; dueDays?: number }
+  opts?: { status?: "PENDING"; dueDays?: number }
 ) {
   const status = opts?.status ?? "PENDING";
-  const invoiceNumber = `INV-${Date.now()}-${Math.random().toString(36).slice(2, 7).toUpperCase()}`;
 
   const invoice = await prisma.invoice.create({
     data: {

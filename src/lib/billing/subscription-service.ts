@@ -4,6 +4,7 @@ import { BillingFrequency, SubscriptionStatus } from "@prisma/client";
 import { calculateQuote, resolveAddOnSelections, getPeriodDates } from "./pricing-engine";
 import { createInvoiceFromQuote } from "./invoice";
 import { createRazorpayCustomer, createRazorpayPlan, createRazorpaySubscription } from "./razorpay-billing";
+import { createRazorpayOrder } from "@/lib/razorpay";
 import { logBillingEvent } from "./events";
 import type { AddOnSelection } from "./types";
 
@@ -37,12 +38,12 @@ export async function createSubscription(input: CreateSubscriptionInput) {
   const { start, end } = getPeriodDates(quote.frequency);
   const trialEnd = quote.trialEnd;
 
-  const org = await prisma.organization.update({
+  const org = await prisma.organization.findUnique({
     where: { id: input.orgId },
-    data: { razorpayCustomerId: { set: undefined } },
+    select: { razorpayCustomerId: true },
   });
 
-  let razorpayCustomerId = org.razorpayCustomerId;
+  let razorpayCustomerId = org?.razorpayCustomerId ?? null;
   let razorpayPlanId: string | null = null;
   let razorpaySubscriptionId: string | null = null;
 
@@ -131,8 +132,30 @@ export async function createSubscription(input: CreateSubscriptionInput) {
   }
 
   // Create first invoice immediately unless in trial.
+  let firstInvoiceRazorpayOrderId: string | undefined;
   if (!trialEnd) {
+    try {
+      const order = await createRazorpayOrder({
+        amountInr: quote.totalInr,
+        receipt: `sub-${subscription.id}`,
+      });
+      firstInvoiceRazorpayOrderId = order.id;
+    } catch (err) {
+      console.error("Failed to create Razorpay order for subscription invoice:", err);
+    }
     await createInvoiceFromQuote(input.orgId, subscription.id, quote, { status: "PENDING" });
+    if (firstInvoiceRazorpayOrderId) {
+      const latestInvoice = await prisma.invoice.findFirst({
+        where: { subscriptionId: subscription.id, orgId: input.orgId },
+        orderBy: { createdAt: "desc" },
+      });
+      if (latestInvoice) {
+        await prisma.invoice.update({
+          where: { id: latestInvoice.id },
+          data: { razorpayOrderId: firstInvoiceRazorpayOrderId },
+        });
+      }
+    }
   }
 
   await logBillingEvent(input.orgId, subscription.id, "SUBSCRIPTION_CREATED", {

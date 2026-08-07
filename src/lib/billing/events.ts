@@ -12,7 +12,7 @@ export async function logBillingEvent(
       orgId,
       subscriptionId,
       eventType,
-      payload: payload as never,
+      metadata: payload as never,
     },
   });
 }

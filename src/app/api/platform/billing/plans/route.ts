@@ -38,13 +38,16 @@ const featureSchema = z.object({
 });
 
 const bodySchema = z.object({
+  slug: z.string().min(1),
   name: z.string().min(1),
   description: z.string().optional(),
   monthlyPriceInr: z.number().int().nonnegative(),
   annualPriceInr: z.number().int().nonnegative(),
   currency: z.string().default("INR"),
   trialDays: z.number().int().nonnegative().default(0),
+  displayOrder: z.number().int().default(0),
   isActive: z.boolean().default(true),
+  isCustom: z.boolean().default(false),
   limits: z.array(limitSchema).default([]),
   features: z.array(featureSchema).default([]),
   addOnIds: z.array(z.string().cuid()).default([]),

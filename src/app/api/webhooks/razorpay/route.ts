@@ -1,18 +1,29 @@
 import { NextResponse } from "next/server";
-import { InvoiceType, OrganizationStatus } from "@prisma/client";
+import { InvoiceType, OrganizationStatus, SubscriptionStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { verifyRazorpayWebhookSignature } from "@/lib/razorpay";
 import { creditWallet } from "@/lib/whatsapp-wallet";
 import { sendPaymentSuccessEmail, sendPaymentFailedEmail } from "@/lib/billing-email";
+import { getPeriodDates } from "@/lib/billing/pricing-engine";
+import { logBillingEvent } from "@/lib/billing/events";
+
+interface RazorpayWebhookPaymentEntity {
+  id?: string;
+  order_id?: string;
+  subscription_id?: string;
+  status?: string;
+}
 
 interface RazorpayWebhookPayload {
   event: string;
   payload?: {
-    payment?: {
+    payment?: { entity?: RazorpayWebhookPaymentEntity };
+    subscription?: {
       entity?: {
         id?: string;
-        order_id?: string;
-        status?: string;
+        status?: "created" | "authenticated" | "active" | "pending" | "halted" | "cancelled" | "paused" | "resumed";
+        current_start?: number;
+        current_end?: number;
       };
     };
   };
@@ -28,10 +39,24 @@ async function billingContactForOrg(orgId: string) {
   return { orgName: org.name, email: owner.email };
 }
 
-// Server-to-server confirmation, independent of whether the paying browser
-// ever reports back — the durable source of truth for invoice status.
-// Configure this URL + a webhook secret in the Razorpay dashboard under
-// Settings > Webhooks, subscribed to "payment.captured".
+function mapRazorpayStatus(status?: string): SubscriptionStatus | null {
+  switch (status) {
+    case "active":
+      return SubscriptionStatus.ACTIVE;
+    case "halted":
+    case "pending":
+      return SubscriptionStatus.PAST_DUE;
+    case "cancelled":
+      return SubscriptionStatus.CANCELLED;
+    case "paused":
+      return SubscriptionStatus.PAUSED;
+    case "created":
+    case "authenticated":
+    default:
+      return null;
+  }
+}
+
 export async function POST(req: Request) {
   const rawBody = await req.text();
   const signature = req.headers.get("x-razorpay-signature");
@@ -59,31 +84,26 @@ export async function POST(req: Request) {
             data: { status: "PAID", razorpayPaymentId: payment.id, paidAt: new Date() },
           });
         }
-        // Subscription payment reactivates the organization.
         if (invoice.type === InvoiceType.SUBSCRIPTION) {
           await prisma.organization.update({
             where: { id: invoice.orgId },
             data: { status: OrganizationStatus.ACTIVE },
           });
+          if (invoice.subscriptionId) {
+            await prisma.customerSubscription.updateMany({
+              where: { id: invoice.subscriptionId },
+              data: { status: SubscriptionStatus.ACTIVE },
+            });
+          }
         }
-        // Razorpay retries webhook delivery and the client-side confirm route
-        // can also fire for the same invoice — creditWallet is idempotent per
-        // invoiceId regardless of which path reaches PAID first or twice.
         if (invoice.type === InvoiceType.WALLET_TOPUP) {
           await creditWallet(invoice.orgId, invoice.amountInr * 100, "TOPUP", { invoiceId: invoice.id });
         }
-        // Send receipt on the first transition to PAID only.
         if (!wasAlreadyPaid) {
           const contact = await billingContactForOrg(invoice.orgId);
           if (contact) {
             try {
-              await sendPaymentSuccessEmail(
-                contact.email,
-                contact.orgName,
-                invoice.id,
-                invoice.amountInr,
-                payment.id
-              );
+              await sendPaymentSuccessEmail(contact.email, contact.orgName, invoice.id, invoice.amountInr, payment.id);
             } catch (err) {
               console.error("Failed to send payment success email:", err);
             }
@@ -107,6 +127,47 @@ export async function POST(req: Request) {
             console.error("Failed to send payment failed email:", err);
           }
         }
+      }
+    }
+  }
+
+  if (body.event === "subscription.activated" || body.event === "subscription.charged" || body.event === "subscription.updated") {
+    const entity = body.payload?.subscription?.entity;
+    if (entity?.id) {
+      const subscription = await prisma.customerSubscription.findFirst({
+        where: { razorpaySubscriptionId: entity.id },
+      });
+      if (subscription) {
+        const status = mapRazorpayStatus(entity.status);
+        const update: Record<string, unknown> = {};
+        if (status) update.status = status;
+        if (entity.current_start && entity.current_end) {
+          const { start, end } = getPeriodDates(subscription.frequency, new Date(entity.current_start * 1000));
+          update.currentPeriodStart = start;
+          update.currentPeriodEnd = end;
+        }
+        if (Object.keys(update).length > 0) {
+          await prisma.customerSubscription.update({ where: { id: subscription.id }, data: update });
+        }
+        await logBillingEvent(subscription.orgId, subscription.id, body.event.toUpperCase(), {
+          razorpayStatus: entity.status,
+        });
+      }
+    }
+  }
+
+  if (body.event === "subscription.cancelled" || body.event === "subscription.halted") {
+    const entity = body.payload?.subscription?.entity;
+    if (entity?.id) {
+      const subscription = await prisma.customerSubscription.findFirst({
+        where: { razorpaySubscriptionId: entity.id },
+      });
+      if (subscription) {
+        const status = mapRazorpayStatus(entity.status);
+        await prisma.customerSubscription.update({
+          where: { id: subscription.id },
+          data: { status: status ?? SubscriptionStatus.CANCELLED, cancelledAt: new Date() },
+        });
       }
     }
   }

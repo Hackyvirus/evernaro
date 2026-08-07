@@ -21,6 +21,7 @@ export async function GET() {
 }
 
 const bodySchema = z.object({
+  slug: z.string().min(1),
   name: z.string().min(1),
   description: z.string().optional(),
   priceInr: z.number().int().nonnegative(),

@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { requirePlatformAdminId, UnauthorizedError } from "@/lib/session";
-import { BillingType } from "@prisma/client";
 
 export async function GET() {
   try {
@@ -24,9 +23,10 @@ const bodySchema = z.object({
   key: z.string().min(1),
   name: z.string().min(1),
   description: z.string().optional(),
+  category: z.string().min(1).default("Usage"),
   unit: z.string().min(1),
-  billingType: z.nativeEnum(BillingType).default(BillingType.USAGE),
-  priceInr: z.number().nonnegative().default(0),
+  billingType: z.enum(["FIXED", "PER_SEAT", "PER_CONTACT", "PER_MESSAGE", "PER_CONVERSATION", "PER_MINUTE", "PER_CREDIT", "PER_GB", "ONE_TIME", "USAGE_TIER", "PERCENTAGE"]).default("USAGE_TIER"),
+  basePriceInr: z.number().nonnegative().default(0),
 });
 
 export async function POST(req: Request) {
