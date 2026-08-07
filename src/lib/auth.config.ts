@@ -10,6 +10,9 @@ export const authConfig = {
   session: { strategy: "jwt" },
   pages: { signIn: "/login" },
   providers: [],
+  // Trust the host header when AUTH_TRUST_HOST=true (needed for Render and
+  // other non-Vercel hosts where Auth.js can't infer the canonical URL).
+  trustHost: process.env.AUTH_TRUST_HOST === "true",
   callbacks: {
     jwt: ({ token, user }) => {
       if (user) {
