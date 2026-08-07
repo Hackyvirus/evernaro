@@ -10,14 +10,18 @@ WORKDIR /app
 
 FROM base AS deps
 ENV NODE_ENV=production
+# Pin the Prisma engine so `prisma generate` doesn't fetch extra binaries.
+ENV PRISMA_CLI_BINARY_TARGETS=debian-openssl-3.0.x
 RUN apt-get update \
   && apt-get install -y --no-install-recommends openssl ca-certificates \
   && rm -rf /var/lib/apt/lists/*
 COPY package.json package-lock.json ./
-RUN npm ci --omit=dev
+# Prisma's postinstall hook runs `prisma generate`, which needs the schema.
+COPY prisma ./prisma
+# `--no-audit` avoids npm's retired advisory endpoint, which can cause ECONNRESET.
+RUN npm ci --omit=dev --no-audit
 
 FROM base AS builder
-ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV DOCKER_BUILD=true
 # Pin Prisma to the engine matching node:22-slim (Debian Bookworm / OpenSSL 3)
@@ -25,11 +29,12 @@ ENV DOCKER_BUILD=true
 ENV PRISMA_CLI_BINARY_TARGETS=debian-openssl-3.0.x
 # We need the full source and devDependencies to build.
 COPY . .
-RUN npm ci
+RUN npm ci --no-audit
 RUN npx prisma generate
 # `next build` is a production build and must run with NODE_ENV=production.
 # Forcing development here causes React's hook dispatcher to be null during
 # static prerender of the internal /_global-error page.
+ENV NODE_ENV=production
 RUN npm run build
 
 FROM base AS runner
