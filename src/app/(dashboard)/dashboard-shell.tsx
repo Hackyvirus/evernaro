@@ -2,25 +2,15 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import type { LucideIcon } from "lucide-react";
 import {
-  BarChart3,
-  Bell,
-  BookOpen,
-  Briefcase,
-  Cable,
   HelpCircle,
-  Megaphone,
   Menu,
-  MessageSquare,
   PanelLeftClose,
   PanelLeftOpen,
-  Receipt,
-  Settings,
-  Users,
   X,
 } from "lucide-react";
 import { NavItem, ThemeToggle, useSidebarCollapsed, IconButton, Logo } from "@/components/ui";
+import { getDefaultNav, buildNavFromKeys, type NavItemDef } from "@/lib/dashboard-nav";
 import { SignOutButton } from "./sign-out-button";
 
 function EmailVerificationBanner({ email }: { email: string }) {
@@ -65,38 +55,12 @@ function EmailVerificationBanner({ email }: { email: string }) {
   );
 }
 
-type NavItemDef = {
-  href: string;
-  icon: LucideIcon;
-  label: string;
-  roles?: string[];
-};
-
-const MAIN_NAV: NavItemDef[] = [
-  { href: "/dashboard", icon: Briefcase, label: "Overview" },
-  { href: "/inbox", icon: MessageSquare, label: "Inbox" },
-  { href: "/contacts", icon: Users, label: "Contacts" },
-  { href: "/campaigns", icon: Megaphone, label: "Campaigns" },
-  { href: "/reminders", icon: Bell, label: "Reminders" },
-  { href: "/analytics", icon: BarChart3, label: "Analytics" },
-];
-
-const CONFIG_NAV: NavItemDef[] = [
-  { href: "/channels", icon: Cable, label: "Channels" },
-  { href: "/knowledge", icon: BookOpen, label: "Knowledge Base" },
-  { href: "/team", icon: Users, label: "Team", roles: ["ADMIN", "OWNER"] },
-];
-
-const BOTTOM_NAV: NavItemDef[] = [
-  { href: "/billing", icon: Receipt, label: "Billing", roles: ["ADMIN", "OWNER"] },
-  { href: "/settings", icon: Settings, label: "Settings" },
-];
-
 function SidebarContent({
   orgName,
   userName,
   userEmail,
   role,
+  nav,
   collapsed = false,
   onToggleCollapse,
 }: {
@@ -104,6 +68,7 @@ function SidebarContent({
   userName: string;
   userEmail: string;
   role: string;
+  nav: { main: NavItemDef[]; config: NavItemDef[]; account: NavItemDef[] };
   collapsed?: boolean;
   onToggleCollapse?: () => void;
 }) {
@@ -135,26 +100,28 @@ function SidebarContent({
 
       <nav className="flex flex-1 flex-col gap-6 overflow-y-auto">
         <div className="flex flex-col gap-1">
-          {MAIN_NAV.filter((item) => !item.roles || item.roles.includes(role)).map((item) => (
-            <NavItem key={item.href} {...item} collapsed={collapsed} />
+          {nav.main.map((item) => (
+            <NavItem key={item.key} href={item.href} icon={item.icon} label={item.label} collapsed={collapsed} />
           ))}
         </div>
 
-        <div className="flex flex-col gap-1">
-          {!collapsed && (
-            <p className="px-3 text-[10px] font-semibold tracking-wide text-text-muted uppercase">Configuration</p>
-          )}
-          {CONFIG_NAV.filter((item) => !item.roles || item.roles.includes(role)).map((item) => (
-            <NavItem key={item.href} {...item} collapsed={collapsed} />
-          ))}
-        </div>
+        {nav.config.length > 0 && (
+          <div className="flex flex-col gap-1">
+            {!collapsed && (
+              <p className="px-3 text-[10px] font-semibold tracking-wide text-text-muted uppercase">Configuration</p>
+            )}
+            {nav.config.map((item) => (
+              <NavItem key={item.key} href={item.href} icon={item.icon} label={item.label} collapsed={collapsed} />
+            ))}
+          </div>
+        )}
 
         <div className="flex flex-col gap-1">
           {!collapsed && (
             <p className="px-3 text-[10px] font-semibold tracking-wide text-text-muted uppercase">Account</p>
           )}
-          {BOTTOM_NAV.filter((item) => !item.roles || item.roles.includes(role)).map((item) => (
-            <NavItem key={item.href} {...item} collapsed={collapsed} />
+          {nav.account.map((item) => (
+            <NavItem key={item.key} href={item.href} icon={item.icon} label={item.label} collapsed={collapsed} />
           ))}
         </div>
       </nav>
@@ -190,6 +157,7 @@ export function DashboardShell({
   userEmail,
   role,
   emailVerified,
+  industry,
   children,
 }: {
   orgName: string;
@@ -197,10 +165,15 @@ export function DashboardShell({
   userEmail: string;
   role: string;
   emailVerified?: boolean;
+  industry: { templateCode: string; config: { dashboard: { nav: string[] } } } | null;
   children: React.ReactNode;
 }) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [collapsed, setCollapsed] = useSidebarCollapsed();
+
+  const nav = industry?.config?.dashboard?.nav
+    ? buildNavFromKeys(industry.config.dashboard.nav, role)
+    : getDefaultNav(role);
 
   return (
     <div className="flex min-h-screen flex-1 flex-col bg-surface md:flex-row">
@@ -223,7 +196,7 @@ export function DashboardShell({
             onClick={() => setMobileOpen(false)}
           />
           <aside className="relative flex h-full w-64 flex-col bg-card p-4 shadow-[var(--shadow-elevated)]">
-            <SidebarContent orgName={orgName} userName={userName} userEmail={userEmail} role={role} />
+            <SidebarContent nav={nav} orgName={orgName} userName={userName} userEmail={userEmail} role={role} />
           </aside>
         </div>
       )}
@@ -235,6 +208,7 @@ export function DashboardShell({
         }`}
       >
         <SidebarContent
+          nav={nav}
           orgName={orgName}
           userName={userName}
           userEmail={userEmail}

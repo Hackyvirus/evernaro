@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { Providers } from "@/app/providers";
+import { getOrgIndustryConfig } from "@/lib/industry-config";
 import { DashboardShell } from "./dashboard-shell";
 import { RoleProvider } from "./role";
 
@@ -13,6 +14,9 @@ export default async function DashboardLayout({
   if (!session?.user) redirect("/login");
 
   const role = (session.user.role ?? "AGENT") as "OWNER" | "ADMIN" | "AGENT" | "VIEWER";
+  const orgId = session.user.orgId;
+  if (!orgId) redirect("/login");
+  const industry = await getOrgIndustryConfig(orgId);
 
   return (
     <Providers>
@@ -23,6 +27,7 @@ export default async function DashboardLayout({
           userEmail={session.user.email ?? ""}
           role={role}
           emailVerified={session.user.ev ?? false}
+          industry={industry}
         >
           {children}
         </DashboardShell>

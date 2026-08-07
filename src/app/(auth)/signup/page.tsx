@@ -1,17 +1,39 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Button, Card, Input, AuthHeader } from "@/components/ui";
+
+type TemplateOption = {
+  code: string;
+  name: string;
+  description: string;
+};
 
 export default function SignupPage() {
   const [orgName, setOrgName] = useState("");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [industryCode, setIndustryCode] = useState("");
+  const [templates, setTemplates] = useState<TemplateOption[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [created, setCreated] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/industry-templates")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.templates) {
+          setTemplates(data.templates);
+          setIndustryCode(data.templates[0]?.code ?? "");
+        }
+      })
+      .catch(() => {
+        setError("Failed to load industries. Please refresh.");
+      });
+  }, []);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -22,7 +44,7 @@ export default function SignupPage() {
       const res = await fetch("/api/signup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ orgName, name, email, password }),
+        body: JSON.stringify({ orgName, name, email, password, industryCode }),
       });
 
       setLoading(false);
@@ -70,6 +92,29 @@ export default function SignupPage() {
 
         <form onSubmit={onSubmit} className="flex flex-col gap-4">
           <Input label="Business name" required value={orgName} onChange={(e) => setOrgName(e.target.value)} />
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor="industry" className="text-sm font-medium text-text">
+              Industry
+            </label>
+            <select
+              id="industry"
+              required
+              value={industryCode}
+              onChange={(e) => setIndustryCode(e.target.value)}
+              className="rounded-md border border-border bg-card px-3 py-2 text-sm text-text outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+            >
+              {templates.map((t) => (
+                <option key={t.code} value={t.code}>
+                  {t.name}
+                </option>
+              ))}
+            </select>
+            {templates.find((t) => t.code === industryCode)?.description && (
+              <p className="text-xs text-text-muted">
+                {templates.find((t) => t.code === industryCode)?.description}
+              </p>
+            )}
+          </div>
           <Input label="Your name" required value={name} onChange={(e) => setName(e.target.value)} />
           <Input
             label="Email"

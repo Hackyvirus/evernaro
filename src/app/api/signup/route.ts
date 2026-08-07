@@ -5,12 +5,14 @@ import { prisma } from "@/lib/prisma";
 import { checkRateLimit, clientIp } from "@/lib/rate-limit";
 import { generateSecureToken, hoursFromNow } from "@/lib/token";
 import { sendVerificationEmail } from "@/lib/auth-email";
+import { getIndustryTemplate } from "@/lib/industry-templates";
 
 const signupSchema = z.object({
   orgName: z.string().min(2),
   name: z.string().min(1),
   email: z.string().email(),
   password: z.string().min(8),
+  industryCode: z.string().min(1),
 });
 
 function slugify(input: string) {
@@ -36,8 +38,13 @@ export async function POST(req: Request) {
       { status: 400 }
     );
   }
-  const { orgName, name, email, password } = parsed.data;
+  const { orgName, name, email, password, industryCode } = parsed.data;
   const normalizedEmail = email.toLowerCase();
+
+  const template = getIndustryTemplate(industryCode as never);
+  if (!template) {
+    return NextResponse.json({ error: "Invalid industry selected" }, { status: 400 });
+  }
 
   const passwordHash = await bcrypt.hash(password, 12);
   const verificationToken = generateSecureToken();
@@ -56,10 +63,15 @@ export async function POST(req: Request) {
         slug = `${baseSlug}-${++suffix}`;
       }
 
-      await tx.organization.create({
+      const dbTemplate = await tx.industryTemplate.findUniqueOrThrow({
+        where: { code: industryCode as never },
+      });
+
+      const org = await tx.organization.create({
         data: {
           name: orgName,
           slug,
+          industryTemplateId: dbTemplate.id,
           users: {
             create: {
               email: normalizedEmail,
@@ -73,9 +85,32 @@ export async function POST(req: Request) {
           businessProfile: {
             create: {
               businessName: orgName,
+              industry: template.name,
               description: "",
             },
           },
+          industryConfig: {
+            create: {
+              templateId: dbTemplate.id,
+              config: {},
+            },
+          },
+          services: {
+            create: template.config.defaultServices.map((s) => ({
+              name: s.name,
+              durationMin: s.durationMin ?? null,
+              priceInr: s.priceInr ?? null,
+              metadata: (s.metadata ?? {}) as never,
+            })),
+          },
+        },
+      });
+
+      await tx.whatsAppWallet.create({
+        data: {
+          orgId: org.id,
+          balancePaise: 0,
+          lowBalanceThresholdPaise: 10000,
         },
       });
     });
