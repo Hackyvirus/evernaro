@@ -103,6 +103,13 @@ export default function LoginPage() {
             Create one
           </Link>
         </p>
+
+        <p className="mt-4 text-center text-sm text-text-secondary">
+          Platform admin?{" "}
+          <Link href="/platform/login" className="font-medium text-primary hover:text-primary-hover">
+            Log in here
+          </Link>
+        </p>
       </Card>
     </div>
   );

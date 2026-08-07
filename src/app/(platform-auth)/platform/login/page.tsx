@@ -6,8 +6,17 @@ import { PlatformLoginForm } from "./login-form";
 export const dynamic = "force-dynamic";
 
 export default async function PlatformLoginPage() {
-  const existing = await prisma.platformAdmin.findFirst();
-  if (!existing) redirect("/platform/setup");
+  let existing: { id: string } | null = null;
+  let dbError: string | null = null;
+
+  try {
+    existing = await prisma.platformAdmin.findFirst();
+  } catch (err) {
+    console.error("Platform login database check failed:", err);
+    dbError = "Database is not ready. Run `npx prisma migrate deploy` before logging in.";
+  }
+
+  if (!existing && !dbError) redirect("/platform/setup");
 
   return (
     <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-surface px-4">
@@ -16,7 +25,11 @@ export default async function PlatformLoginPage() {
       <Card className="relative w-full max-w-sm p-8">
         <AuthHeader title="Admin Login" />
         <p className="mb-6 text-center text-sm text-text-secondary">Eversity Tech LLP — internal use only.</p>
-        <PlatformLoginForm />
+        {dbError ? (
+          <p className="rounded-md bg-danger-light p-3 text-sm text-danger">{dbError}</p>
+        ) : (
+          <PlatformLoginForm />
+        )}
       </Card>
     </div>
   );

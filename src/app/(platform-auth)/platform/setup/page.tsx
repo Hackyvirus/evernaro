@@ -6,7 +6,16 @@ import { SetupForm } from "./setup-form";
 export const dynamic = "force-dynamic";
 
 export default async function PlatformSetupPage() {
-  const existing = await prisma.platformAdmin.findFirst();
+  let existing: { id: string } | null = null;
+  let dbError: string | null = null;
+
+  try {
+    existing = await prisma.platformAdmin.findFirst();
+  } catch (err) {
+    console.error("Platform setup database check failed:", err);
+    dbError = "Database is not ready. Run `npx prisma migrate deploy` before setting up the platform admin.";
+  }
+
   if (existing) redirect("/platform/login");
 
   return (
@@ -18,7 +27,11 @@ export default async function PlatformSetupPage() {
         <p className="mb-6 text-center text-sm text-text-secondary">
           One-time setup — this only works because no platform admin exists yet.
         </p>
-        <SetupForm />
+        {dbError ? (
+          <p className="rounded-md bg-danger-light p-3 text-sm text-danger">{dbError}</p>
+        ) : (
+          <SetupForm />
+        )}
       </Card>
     </div>
   );
