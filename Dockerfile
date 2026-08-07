@@ -17,7 +17,6 @@ COPY package.json package-lock.json ./
 RUN npm ci --omit=dev
 
 FROM deps AS builder
-ENV NODE_ENV=development
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV DOCKER_BUILD=true
 # Pin Prisma to the engine matching node:22-slim (Debian Bookworm / OpenSSL 3)
@@ -27,6 +26,10 @@ ENV PRISMA_CLI_BINARY_TARGETS=debian-openssl-3.0.x
 COPY . .
 RUN npm ci
 RUN npx prisma generate
+# `next build` is a production build and must run with NODE_ENV=production.
+# Forcing development here causes React's hook dispatcher to be null during
+# static prerender of the internal /_global-error page.
+ENV NODE_ENV=production
 RUN npm run build
 
 FROM base AS runner

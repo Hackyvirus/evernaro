@@ -3,7 +3,12 @@
 import { useState, useRef, useEffect } from "react";
 import { MessageSquare, X, Send, Loader2 } from "lucide-react";
 
+function makeMessageId() {
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+}
+
 type Message = {
+  id: string;
   role: "user" | "assistant";
   content: string;
 };
@@ -12,6 +17,7 @@ export function ChatWidget() {
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([
     {
+      id: makeMessageId(),
       role: "assistant",
       content: "Hi! I'm the Evernaro Assistant. How can I help you today?",
     },
@@ -32,7 +38,7 @@ export function ChatWidget() {
     const text = input.trim();
     if (!text || loading) return;
 
-    const userMessage: Message = { role: "user", content: text };
+    const userMessage: Message = { id: makeMessageId(), role: "user", content: text };
     const nextMessages = [...messages, userMessage];
     setMessages(nextMessages);
     setInput("");
@@ -54,7 +60,7 @@ export function ChatWidget() {
       }
 
       const data = await res.json();
-      setMessages([...nextMessages, { role: "assistant", content: data.reply }]);
+      setMessages([...nextMessages, { id: makeMessageId(), role: "assistant", content: data.reply }]);
     } catch {
       setLoading(false);
       setError("Network error — check your connection and try again.");
@@ -102,9 +108,9 @@ export function ChatWidget() {
           {/* Messages */}
           <div ref={scrollRef} className="flex-1 overflow-y-auto p-4">
             <div className="flex flex-col gap-3">
-              {messages.map((m, i) => (
+              {messages.map((m) => (
                 <div
-                  key={i}
+                  key={m.id}
                   className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm ${
                     m.role === "user"
                       ? "self-end bg-primary text-white"

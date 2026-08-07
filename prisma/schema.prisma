@@ -56,6 +56,17 @@ model Organization {
   customerEvents     CustomerEvent[]
   automations        Automation[]
   notificationPrefs  NotificationPreference[]
+
+  // SaaS subscription billing
+  razorpayCustomerId String?
+  subscriptions      CustomerSubscription[]
+  subscriptionItems  SubscriptionItem[]
+  usageRecords       UsageRecord[]
+  usageAggregates    UsageAggregate[]
+  invoiceItems       InvoiceItem[]
+  payments           Payment[]
+  couponRedemptions  CouponRedemption[]
+  billingEvents      BillingEvent[]
 }
 
 // ---------- Billing (Razorpay) ----------
@@ -96,9 +107,16 @@ model Invoice {
   createdAt         DateTime      @default(now())
   paidAt            DateTime?
 
+  // SaaS subscription billing
+  subscriptionId    String?
+  subscription      CustomerSubscription? @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+  invoiceItems      InvoiceItem[]
+  payments          Payment[]
+
   walletTransaction WalletTransaction?
 
   @@index([orgId, status])
+  @@index([subscriptionId])
 }
 
 // ---------- WhatsApp wallet ----------
@@ -1046,4 +1064,395 @@ model NotificationPreference {
   events    String[]
 
   @@unique([orgId, contactId, channel])
+}
+
+// ---------- SaaS Subscription Billing ----------
+
+enum BillingFrequency {
+  MONTHLY
+  YEARLY
+}
+
+enum BillingType {
+  FIXED
+  PER_SEAT
+  PER_CONTACT
+  PER_MESSAGE
+  PER_CONVERSATION
+  PER_MINUTE
+  PER_CREDIT
+  PER_GB
+  ONE_TIME
+  USAGE_TIER
+  PERCENTAGE
+}
+
+enum SubscriptionStatus {
+  TRIALING
+  ACTIVE
+  PAST_DUE
+  PAYMENT_FAILED
+  CANCELLED
+  PAUSED
+  EXPIRED
+  INCOMPLETE
+}
+
+enum InvoiceItemType {
+  PLAN
+  ADD_ON
+  USAGE
+  OVERAGE
+  TAX
+  DISCOUNT
+}
+
+enum CouponType {
+  PERCENTAGE
+  FIXED
+}
+
+enum CouponDuration {
+  ONCE
+  REPEATING
+  FOREVER
+}
+
+model TaxConfiguration {
+  id        String   @id @default(cuid())
+  enabled   Boolean  @default(true)
+  name      String   @default("GST")
+  rate      Float    @default(18)
+  inclusive Boolean  @default(false)
+  country   String   @default("IN")
+  currency  String   @default("INR")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model SubscriptionPlan {
+  id          String   @id @default(cuid())
+  slug        String   @unique
+  name        String
+  description String?
+  monthlyPriceInr Int  @default(0)
+  annualPriceInr  Int  @default(0)
+  annualDiscountPercent Int?
+  trialDays   Int      @default(0)
+  currency    String   @default("INR")
+  isActive    Boolean  @default(true)
+  isCustom    Boolean  @default(false)
+  displayOrder Int     @default(0)
+  metadata    Json     @default("{}")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  features      PlanFeature[]
+  limits        PlanLimit[]
+  planServices  PlanService[]
+  planAddOns    PlanAddOn[]
+  subscriptions CustomerSubscription[]
+
+  @@index([isActive, displayOrder])
+}
+
+model PlanFeature {
+  id       String @id @default(cuid())
+  planId   String
+  plan     SubscriptionPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+  key      String
+  label    String
+  value    String?
+  included Boolean @default(true)
+
+  @@index([planId])
+  @@unique([planId, key])
+}
+
+model PlanLimit {
+  id              String          @id @default(cuid())
+  planId          String
+  plan            SubscriptionPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+  serviceId       String
+  service         BillableService @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  includedQuantity Int            @default(0)
+  overagePriceInr Int?            // per unit overage; null = blocked
+  overageUnit     String?         // e.g. "1000" for per-1000-contacts
+  metadata        Json            @default("{}")
+
+  @@index([planId, serviceId])
+  @@unique([planId, serviceId])
+}
+
+model BillableService {
+  id          String      @id @default(cuid())
+  key         String      @unique
+  name        String
+  description String?
+  category    String
+  unit        String
+  billingType BillingType @default(FIXED)
+  basePriceInr Int       @default(0)
+  isActive    Boolean     @default(true)
+  metadata    Json        @default("{}")
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  pricingRules    ServicePricingRule[]
+  planServices    PlanService[]
+  addOns          AddOn[]
+  limits          PlanLimit[]
+  usageRecords    UsageRecord[]
+  usageAggregates UsageAggregate[]
+
+  @@index([category, isActive])
+}
+
+model ServicePricingRule {
+  id              String          @id @default(cuid())
+  serviceId       String
+  service         BillableService @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  billingType     BillingType
+  tierMin         Int?
+  tierMax         Int?
+  priceInr        Int
+  overagePriceInr Int?
+  currency        String          @default("INR")
+  isActive        Boolean         @default(true)
+  metadata        Json            @default("{}")
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  @@index([serviceId, billingType, isActive])
+}
+
+model PlanService {
+  id               String           @id @default(cuid())
+  planId           String
+  plan             SubscriptionPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+  serviceId        String
+  service          BillableService  @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  includedQuantity Int              @default(0)
+  isActive         Boolean          @default(true)
+
+  @@unique([planId, serviceId])
+  @@index([planId])
+}
+
+model AddOn {
+  id               String           @id @default(cuid())
+  slug             String           @unique
+  name             String
+  description      String?
+  serviceId        String?
+  service          BillableService? @relation(fields: [serviceId], references: [id], onDelete: SetNull)
+  billingType      BillingType      @default(FIXED)
+  unit             String?
+  priceInr         Int              @default(0)
+  includedQuantity Int              @default(0)
+  minQuantity      Int              @default(0)
+  maxQuantity      Int?
+  frequency        BillingFrequency @default(MONTHLY)
+  isActive         Boolean          @default(true)
+  metadata         Json             @default("{}")
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  planAddOns        PlanAddOn[]
+  subscriptionItems SubscriptionItem[]
+
+  @@index([isActive])
+}
+
+model PlanAddOn {
+  id      String @id @default(cuid())
+  planId  String
+  plan    SubscriptionPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+  addOnId String
+  addOn   AddOn @relation(fields: [addOnId], references: [id], onDelete: Cascade)
+  isActive Boolean @default(true)
+
+  @@unique([planId, addOnId])
+  @@index([planId])
+}
+
+model CustomerSubscription {
+  id                 String             @id @default(cuid())
+  orgId              String
+  org                Organization       @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  planId             String
+  plan               SubscriptionPlan   @relation(fields: [planId], references: [id], onDelete: Restrict)
+  status             SubscriptionStatus @default(INCOMPLETE)
+  frequency          BillingFrequency   @default(MONTHLY)
+  currentPeriodStart DateTime?
+  currentPeriodEnd   DateTime?
+  trialEnd           DateTime?
+  cancelledAt        DateTime?
+  cancelAtPeriodEnd  Boolean            @default(false)
+  pausedAt           DateTime?
+  quantity           Int                @default(1)
+  razorpaySubscriptionId String?
+  razorpayPlanId         String?
+  razorpayCustomerId     String?
+  baseAmountInr      Int @default(0)
+  discountAmountInr  Int @default(0)
+  taxAmountInr       Int @default(0)
+  totalAmountInr     Int @default(0)
+  items              SubscriptionItem[]
+  usageAggregates    UsageAggregate[]
+  invoices           Invoice[]
+  payments           Payment[]
+  billingEvents      BillingEvent[]
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+
+  @@index([orgId, status])
+  @@index([razorpaySubscriptionId])
+}
+
+model SubscriptionItem {
+  id            String               @id @default(cuid())
+  subscriptionId String
+  subscription  CustomerSubscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  orgId         String
+  org           Organization         @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  type          String
+  addOnId       String?
+  addOn         AddOn?               @relation(fields: [addOnId], references: [id], onDelete: SetNull)
+  quantity      Int                  @default(1)
+  unitPriceInr  Int                  @default(0)
+  totalPriceInr Int                  @default(0)
+  metadata      Json                 @default("{}")
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+
+  @@index([subscriptionId])
+  @@index([orgId])
+}
+
+model UsageRecord {
+  id        String          @id @default(cuid())
+  orgId     String
+  org       Organization    @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  serviceId String
+  service   BillableService @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  quantity  Int             @default(1)
+  metadata  Json            @default("{}")
+  createdAt DateTime        @default(now())
+
+  @@index([orgId, serviceId, createdAt])
+}
+
+model UsageAggregate {
+  id               String               @id @default(cuid())
+  orgId            String
+  org              Organization         @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  subscriptionId   String
+  subscription     CustomerSubscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  serviceId        String
+  service          BillableService      @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  periodStart      DateTime
+  periodEnd        DateTime
+  includedQuantity Int                  @default(0)
+  usedQuantity     Int                  @default(0)
+  overageQuantity  Int                  @default(0)
+  overageCostInr   Int                  @default(0)
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+
+  @@index([orgId, subscriptionId, periodStart])
+  @@index([serviceId, periodStart])
+  @@unique([orgId, subscriptionId, serviceId, periodStart])
+}
+
+model InvoiceItem {
+  id           String       @id @default(cuid())
+  invoiceId    String
+  invoice      Invoice      @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  orgId        String
+  org          Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  type         InvoiceItemType
+  description  String
+  quantity     Int          @default(1)
+  unitPriceInr Int          @default(0)
+  amountInr    Int          @default(0)
+  metadata     Json         @default("{}")
+  createdAt    DateTime     @default(now())
+
+  @@index([invoiceId])
+  @@index([orgId])
+}
+
+model Payment {
+  id                String               @id @default(cuid())
+  orgId             String
+  org               Organization         @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  invoiceId         String?
+  invoice           Invoice?             @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+  subscriptionId    String?
+  subscription      CustomerSubscription? @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+  amountInr         Int
+  status            String
+  razorpayPaymentId String?
+  razorpayOrderId   String?
+  razorpaySignature String?
+  failureReason     String?
+  metadata          Json                 @default("{}")
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+
+  @@index([orgId, createdAt])
+  @@index([invoiceId])
+  @@index([subscriptionId])
+  @@index([razorpayPaymentId])
+}
+
+model Coupon {
+  id                String       @id @default(cuid())
+  code              String       @unique
+  description       String?
+  type              CouponType
+  value             Int
+  duration          CouponDuration @default(ONCE)
+  durationInMonths  Int?
+  maxRedemptions    Int?
+  redemptionCount   Int          @default(0)
+  validFrom         DateTime     @default(now())
+  validUntil        DateTime?
+  minAmountInr      Int?
+  applicablePlanIds String[]
+  isActive          Boolean      @default(true)
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+
+  redemptions CouponRedemption[]
+}
+
+model CouponRedemption {
+  id                String       @id @default(cuid())
+  couponId          String
+  coupon            Coupon       @relation(fields: [couponId], references: [id], onDelete: Cascade)
+  orgId             String
+  org               Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  subscriptionId    String?
+  discountAmountInr Int          @default(0)
+  createdAt         DateTime     @default(now())
+
+  @@index([couponId])
+  @@index([orgId])
+  @@unique([couponId, orgId])
+}
+
+model BillingEvent {
+  id             String               @id @default(cuid())
+  orgId          String
+  org            Organization         @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  subscriptionId String?
+  subscription   CustomerSubscription? @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+  eventType      String
+  metadata       Json                 @default("{}")
+  createdAt      DateTime             @default(now())
+
+  @@index([orgId, eventType, createdAt])
+  @@index([subscriptionId])
 }

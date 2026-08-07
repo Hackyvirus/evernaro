@@ -8,8 +8,6 @@ import {
   Calendar,
   ClipboardList,
   Gift,
-  Home,
-  Inbox,
   LayoutGrid,
   Megaphone,
   MessageSquare,

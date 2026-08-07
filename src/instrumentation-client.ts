@@ -8,3 +8,6 @@ if (process.env.NEXT_PUBLIC_SENTRY_DSN) {
     environment: process.env.NODE_ENV,
   });
 }
+
+// Required by Sentry Next.js SDK to instrument client-side navigations.
+export const onRouterTransitionStart = Sentry.captureRouterTransitionStart;

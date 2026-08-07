@@ -46,7 +46,7 @@ export function PlatformLoginForm() {
   }
 
   return (
-    <form onSubmit={onSubmit} className="mt-6 flex flex-col gap-4">
+    <form onSubmit={onSubmit} className="flex flex-col gap-4">
       <Input label="Email" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
       <Input
         label="Password"

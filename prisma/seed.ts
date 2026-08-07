@@ -1,6 +1,7 @@
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { INDUSTRY_TEMPLATES } from "../src/lib/industry-templates";
+import { seedBillingCatalog } from "./billing-seed";
 
 // Use the direct (non-pooled) database URL when available so the seed can run
 // while the dev server is holding pooled connections.
@@ -39,6 +40,7 @@ async function main() {
   }
 
   await seedIndustryTemplates();
+  await seedBillingCatalog();
 
   const salonTemplate = await prisma.industryTemplate.findUniqueOrThrow({
     where: { code: "SALON" },

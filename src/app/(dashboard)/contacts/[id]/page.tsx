@@ -3,8 +3,27 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { Mail, Phone, MessageCircle, AtSign, Calendar, Tag, Edit, Save, X, Plus, FileText } from "lucide-react";
-import { Button, Card, Input, PageHeader, Skeleton, Badge, Textarea, Avatar } from "@/components/ui";
+import {
+  Mail,
+  Phone,
+  MessageCircle,
+  AtSign,
+  Calendar,
+  Tag,
+  Edit,
+  Save,
+  X,
+  Plus,
+  FileText,
+  Clock,
+  ClipboardList,
+  Wrench,
+  Gift,
+  Star,
+  Receipt,
+  Activity,
+} from "lucide-react";
+import { Button, Card, Input, PageHeader, Skeleton, Badge, Textarea, Avatar, Tabs } from "@/components/ui";
 import { useToast } from "@/components/ui/toast";
 import { contactLabel } from "@/lib/contact-label";
 import { useRole, isAgentOrAbove } from "../../role";
@@ -36,13 +55,80 @@ interface ConversationSummary {
   messages: { body: string; createdAt: string }[];
 }
 
+interface Appointment {
+  id: string;
+  startsAt: string;
+  endsAt: string;
+  status: string;
+  notes: string | null;
+  service: { name: string } | null;
+  staff: { name: string } | null;
+  resource: { name: string } | null;
+}
+
+interface QueueEntry {
+  id: string;
+  token: string;
+  position: number;
+  status: string;
+  createdAt: string;
+  queue: { name: string };
+  service: { name: string } | null;
+  staff: { name: string } | null;
+}
+
+interface JobCard {
+  id: string;
+  title: string;
+  description: string | null;
+  status: string;
+  estimateInr: number | null;
+  createdAt: string;
+  service: { name: string } | null;
+  staff: { name: string } | null;
+}
+
+interface Membership {
+  id: string;
+  name: string;
+  sessionsTotal: number | null;
+  sessionsUsed: number;
+  status: string;
+  expiresAt: string | null;
+  createdAt: string;
+}
+
+interface Review {
+  id: string;
+  rating: number;
+  comment: string | null;
+  createdAt: string;
+}
+
+interface Invoice {
+  id: string;
+  type: string;
+  amountInr: number;
+  status: string;
+  createdAt: string;
+  paidAt: string | null;
+}
+
+interface CustomerEvent {
+  id: string;
+  type: string;
+  entityType: string | null;
+  entityId: string | null;
+  metadata: Record<string, unknown>;
+  createdAt: string;
+}
+
 export default function ContactDetailPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
   const { showToast } = useToast();
   const role = useRole();
   const [contact, setContact] = useState<Contact | null>(null);
-  const [conversations, setConversations] = useState<ConversationSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
 
@@ -60,19 +146,14 @@ export default function ContactDetailPage() {
     async function load() {
       setLoading(true);
       try {
-        const [cRes, convRes] = await Promise.all([
-          fetch(`/api/contacts/${params.id}`),
-          fetch(`/api/conversations?contactId=${params.id}`),
-        ]);
+        const cRes = await fetch(`/api/contacts/${params.id}`);
         if (!cRes.ok) {
           router.push("/contacts");
           return;
         }
         const cData = await cRes.json();
-        const convData = await convRes.json();
         if (!cancelled) {
           setContact(cData.contact);
-          setConversations(convData.conversations ?? []);
           resetForm(cData.contact);
         }
       } catch {
@@ -164,6 +245,17 @@ export default function ContactDetailPage() {
   }
 
   if (!contact) return null;
+
+  const tabs = [
+    { id: "overview", label: "Overview", content: <OverviewTab contactId={contact.id} /> },
+    { id: "appointments", label: "Appointments", content: <AppointmentsTab contactId={contact.id} /> },
+    { id: "queue", label: "Queue", content: <QueueTab contactId={contact.id} /> },
+    { id: "jobs", label: "Jobs", content: <JobCardsTab contactId={contact.id} /> },
+    { id: "memberships", label: "Memberships", content: <MembershipsTab contactId={contact.id} /> },
+    { id: "reviews", label: "Reviews", content: <ReviewsTab contactId={contact.id} /> },
+    { id: "invoices", label: "Payments", content: <InvoicesTab contactId={contact.id} /> },
+    { id: "events", label: "Timeline", content: <EventsTab contactId={contact.id} /> },
+  ];
 
   return (
     <div className="flex flex-1 flex-col overflow-y-auto">
@@ -274,30 +366,10 @@ export default function ContactDetailPage() {
           </Card>
         </div>
 
-        {/* Right column — activity */}
+        {/* Right column — activity tabs */}
         <div className="lg:col-span-2">
           <Card className="p-5">
-            <h3 className="mb-4 text-sm font-semibold text-text">Recent conversations</h3>
-            {conversations.length === 0 ? (
-              <p className="text-sm text-text-secondary">No conversations yet.</p>
-            ) : (
-              <ul className="divide-y divide-border">
-                {conversations.map((conv) => {
-                  const last = conv.messages[0];
-                  return (
-                    <li key={conv.id} className="py-3">
-                      <Link href={`/inbox/${conv.id}`} className="flex items-center justify-between gap-3 hover:text-primary">
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-medium text-text">{last?.body ?? "No messages"}</p>
-                          <p className="text-xs text-text-secondary">{conv.channel.type} · {new Date(conv.lastMessageAt).toLocaleString()}</p>
-                        </div>
-                        <Badge variant={conv.status === "CLOSED" ? "success" : "default"}>{conv.status === "CLOSED" ? "Resolved" : "Open"}</Badge>
-                      </Link>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
+            <Tabs tabs={tabs} defaultTab="overview" />
           </Card>
         </div>
       </div>
@@ -329,5 +401,286 @@ export default function ContactDetailPage() {
         </div>
       )}
     </div>
+  );
+}
+
+function Empty({ message }: { message: string }) {
+  return <p className="py-8 text-center text-sm text-text-secondary">{message}</p>;
+}
+
+function ErrorMessage({ message }: { message: string }) {
+  return <p className="py-8 text-center text-sm text-danger">{message}</p>;
+}
+
+function useTabData<T>(url: string) {
+  const [data, setData] = useState<T[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      try {
+        const res = await fetch(url);
+        if (!res.ok) throw new Error("Failed to load");
+        const json = await res.json();
+        if (!cancelled) {
+          setData(json);
+          setError(null);
+        }
+      } catch {
+        if (!cancelled) setError("Failed to load data");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, [url]);
+
+  return { data, loading, error };
+}
+
+function OverviewTab({ contactId }: { contactId: string }) {
+  const { data, loading, error } = useTabData<ConversationSummary>(`/api/conversations?contactId=${contactId}`);
+  const conversations = (data as unknown as { conversations?: ConversationSummary[] })?.conversations ?? [];
+
+  if (loading) return <Skeleton className="h-48" />;
+  if (error) return <ErrorMessage message={error} />;
+  if (conversations.length === 0) return <Empty message="No conversations yet." />;
+
+  return (
+    <div>
+      <h3 className="mb-4 flex items-center gap-2 text-sm font-semibold text-text">
+        <FileText className="h-4 w-4" aria-hidden="true" />
+        Recent conversations
+      </h3>
+      <ul className="divide-y divide-border">
+        {conversations.map((conv) => {
+          const last = conv.messages[0];
+          return (
+            <li key={conv.id} className="py-3">
+              <Link href={`/inbox/${conv.id}`} className="flex items-center justify-between gap-3 hover:text-primary">
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium text-text">{last?.body ?? "No messages"}</p>
+                  <p className="text-xs text-text-secondary">{conv.channel.type} · {new Date(conv.lastMessageAt).toLocaleString()}</p>
+                </div>
+                <Badge variant={conv.status === "CLOSED" ? "success" : "default"}>{conv.status === "CLOSED" ? "Resolved" : "Open"}</Badge>
+              </Link>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
+function AppointmentsTab({ contactId }: { contactId: string }) {
+  const { data: json, loading, error } = useTabData<unknown>(`/api/contacts/${contactId}/appointments`);
+  const appointments = ((json as unknown as { appointments?: Appointment[] })?.appointments ?? []);
+
+  if (loading) return <Skeleton className="h-48" />;
+  if (error) return <ErrorMessage message={error} />;
+  if (appointments.length === 0) return <Empty message="No appointments yet." />;
+
+  return (
+    <ul className="divide-y divide-border">
+      {appointments.map((a) => (
+        <li key={a.id} className="py-3">
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-medium text-text">
+                {a.service?.name ?? "Appointment"} {a.staff && `· ${a.staff.name}`}
+              </p>
+              <p className="text-xs text-text-secondary">
+                <Clock className="mr-1 inline h-3 w-3" />
+                {new Date(a.startsAt).toLocaleString()} - {new Date(a.endsAt).toLocaleTimeString()}
+                {a.resource && ` · ${a.resource.name}`}
+              </p>
+              {a.notes && <p className="mt-1 text-xs text-text-muted">{a.notes}</p>}
+            </div>
+            <Badge variant="default">{a.status}</Badge>
+          </div>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function QueueTab({ contactId }: { contactId: string }) {
+  const { data: json, loading, error } = useTabData<unknown>(`/api/contacts/${contactId}/queue`);
+  const entries = ((json as unknown as { entries?: QueueEntry[] })?.entries ?? []);
+
+  if (loading) return <Skeleton className="h-48" />;
+  if (error) return <ErrorMessage message={error} />;
+  if (entries.length === 0) return <Empty message="No queue history yet." />;
+
+  return (
+    <ul className="divide-y divide-border">
+      {entries.map((e) => (
+        <li key={e.id} className="py-3">
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-medium text-text">
+                <ClipboardList className="mr-1 inline h-3 w-3" />
+                {e.token} · {e.queue.name}
+              </p>
+              <p className="text-xs text-text-secondary">
+                #{e.position} {e.service && `· ${e.service.name}`} {e.staff && `· ${e.staff.name}`}
+              </p>
+              <p className="text-xs text-text-muted">Joined {new Date(e.createdAt).toLocaleString()}</p>
+            </div>
+            <Badge variant="default">{e.status}</Badge>
+          </div>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function JobCardsTab({ contactId }: { contactId: string }) {
+  const { data: json, loading, error } = useTabData<unknown>(`/api/contacts/${contactId}/job-cards`);
+  const jobCards = ((json as unknown as { jobCards?: JobCard[] })?.jobCards ?? []);
+
+  if (loading) return <Skeleton className="h-48" />;
+  if (error) return <ErrorMessage message={error} />;
+  if (jobCards.length === 0) return <Empty message="No job cards yet." />;
+
+  return (
+    <ul className="divide-y divide-border">
+      {jobCards.map((j) => (
+        <li key={j.id} className="py-3">
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-medium text-text">
+                <Wrench className="mr-1 inline h-3 w-3" />
+                {j.title}
+              </p>
+              <p className="text-xs text-text-secondary">
+                {j.service?.name} {j.staff && `· ${j.staff.name}`} {j.estimateInr ? `· Est. ₹${j.estimateInr}` : ""}
+              </p>
+              {j.description && <p className="mt-1 text-xs text-text-muted">{j.description}</p>}
+            </div>
+            <Badge variant="default">{j.status}</Badge>
+          </div>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function MembershipsTab({ contactId }: { contactId: string }) {
+  const { data: json, loading, error } = useTabData<unknown>(`/api/contacts/${contactId}/memberships`);
+  const memberships = ((json as unknown as { memberships?: Membership[] })?.memberships ?? []);
+
+  if (loading) return <Skeleton className="h-48" />;
+  if (error) return <ErrorMessage message={error} />;
+  if (memberships.length === 0) return <Empty message="No memberships or packages yet." />;
+
+  return (
+    <ul className="divide-y divide-border">
+      {memberships.map((m) => (
+        <li key={m.id} className="py-3">
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-medium text-text">
+                <Gift className="mr-1 inline h-3 w-3" />
+                {m.name}
+              </p>
+              <p className="text-xs text-text-secondary">
+                {m.sessionsTotal !== null ? `${m.sessionsUsed} / ${m.sessionsTotal} sessions used` : "Unlimited sessions"}
+                {m.expiresAt && ` · Expires ${new Date(m.expiresAt).toLocaleDateString()}`}
+              </p>
+            </div>
+            <Badge variant={m.status === "ACTIVE" ? "success" : "default"}>{m.status}</Badge>
+          </div>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function ReviewsTab({ contactId }: { contactId: string }) {
+  const { data: json, loading, error } = useTabData<unknown>(`/api/contacts/${contactId}/reviews`);
+  const reviews = ((json as unknown as { reviews?: Review[] })?.reviews ?? []);
+
+  if (loading) return <Skeleton className="h-48" />;
+  if (error) return <ErrorMessage message={error} />;
+  if (reviews.length === 0) return <Empty message="No reviews yet." />;
+
+  return (
+    <ul className="divide-y divide-border">
+      {reviews.map((r) => (
+        <li key={r.id} className="py-3">
+          <div className="flex items-start gap-3">
+            <Star className="mt-0.5 h-4 w-4 text-warning" aria-hidden="true" />
+            <div>
+              <p className="text-sm font-medium text-text">{r.rating} / 5</p>
+              {r.comment && <p className="text-sm text-text-secondary">{r.comment}</p>}
+              <p className="text-xs text-text-muted">{new Date(r.createdAt).toLocaleString()}</p>
+            </div>
+          </div>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function InvoicesTab({ contactId }: { contactId: string }) {
+  const { data: json, loading, error } = useTabData<unknown>(`/api/contacts/${contactId}/invoices`);
+  const invoices = ((json as unknown as { invoices?: Invoice[] })?.invoices ?? []);
+
+  if (loading) return <Skeleton className="h-48" />;
+  if (error) return <ErrorMessage message={error} />;
+  if (invoices.length === 0) return <Empty message="No invoices yet." />;
+
+  return (
+    <ul className="divide-y divide-border">
+      {invoices.map((inv) => (
+        <li key={inv.id} className="py-3">
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-medium text-text">
+                <Receipt className="mr-1 inline h-3 w-3" />
+                {inv.type === "WALLET_TOPUP" ? "Wallet top-up" : "Subscription"}
+              </p>
+              <p className="text-xs text-text-secondary">
+                ₹{inv.amountInr} · {new Date(inv.createdAt).toLocaleDateString()}
+                {inv.paidAt && ` · Paid ${new Date(inv.paidAt).toLocaleDateString()}`}
+              </p>
+            </div>
+            <Badge variant={inv.status === "PAID" ? "success" : inv.status === "FAILED" ? "danger" : "default"}>{inv.status}</Badge>
+          </div>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function EventsTab({ contactId }: { contactId: string }) {
+  const { data: json, loading, error } = useTabData<unknown>(`/api/contacts/${contactId}/events`);
+  const events = ((json as unknown as { events?: CustomerEvent[] })?.events ?? []);
+
+  if (loading) return <Skeleton className="h-48" />;
+  if (error) return <ErrorMessage message={error} />;
+  if (events.length === 0) return <Empty message="No timeline events yet." />;
+
+  return (
+    <ul className="divide-y divide-border">
+      {events.map((ev) => (
+        <li key={ev.id} className="py-3">
+          <div className="flex items-start gap-3">
+            <Activity className="mt-0.5 h-4 w-4 text-primary" aria-hidden="true" />
+            <div>
+              <p className="text-sm font-medium text-text">{ev.type}</p>
+              {ev.entityType && <p className="text-xs text-text-secondary">{ev.entityType} · {ev.entityId}</p>}
+              <p className="text-xs text-text-muted">{new Date(ev.createdAt).toLocaleString()}</p>
+            </div>
+          </div>
+        </li>
+      ))}
+    </ul>
   );
 }
