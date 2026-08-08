@@ -33,9 +33,9 @@ const DEMO_URL =
   "mailto:contact@evernaro.com?subject=Book%20a%20demo";
 
 const CHANNELS = [
-  { icon: MessageSquare, label: "Telegram" },
-  { icon: Mail, label: "Email" },
   { icon: Send, label: "WhatsApp" },
+  { icon: Mail, label: "Email" },
+  { icon: MessageSquare, label: "Telegram" },
   { icon: Camera, label: "Instagram" },
   { icon: PhoneCall, label: "Voice reminders" },
 ];
@@ -304,9 +304,8 @@ export default async function Home() {
             </Reveal>
             <Reveal delay={200}>
               <p className="max-w-lg text-base leading-relaxed text-text-secondary">
-                Let customers join your queue, book appointments, track their position, receive live
-                updates, and know exactly when it&apos;s their turn. Your team manages the entire customer
-                journey from one place.
+                Let customers join queues, book appointments, track their status, and get notified when
+                it&apos;s their turn — while your team manages the entire customer journey from one place.
               </p>
             </Reveal>
             <Reveal delay={260}>
@@ -544,16 +543,14 @@ export default async function Home() {
         <section className="flex flex-col gap-10">
           <div className="mx-auto max-w-2xl text-center">
             <Reveal>
-              <p className="text-xs font-medium tracking-wide text-primary uppercase">Channels</p>
+              <p className="text-xs font-medium tracking-wide text-primary uppercase">Connect</p>
               <h2 className="mt-2 text-3xl font-extrabold text-text">
-                Every customer interaction, connected to the customer journey.
+                Connect with customers wherever they already are.
               </h2>
             </Reveal>
             <Reveal delay={80}>
               <p className="mt-3 text-base text-text-secondary">
-                Customers may contact you through WhatsApp, Email, Telegram or Instagram. Evernaro
-                connects those conversations with the customer&apos;s broader journey — appointments,
-                queue tokens, services, payments and follow-ups.
+                WhatsApp · Email · Telegram · Instagram · Voice reminders
               </p>
             </Reveal>
           </div>

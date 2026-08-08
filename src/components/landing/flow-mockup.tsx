@@ -3,30 +3,36 @@
 import { useEffect, useState } from "react";
 import { Bell, Check, Clock, Users } from "lucide-react";
 
+function token(num: number) {
+  return `A${String(num).padStart(3, "0")}`;
+}
+
 export function FlowMockup() {
+  const [servingNum, setServingNum] = useState(116);
+  const [customerNum, setCustomerNum] = useState(119);
   const [ahead, setAhead] = useState(2);
-  const [nowServing, setNowServing] = useState("A102");
-  const [customerToken, setCustomerToken] = useState("A105");
   const [notified, setNotified] = useState(false);
 
-  // Subtle live animation: customer moves up every few seconds.
+  const nowServing = token(servingNum);
+  const customerToken = token(customerNum);
+  const nextTokens = [servingNum + 1, servingNum + 2, servingNum + 3].map(token);
+
+  // Subtle live animation: the queue advances until this customer's turn, then resets.
   useEffect(() => {
     const timer = setInterval(() => {
       setAhead((prev) => {
         if (prev <= 0) {
           setNotified(true);
           setTimeout(() => setNotified(false), 2500);
+          setTimeout(() => {
+            setServingNum(116);
+            setCustomerNum(119);
+            setAhead(2);
+          }, 3000);
           return 0;
         }
+        setServingNum((n) => n + 1);
         return prev - 1;
-      });
-      setNowServing((prev) => {
-        const num = Number(prev.slice(1));
-        return `A${String(num + 1).padStart(3, "0")}`;
-      });
-      setCustomerToken((prev) => {
-        const num = Number(prev.slice(1));
-        return `A${String(num + 1).padStart(3, "0")}`;
       });
     }, 4000);
     return () => clearInterval(timer);
@@ -65,11 +71,11 @@ export function FlowMockup() {
           <div className="mb-4 rounded-lg border border-border bg-surface p-3">
             <p className="mb-2 text-xs font-medium text-text-secondary">Next:</p>
             <div className="flex flex-wrap gap-2">
-              {["A103", "A104", "A105"].map((t) => (
+              {nextTokens.map((t) => (
                 <span
                   key={t}
                   className={`rounded-md px-2 py-1 text-xs font-medium ${
-                    t === "A103" ? "bg-primary text-white" : "bg-card text-text-secondary"
+                    t === token(servingNum + 1) ? "bg-primary text-white" : "bg-card text-text-secondary"
                   }`}
                 >
                   {t}
@@ -80,7 +86,7 @@ export function FlowMockup() {
 
           <div className="flex items-center gap-2 text-xs text-text-muted">
             <Clock className="h-3.5 w-3.5" aria-hidden="true" />
-            Average wait ~18 min
+            Average wait ~12 min
           </div>
         </div>
 
@@ -99,7 +105,7 @@ export function FlowMockup() {
             </div>
             <div className="rounded-lg bg-surface p-3 text-center">
               <p className="text-xs text-text-secondary">Est. wait</p>
-              <p className="text-2xl font-bold text-text">{12 + ahead * 6}m</p>
+              <p className="text-2xl font-bold text-text">{ahead * 6}m</p>
             </div>
           </div>
 
