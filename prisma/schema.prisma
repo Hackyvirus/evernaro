@@ -42,7 +42,7 @@ model Organization {
 
   // Multi-industry core
   industryTemplateId String?
-  industryTemplate   IndustryTemplate?         @relation(fields: [industryTemplateId], references: [id])
+  industryTemplate   IndustryTemplate?           @relation(fields: [industryTemplateId], references: [id])
   industryConfig     OrganizationIndustryConfig?
   services           Service[]
   staffProfiles      StaffProfile[]
@@ -56,6 +56,7 @@ model Organization {
   customerEvents     CustomerEvent[]
   automations        Automation[]
   notificationPrefs  NotificationPreference[]
+  flowSessions       CustomerFlowSession[]
 
   // SaaS subscription billing
   razorpayCustomerId String?
@@ -108,10 +109,10 @@ model Invoice {
   paidAt            DateTime?
 
   // SaaS subscription billing
-  subscriptionId    String?
-  subscription      CustomerSubscription? @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
-  invoiceItems      InvoiceItem[]
-  payments          Payment[]
+  subscriptionId String?
+  subscription   CustomerSubscription? @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+  invoiceItems   InvoiceItem[]
+  payments       Payment[]
 
   walletTransaction WalletTransaction?
 
@@ -213,14 +214,14 @@ model WhatsAppRateCard {
 // ---------- Platform admin (Eversity Tech LLP staff, not tied to any org) ----------
 
 model PlatformAdmin {
-  id                          String    @id @default(cuid())
-  email                       String    @unique
+  id                          String     @id @default(cuid())
+  email                       String     @unique
   passwordHash                String
   name                        String
-  passwordResetToken          String?   @unique
+  passwordResetToken          String?    @unique
   passwordResetTokenExpiresAt DateTime?
-  createdAt                   DateTime  @default(now())
-  updatedAt                   DateTime  @default(now()) @updatedAt
+  createdAt                   DateTime   @default(now())
+  updatedAt                   DateTime   @default(now()) @updatedAt
   auditLogs                   AuditLog[]
 }
 
@@ -242,7 +243,7 @@ model EmailLog {
   replyTo   String?
   subject   String
   body      String           @db.Text
-  status    String           // SENT | FAILED | QUEUED
+  status    String // SENT | FAILED | QUEUED
   error     String?          @db.Text
   metadata  Json?
   createdAt DateTime         @default(now())
@@ -250,6 +251,24 @@ model EmailLog {
   @@index([category, createdAt])
   @@index([status, createdAt])
   @@index([createdAt])
+}
+
+model CustomerFlowSession {
+  id            String       @id @default(cuid())
+  orgId         String
+  org           Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  token         String       @unique
+  type          String // QUEUE | APPOINTMENT | GENERAL
+  contactId     String?
+  contact       Contact?     @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  queueEntryId  String?      @unique
+  queueEntry    QueueEntry?  @relation(fields: [queueEntryId], references: [id], onDelete: SetNull)
+  appointmentId String?      @unique
+  appointment   Appointment? @relation(fields: [appointmentId], references: [id], onDelete: SetNull)
+  createdAt     DateTime     @default(now())
+  expiresAt     DateTime?
+
+  @@index([orgId, createdAt])
 }
 
 enum AuditLogAction {
@@ -319,19 +338,19 @@ model User {
   updatedAt    DateTime     @default(now()) @updatedAt
 
   // Email verification
-  emailVerified                 Boolean   @default(false)
-  emailVerificationToken        String?   @unique
+  emailVerified                   Boolean   @default(false)
+  emailVerificationToken          String?   @unique
   emailVerificationTokenExpiresAt DateTime?
 
   // Password reset
-  passwordResetToken        String?   @unique
+  passwordResetToken          String?   @unique
   passwordResetTokenExpiresAt DateTime?
 
   // TOTP MFA
-  mfaSecret     String?   // encrypted TOTP secret; null until MFA setup
-  mfaEnabled    Boolean   @default(false)
-  mfaBackupCodes String[]  // bcrypt-hashed backup codes
-  mfaTempSecret String?   // holds secret during MFA setup until verified
+  mfaSecret      String? // encrypted TOTP secret; null until MFA setup
+  mfaEnabled     Boolean  @default(false)
+  mfaBackupCodes String[] // bcrypt-hashed backup codes
+  mfaTempSecret  String? // holds secret during MFA setup until verified
 
   assignedConversations Conversation[] @relation("AssignedTo")
   closedConversations   Conversation[] @relation("ClosedBy")
@@ -349,26 +368,26 @@ enum UserRole {
 
 // One business profile per org — feeds the AI draft-reply engine.
 model BusinessProfile {
-  id            String       @id @default(cuid())
-  orgId         String       @unique
-  org           Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  businessName  String
-  industry      String?
-  description   String       @default("") // what the business does, who its customers are
-  address       String?
-  phone         String?
-  website       String?
-  workingHours  String?
-  tone          String       @default("friendly and professional")
-  formality     String       @default("semi-formal")
-  language      String       @default("en")
-  knowledgeBase String       @default("") // FAQs, pricing, policies — free text fed to the AI
-  faqs          Json         @default("[]")
-  products      Json         @default("[]")
-  policies      Json         @default("[]")
-  aiInstructions Json        @default("{}")
-  signOff       String       @default("")
-  updatedAt     DateTime     @updatedAt
+  id             String       @id @default(cuid())
+  orgId          String       @unique
+  org            Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  businessName   String
+  industry       String?
+  description    String       @default("") // what the business does, who its customers are
+  address        String?
+  phone          String?
+  website        String?
+  workingHours   String?
+  tone           String       @default("friendly and professional")
+  formality      String       @default("semi-formal")
+  language       String       @default("en")
+  knowledgeBase  String       @default("") // FAQs, pricing, policies — free text fed to the AI
+  faqs           Json         @default("[]")
+  products       Json         @default("[]")
+  policies       Json         @default("[]")
+  aiInstructions Json         @default("{}")
+  signOff        String       @default("")
+  updatedAt      DateTime     @updatedAt
 }
 
 // Helpers for typed JSON fields in BusinessProfile
@@ -499,6 +518,7 @@ model Contact {
   reviews            Review[]
   customerEvents     CustomerEvent[]
   notificationPrefs  NotificationPreference[]
+  flowSessions       CustomerFlowSession[]
 
   @@index([orgId])
 }
@@ -736,12 +756,12 @@ model IndustryTemplate {
   name        String
   description String
   isActive    Boolean      @default(true)
-  config      Json         // default terminology, features, workflows, dashboard, services, automations
+  config      Json // default terminology, features, workflows, dashboard, services, automations
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
 
-  organizations          Organization[]
-  organizationConfigs    OrganizationIndustryConfig[]
+  organizations       Organization[]
+  organizationConfigs OrganizationIndustryConfig[]
 }
 
 model OrganizationIndustryConfig {
@@ -750,7 +770,7 @@ model OrganizationIndustryConfig {
   org        Organization     @relation(fields: [orgId], references: [id], onDelete: Cascade)
   templateId String
   template   IndustryTemplate @relation(fields: [templateId], references: [id])
-  config     Json             // org-specific overrides
+  config     Json // org-specific overrides
   createdAt  DateTime         @default(now())
   updatedAt  DateTime         @updatedAt
 }
@@ -761,8 +781,8 @@ model Service {
   org         Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
   name        String
   description String?
-  durationMin Int?         // default duration in minutes
-  priceInr    Int?         // whole rupees for simplicity; use 0 for free services
+  durationMin Int? // default duration in minutes
+  priceInr    Int? // whole rupees for simplicity; use 0 for free services
   color       String?
   isActive    Boolean      @default(true)
   metadata    Json         @default("{}") // industry-specific extras
@@ -785,7 +805,7 @@ model StaffProfile {
   userId       String?      @unique
   user         User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
   name         String
-  role         String       // industry-specific label: Stylist / Doctor / Technician / Lawyer
+  role         String // industry-specific label: Stylist / Doctor / Technician / Lawyer
   phone        String?
   email        String?
   color        String?
@@ -822,16 +842,16 @@ enum ResourceType {
 }
 
 model Resource {
-  id         String       @id @default(cuid())
-  orgId      String
-  org        Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  name       String
-  type       ResourceType @default(OTHER)
-  capacity   Int          @default(1)
-  isActive   Boolean      @default(true)
-  metadata   Json         @default("{}")
-  createdAt  DateTime     @default(now())
-  updatedAt  DateTime     @updatedAt
+  id        String       @id @default(cuid())
+  orgId     String
+  org       Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  name      String
+  type      ResourceType @default(OTHER)
+  capacity  Int          @default(1)
+  isActive  Boolean      @default(true)
+  metadata  Json         @default("{}")
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
 
   appointments Appointment[]
 
@@ -866,8 +886,11 @@ model Appointment {
   notes          String?           @db.Text
   depositInr     Int?
   reminderSentAt DateTime?
+  publicToken    String?           @unique
   createdAt      DateTime          @default(now())
   updatedAt      DateTime          @updatedAt
+
+  flowSession CustomerFlowSession?
 
   @@index([orgId, startsAt])
   @@index([orgId, status])
@@ -884,15 +907,16 @@ enum QueueEntryStatus {
 }
 
 model Queue {
-  id        String       @id @default(cuid())
-  orgId     String
-  org       Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  name      String       @default("Main Queue")
-  serviceId String?
-  service   Service?     @relation(fields: [serviceId], references: [id], onDelete: SetNull)
-  isActive  Boolean      @default(true)
-  createdAt DateTime     @default(now())
-  updatedAt DateTime     @updatedAt
+  id                     String       @id @default(cuid())
+  orgId                  String
+  org                    Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  name                   String       @default("Main Queue")
+  serviceId              String?
+  service                Service?     @relation(fields: [serviceId], references: [id], onDelete: SetNull)
+  isActive               Boolean      @default(true)
+  noShowThresholdSeconds Int          @default(120)
+  createdAt              DateTime     @default(now())
+  updatedAt              DateTime     @updatedAt
 
   entries QueueEntry[]
 
@@ -900,32 +924,39 @@ model Queue {
 }
 
 model QueueEntry {
-  id                String           @id @default(cuid())
-  orgId             String
-  org               Organization     @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  queueId           String
-  queue             Queue            @relation(fields: [queueId], references: [id], onDelete: Cascade)
-  contactId         String
-  contact           Contact          @relation(fields: [contactId], references: [id], onDelete: Cascade)
-  serviceId         String?
-  service           Service?         @relation(fields: [serviceId], references: [id], onDelete: SetNull)
-  staffId           String?
-  staff             StaffProfile?    @relation("AssignedStaff", fields: [staffId], references: [id], onDelete: SetNull)
-  token             String
-  position          Int              @default(0)
-  estimatedWaitMin  Int?
-  status            QueueEntryStatus @default(WAITING)
-  calledAt          DateTime?
-  startedAt         DateTime?
-  completedAt       DateTime?
-  cancelledAt       DateTime?
-  noShowAt          DateTime?
-  createdAt         DateTime         @default(now())
-  updatedAt         DateTime         @updatedAt
+  id                        String           @id @default(cuid())
+  orgId                     String
+  org                       Organization     @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  queueId                   String
+  queue                     Queue            @relation(fields: [queueId], references: [id], onDelete: Cascade)
+  contactId                 String
+  contact                   Contact          @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  serviceId                 String?
+  service                   Service?         @relation(fields: [serviceId], references: [id], onDelete: SetNull)
+  staffId                   String?
+  staff                     StaffProfile?    @relation("AssignedStaff", fields: [staffId], references: [id], onDelete: SetNull)
+  token                     String
+  publicToken               String?          @unique
+  verificationCode          String?
+  verificationCodeExpiresAt DateTime?
+  autoNoShowJobId           String?
+  position                  Int              @default(0)
+  estimatedWaitMin          Int?
+  status                    QueueEntryStatus @default(WAITING)
+  calledAt                  DateTime?
+  startedAt                 DateTime?
+  completedAt               DateTime?
+  cancelledAt               DateTime?
+  noShowAt                  DateTime?
+  createdAt                 DateTime         @default(now())
+  updatedAt                 DateTime         @updatedAt
+
+  flowSession CustomerFlowSession?
 
   @@index([queueId, status])
   @@index([queueId, position])
   @@index([contactId])
+  @@index([publicToken])
 }
 
 enum JobCardStatus {
@@ -1017,16 +1048,16 @@ enum CustomerEventType {
 }
 
 model CustomerEvent {
-  id         String          @id @default(cuid())
+  id         String            @id @default(cuid())
   orgId      String
-  org        Organization    @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  org        Organization      @relation(fields: [orgId], references: [id], onDelete: Cascade)
   contactId  String
-  contact    Contact         @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  contact    Contact           @relation(fields: [contactId], references: [id], onDelete: Cascade)
   type       CustomerEventType
-  entityType String?         // "appointment", "queueEntry", "jobCard", "invoice"
+  entityType String? // "appointment", "queueEntry", "jobCard", "invoice"
   entityId   String?
-  metadata   Json            @default("{}")
-  createdAt  DateTime        @default(now())
+  metadata   Json              @default("{}")
+  createdAt  DateTime          @default(now())
 
   @@index([orgId, contactId, createdAt])
   @@index([orgId, type, createdAt])
@@ -1055,16 +1086,16 @@ enum AutomationActionType {
 }
 
 model Automation {
-  id         String              @id @default(cuid())
+  id         String            @id @default(cuid())
   orgId      String
-  org        Organization        @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  org        Organization      @relation(fields: [orgId], references: [id], onDelete: Cascade)
   name       String
   trigger    AutomationTrigger
-  conditions Json                @default("[]")
+  conditions Json              @default("[]")
   actions    Json
-  isActive   Boolean             @default(true)
-  createdAt  DateTime            @default(now())
-  updatedAt  DateTime            @updatedAt
+  isActive   Boolean           @default(true)
+  createdAt  DateTime          @default(now())
+  updatedAt  DateTime          @updatedAt
 
   executions AutomationExecution[]
 
@@ -1075,7 +1106,7 @@ model AutomationExecution {
   id           String     @id @default(cuid())
   automationId String
   automation   Automation @relation(fields: [automationId], references: [id], onDelete: Cascade)
-  status       String     // SUCCESS / FAILED / SKIPPED
+  status       String // SUCCESS / FAILED / SKIPPED
   error        String?
   metadata     Json       @default("{}")
   createdAt    DateTime   @default(now())
@@ -1089,7 +1120,7 @@ model NotificationPreference {
   org       Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
   contactId String
   contact   Contact      @relation(fields: [contactId], references: [id], onDelete: Cascade)
-  channel   String       // WHATSAPP / EMAIL / SMS
+  channel   String // WHATSAPP / EMAIL / SMS
   enabled   Boolean      @default(true)
   events    String[]
 
@@ -1161,21 +1192,21 @@ model TaxConfiguration {
 }
 
 model SubscriptionPlan {
-  id          String   @id @default(cuid())
-  slug        String   @unique
-  name        String
-  description String?
-  monthlyPriceInr Int  @default(0)
-  annualPriceInr  Int  @default(0)
+  id                    String   @id @default(cuid())
+  slug                  String   @unique
+  name                  String
+  description           String?
+  monthlyPriceInr       Int      @default(0)
+  annualPriceInr        Int      @default(0)
   annualDiscountPercent Int?
-  trialDays   Int      @default(0)
-  currency    String   @default("INR")
-  isActive    Boolean  @default(true)
-  isCustom    Boolean  @default(false)
-  displayOrder Int     @default(0)
-  metadata    Json     @default("{}")
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  trialDays             Int      @default(0)
+  currency              String   @default("INR")
+  isActive              Boolean  @default(true)
+  isCustom              Boolean  @default(false)
+  displayOrder          Int      @default(0)
+  metadata              Json     @default("{}")
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
 
   features      PlanFeature[]
   limits        PlanLimit[]
@@ -1187,46 +1218,46 @@ model SubscriptionPlan {
 }
 
 model PlanFeature {
-  id       String @id @default(cuid())
+  id       String           @id @default(cuid())
   planId   String
   plan     SubscriptionPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
   key      String
   label    String
   value    String?
-  included Boolean @default(true)
+  included Boolean          @default(true)
 
-  @@index([planId])
   @@unique([planId, key])
+  @@index([planId])
 }
 
 model PlanLimit {
-  id              String          @id @default(cuid())
-  planId          String
-  plan            SubscriptionPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
-  serviceId       String
-  service         BillableService @relation(fields: [serviceId], references: [id], onDelete: Cascade)
-  includedQuantity Int            @default(0)
-  overagePriceInr Int?            // per unit overage; null = blocked
-  overageUnit     String?         // e.g. "1000" for per-1000-contacts
-  metadata        Json            @default("{}")
+  id               String           @id @default(cuid())
+  planId           String
+  plan             SubscriptionPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+  serviceId        String
+  service          BillableService  @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  includedQuantity Int              @default(0)
+  overagePriceInr  Int? // per unit overage; null = blocked
+  overageUnit      String? // e.g. "1000" for per-1000-contacts
+  metadata         Json             @default("{}")
 
-  @@index([planId, serviceId])
   @@unique([planId, serviceId])
+  @@index([planId, serviceId])
 }
 
 model BillableService {
-  id          String      @id @default(cuid())
-  key         String      @unique
-  name        String
-  description String?
-  category    String
-  unit        String
-  billingType BillingType @default(FIXED)
-  basePriceInr Int       @default(0)
-  isActive    Boolean     @default(true)
-  metadata    Json        @default("{}")
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
+  id           String      @id @default(cuid())
+  key          String      @unique
+  name         String
+  description  String?
+  category     String
+  unit         String
+  billingType  BillingType @default(FIXED)
+  basePriceInr Int         @default(0)
+  isActive     Boolean     @default(true)
+  metadata     Json        @default("{}")
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
 
   pricingRules    ServicePricingRule[]
   planServices    PlanService[]
@@ -1295,66 +1326,66 @@ model AddOn {
 }
 
 model PlanAddOn {
-  id      String @id @default(cuid())
-  planId  String
-  plan    SubscriptionPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
-  addOnId String
-  addOn   AddOn @relation(fields: [addOnId], references: [id], onDelete: Cascade)
-  isActive Boolean @default(true)
+  id       String           @id @default(cuid())
+  planId   String
+  plan     SubscriptionPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+  addOnId  String
+  addOn    AddOn            @relation(fields: [addOnId], references: [id], onDelete: Cascade)
+  isActive Boolean          @default(true)
 
   @@unique([planId, addOnId])
   @@index([planId])
 }
 
 model CustomerSubscription {
-  id                 String             @id @default(cuid())
-  orgId              String
-  org                Organization       @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  planId             String
-  plan               SubscriptionPlan   @relation(fields: [planId], references: [id], onDelete: Restrict)
-  status             SubscriptionStatus @default(INCOMPLETE)
-  frequency          BillingFrequency   @default(MONTHLY)
-  currentPeriodStart DateTime?
-  currentPeriodEnd   DateTime?
-  trialEnd           DateTime?
-  cancelledAt        DateTime?
-  cancelAtPeriodEnd  Boolean            @default(false)
-  pausedAt           DateTime?
-  quantity           Int                @default(1)
+  id                     String             @id @default(cuid())
+  orgId                  String
+  org                    Organization       @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  planId                 String
+  plan                   SubscriptionPlan   @relation(fields: [planId], references: [id], onDelete: Restrict)
+  status                 SubscriptionStatus @default(INCOMPLETE)
+  frequency              BillingFrequency   @default(MONTHLY)
+  currentPeriodStart     DateTime?
+  currentPeriodEnd       DateTime?
+  trialEnd               DateTime?
+  cancelledAt            DateTime?
+  cancelAtPeriodEnd      Boolean            @default(false)
+  pausedAt               DateTime?
+  quantity               Int                @default(1)
   razorpaySubscriptionId String?
   razorpayPlanId         String?
   razorpayCustomerId     String?
-  baseAmountInr      Int @default(0)
-  discountAmountInr  Int @default(0)
-  taxAmountInr       Int @default(0)
-  totalAmountInr     Int @default(0)
-  items              SubscriptionItem[]
-  usageAggregates    UsageAggregate[]
-  invoices           Invoice[]
-  payments           Payment[]
-  billingEvents      BillingEvent[]
-  createdAt          DateTime           @default(now())
-  updatedAt          DateTime           @updatedAt
+  baseAmountInr          Int                @default(0)
+  discountAmountInr      Int                @default(0)
+  taxAmountInr           Int                @default(0)
+  totalAmountInr         Int                @default(0)
+  items                  SubscriptionItem[]
+  usageAggregates        UsageAggregate[]
+  invoices               Invoice[]
+  payments               Payment[]
+  billingEvents          BillingEvent[]
+  createdAt              DateTime           @default(now())
+  updatedAt              DateTime           @updatedAt
 
   @@index([orgId, status])
   @@index([razorpaySubscriptionId])
 }
 
 model SubscriptionItem {
-  id            String               @id @default(cuid())
+  id             String               @id @default(cuid())
   subscriptionId String
-  subscription  CustomerSubscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
-  orgId         String
-  org           Organization         @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  type          String
-  addOnId       String?
-  addOn         AddOn?               @relation(fields: [addOnId], references: [id], onDelete: SetNull)
-  quantity      Int                  @default(1)
-  unitPriceInr  Int                  @default(0)
-  totalPriceInr Int                  @default(0)
-  metadata      Json                 @default("{}")
-  createdAt     DateTime             @default(now())
-  updatedAt     DateTime             @updatedAt
+  subscription   CustomerSubscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  orgId          String
+  org            Organization         @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  type           String
+  addOnId        String?
+  addOn          AddOn?               @relation(fields: [addOnId], references: [id], onDelete: SetNull)
+  quantity       Int                  @default(1)
+  unitPriceInr   Int                  @default(0)
+  totalPriceInr  Int                  @default(0)
+  metadata       Json                 @default("{}")
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
 
   @@index([subscriptionId])
   @@index([orgId])
@@ -1390,35 +1421,35 @@ model UsageAggregate {
   createdAt        DateTime             @default(now())
   updatedAt        DateTime             @updatedAt
 
+  @@unique([orgId, subscriptionId, serviceId, periodStart])
   @@index([orgId, subscriptionId, periodStart])
   @@index([serviceId, periodStart])
-  @@unique([orgId, subscriptionId, serviceId, periodStart])
 }
 
 model InvoiceItem {
-  id           String       @id @default(cuid())
+  id           String          @id @default(cuid())
   invoiceId    String
-  invoice      Invoice      @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  invoice      Invoice         @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
   orgId        String
-  org          Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  org          Organization    @relation(fields: [orgId], references: [id], onDelete: Cascade)
   type         InvoiceItemType
   description  String
-  quantity     Int          @default(1)
-  unitPriceInr Int          @default(0)
-  amountInr    Int          @default(0)
-  metadata     Json         @default("{}")
-  createdAt    DateTime     @default(now())
+  quantity     Int             @default(1)
+  unitPriceInr Int             @default(0)
+  amountInr    Int             @default(0)
+  metadata     Json            @default("{}")
+  createdAt    DateTime        @default(now())
 
   @@index([invoiceId])
   @@index([orgId])
 }
 
 model Payment {
-  id                String               @id @default(cuid())
+  id                String                @id @default(cuid())
   orgId             String
-  org               Organization         @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  org               Organization          @relation(fields: [orgId], references: [id], onDelete: Cascade)
   invoiceId         String?
-  invoice           Invoice?             @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+  invoice           Invoice?              @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
   subscriptionId    String?
   subscription      CustomerSubscription? @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
   amountInr         Int
@@ -1427,9 +1458,9 @@ model Payment {
   razorpayOrderId   String?
   razorpaySignature String?
   failureReason     String?
-  metadata          Json                 @default("{}")
-  createdAt         DateTime             @default(now())
-  updatedAt         DateTime             @updatedAt
+  metadata          Json                  @default("{}")
+  createdAt         DateTime              @default(now())
+  updatedAt         DateTime              @updatedAt
 
   @@index([orgId, createdAt])
   @@index([invoiceId])
@@ -1438,22 +1469,22 @@ model Payment {
 }
 
 model Coupon {
-  id                String       @id @default(cuid())
-  code              String       @unique
+  id                String         @id @default(cuid())
+  code              String         @unique
   description       String?
   type              CouponType
   value             Int
   duration          CouponDuration @default(ONCE)
   durationInMonths  Int?
   maxRedemptions    Int?
-  redemptionCount   Int          @default(0)
-  validFrom         DateTime     @default(now())
+  redemptionCount   Int            @default(0)
+  validFrom         DateTime       @default(now())
   validUntil        DateTime?
   minAmountInr      Int?
   applicablePlanIds String[]
-  isActive          Boolean      @default(true)
-  createdAt         DateTime     @default(now())
-  updatedAt         DateTime     @updatedAt
+  isActive          Boolean        @default(true)
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
 
   redemptions CouponRedemption[]
 }
@@ -1468,20 +1499,20 @@ model CouponRedemption {
   discountAmountInr Int          @default(0)
   createdAt         DateTime     @default(now())
 
+  @@unique([couponId, orgId])
   @@index([couponId])
   @@index([orgId])
-  @@unique([couponId, orgId])
 }
 
 model BillingEvent {
-  id             String               @id @default(cuid())
+  id             String                @id @default(cuid())
   orgId          String
-  org            Organization         @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  org            Organization          @relation(fields: [orgId], references: [id], onDelete: Cascade)
   subscriptionId String?
   subscription   CustomerSubscription? @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
   eventType      String
-  metadata       Json                 @default("{}")
-  createdAt      DateTime             @default(now())
+  metadata       Json                  @default("{}")
+  createdAt      DateTime              @default(now())
 
   @@index([orgId, eventType, createdAt])
   @@index([subscriptionId])

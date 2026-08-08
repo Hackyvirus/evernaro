@@ -3,10 +3,12 @@ import { redisConnection } from "@/lib/redis";
 
 export const CAMPAIGN_SEND_QUEUE = "campaign-send";
 export const REMINDER_SEND_QUEUE = "reminder-send";
+export const NO_SHOW_QUEUE = "queue-no-show";
 
 const globalForQueues = globalThis as unknown as {
   campaignQueue: Queue | undefined;
   reminderQueue: Queue | undefined;
+  noShowQueue: Queue | undefined;
 };
 
 function getCampaignQueue(): Queue {
@@ -23,12 +25,24 @@ function getReminderQueue(): Queue {
   return globalForQueues.reminderQueue;
 }
 
+function getNoShowQueue(): Queue {
+  if (!globalForQueues.noShowQueue) {
+    globalForQueues.noShowQueue = new Queue(NO_SHOW_QUEUE, { connection: redisConnection });
+  }
+  return globalForQueues.noShowQueue;
+}
+
 export interface CampaignSendJob {
   campaignRecipientId: string;
 }
 
 export interface ReminderSendJob {
   reminderId: string;
+}
+
+export interface NoShowJob {
+  queueEntryId: string;
+  orgId: string;
 }
 
 export async function enqueueCampaignRecipient(campaignRecipientId: string, delayMs?: number) {
@@ -67,6 +81,31 @@ export async function cancelReminderJob(reminderId: string): Promise<{ removed: 
 
 export async function cancelCampaignRecipientJob(recipientId: string): Promise<{ removed: boolean }> {
   const job = await getCampaignQueue().getJob(recipientId);
+  if (!job) return { removed: true };
+  try {
+    await job.remove();
+    return { removed: true };
+  } catch {
+    return { removed: false };
+  }
+}
+
+export async function enqueueNoShow(
+  queueEntryId: string,
+  orgId: string,
+  delayMs: number
+): Promise<{ jobId: string }> {
+  const jobId = `no-show:${queueEntryId}`;
+  await getNoShowQueue().add(
+    "check",
+    { queueEntryId, orgId } satisfies NoShowJob,
+    { jobId, delay: Math.max(0, delayMs) }
+  );
+  return { jobId };
+}
+
+export async function cancelNoShowJob(queueEntryId: string): Promise<{ removed: boolean }> {
+  const job = await getNoShowQueue().getJob(`no-show:${queueEntryId}`);
   if (!job) return { removed: true };
   try {
     await job.remove();

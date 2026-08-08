@@ -22,7 +22,7 @@ export async function GET() {
   }
 
   const queues = await getQueuesByOrg(session.user.orgId);
-  return NextResponse.json({ queues });
+  return NextResponse.json({ queues, orgSlug: session.user.orgSlug });
 }
 
 export async function POST(req: Request) {

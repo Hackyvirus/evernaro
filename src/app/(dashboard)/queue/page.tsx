@@ -2,10 +2,12 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Button, Card, Input, PageHeader } from "@/components/ui";
+import Link from "next/link";
 
 type QueueEntry = {
   id: string;
   token: string;
+  publicToken: string;
   position: number;
   status: string;
   contact: { name: string | null; phone: string | null };
@@ -59,6 +61,8 @@ export default function QueuePage() {
   const [contactId, setContactId] = useState("");
   const [serviceId, setServiceId] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [verifyCode, setVerifyCode] = useState("");
+  const [verifyingEntryId, setVerifyingEntryId] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [pollError, setPollError] = useState<string | null>(null);
   const [statusNotice, setStatusNotice] = useState<{
@@ -222,11 +226,33 @@ export default function QueuePage() {
     load();
   }
 
+  async function verifyAndStart(publicToken: string) {
+    if (!verifyCode || verifyCode.length !== 6) return;
+    setVerifyingEntryId(publicToken);
+    const res = await fetch("/api/queue/verify", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ publicToken, code: verifyCode }),
+    });
+    setVerifyingEntryId(null);
+    setVerifyCode("");
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      setPollError(data.error ?? "Verification failed");
+      return;
+    }
+    load();
+  }
+
   const activeQueue = queues.find((q) => q.id === selectedQueueId);
 
   return (
     <div className="flex flex-1 flex-col overflow-auto">
-      <PageHeader title="Queue" description="Manage walk-ins and live waiting list." />
+      <PageHeader title="Queue" description="Manage walk-ins and live waiting list.">
+        <Link href="/queue/qr-codes">
+          <Button size="sm" variant="secondary">QR Codes</Button>
+        </Link>
+      </PageHeader>
 
       <div className="flex flex-1 flex-col gap-6 p-6">
         <Card className="p-4">
@@ -355,9 +381,25 @@ export default function QueuePage() {
                         </Button>
                       )}
                       {e.status === "CALLED" && (
-                        <Button size="sm" variant="secondary" onClick={() => updateStatus(e.id, "IN_PROGRESS")}>
-                          Start
-                        </Button>
+                        <div className="flex items-center gap-2">
+                          <Input
+                            placeholder="OTP"
+                            value={verifyingEntryId === e.publicToken ? verifyCode : ""}
+                            onChange={(ev) => {
+                              setVerifyCode(ev.target.value.replace(/\D/g, "").slice(0, 6));
+                            }}
+                            className="w-24"
+                            maxLength={6}
+                          />
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            loading={verifyingEntryId === e.publicToken}
+                            onClick={() => verifyAndStart(e.publicToken)}
+                          >
+                            Verify & Start
+                          </Button>
+                        </div>
                       )}
                       {e.status === "IN_PROGRESS" && (
                         <Button size="sm" variant="secondary" onClick={() => updateStatus(e.id, "COMPLETED")}>

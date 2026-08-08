@@ -19,10 +19,13 @@ import { requireActiveSubscription } from "../lib/subscription";
 import {
   CAMPAIGN_SEND_QUEUE,
   REMINDER_SEND_QUEUE,
+  NO_SHOW_QUEUE,
   enqueueReminder,
   type CampaignSendJob,
   type ReminderSendJob,
+  type NoShowJob,
 } from "../lib/queue";
+import { markNoShow } from "../lib/services/queue-service";
 
 // This process runs outside Next.js (`npm run worker`), so it isn't covered
 // by src/instrumentation.ts — needs its own Sentry init. No-op until
@@ -63,7 +66,7 @@ async function shutdown(signal: NodeJS.Signals) {
   } catch {}
 
   try {
-    await Promise.all([campaignWorker.close(), reminderWorker.close()]);
+    await Promise.all([campaignWorker.close(), reminderWorker.close(), noShowWorker.close()]);
   } catch (err) {
     console.error("Error closing BullMQ workers:", err);
   }
@@ -83,6 +86,7 @@ SHUTDOWN_SIGNALS.forEach((signal) => process.on(signal, shutdown));
 const CAMPAIGN_RATE_PER_SECOND = Number(process.env.CAMPAIGN_RATE_PER_SECOND || 5);
 const CAMPAIGN_WORKER_CONCURRENCY = Number(process.env.CAMPAIGN_WORKER_CONCURRENCY || 5);
 const REMINDER_WORKER_CONCURRENCY = Number(process.env.REMINDER_WORKER_CONCURRENCY || 10);
+const NO_SHOW_WORKER_CONCURRENCY = Number(process.env.NO_SHOW_WORKER_CONCURRENCY || 20);
 
 function renderTemplate(template: string, name: string | null) {
   return template.replace(/\{\{\s*name\s*\}\}/gi, name?.trim() || "there");
@@ -289,6 +293,14 @@ async function processReminderJob(job: Job<ReminderSendJob>) {
   }
 }
 
+async function processNoShowJob(job: Job<NoShowJob>) {
+  const { queueEntryId, orgId } = job.data;
+  const entry = await prisma.queueEntry.findFirst({ where: { id: queueEntryId, orgId } });
+  if (!entry) return;
+  if (entry.status !== "CALLED") return; // already served or no-showed manually
+  await markNoShow(queueEntryId, orgId);
+}
+
 const campaignWorker = new Worker<CampaignSendJob>(CAMPAIGN_SEND_QUEUE, processCampaignJob, {
   connection: redisConnection,
   concurrency: CAMPAIGN_WORKER_CONCURRENCY,
@@ -300,6 +312,11 @@ const reminderWorker = new Worker<ReminderSendJob>(REMINDER_SEND_QUEUE, processR
   concurrency: REMINDER_WORKER_CONCURRENCY,
 });
 
+const noShowWorker = new Worker<NoShowJob>(NO_SHOW_QUEUE, processNoShowJob, {
+  connection: redisConnection,
+  concurrency: NO_SHOW_WORKER_CONCURRENCY,
+});
+
 campaignWorker.on("failed", (job, err) => {
   Sentry.captureException(err, { tags: { queue: CAMPAIGN_SEND_QUEUE }, extra: { jobId: job?.id } });
   console.error(`Campaign job ${job?.id} failed:`, err);
@@ -308,5 +325,9 @@ reminderWorker.on("failed", (job, err) => {
   Sentry.captureException(err, { tags: { queue: REMINDER_SEND_QUEUE }, extra: { jobId: job?.id } });
   console.error(`Reminder job ${job?.id} failed:`, err);
 });
+noShowWorker.on("failed", (job, err) => {
+  Sentry.captureException(err, { tags: { queue: NO_SHOW_QUEUE }, extra: { jobId: job?.id } });
+  console.error(`No-show job ${job?.id} failed:`, err);
+});
 
-console.log("Evernaro worker running — listening for campaign-send and reminder-send jobs.");
+console.log("Evernaro worker running — listening for campaign-send, reminder-send, and queue-no-show jobs.");
