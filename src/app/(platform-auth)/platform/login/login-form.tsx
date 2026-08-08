@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { Button, Input } from "@/components/ui";
 
 export function PlatformLoginForm() {
@@ -61,6 +62,12 @@ export function PlatformLoginForm() {
       <Button type="submit" loading={loading} className="mt-2 w-full">
         {loading ? "Logging in..." : "Log in"}
       </Button>
+
+      <p className="text-center text-sm text-text-secondary">
+        <Link href="/platform/forgot-password" className="font-medium text-primary hover:text-primary-hover">
+          Forgot password?
+        </Link>
+      </p>
     </form>
   );
 }

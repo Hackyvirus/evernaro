@@ -62,3 +62,21 @@ export async function sendPasswordChangedEmail(email: string) {
     text: `Your Evernaro password was just changed. If this was you, no action is needed.\n\nIf you did not make this change, reset your password immediately: ${loginUrl}\n\nContact support@evernaro.com if you need help.`,
   });
 }
+
+export async function sendPlatformAdminPasswordResetEmail(email: string, token: string) {
+  const url = `${BASE_URL}/platform/reset-password?token=${encodeURIComponent(token)}`;
+  await sendSecurityEmail({
+    to: email,
+    subject: "Reset your Evernaro platform admin password",
+    text: `Reset your Evernaro platform admin password by opening this link:\n\n${url}\n\nThis link expires in 1 hour. If you did not request a password reset, you can ignore this email.`,
+  });
+}
+
+export async function sendPlatformAdminPasswordChangedEmail(email: string) {
+  const loginUrl = `${BASE_URL}/platform/login`;
+  await sendSecurityEmail({
+    to: email,
+    subject: "Your Evernaro platform admin password was changed",
+    text: `Your Evernaro platform admin password was just changed. If this was you, no action is needed.\n\nIf you did not make this change, reset your password immediately: ${loginUrl}`,
+  });
+}

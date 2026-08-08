@@ -29,7 +29,10 @@ export const proxy = auth((req) => {
   // Platform admin area — a completely separate auth track from org users.
   if (pathname.startsWith("/platform")) {
     const isPlatformAuthPage =
-      pathname.startsWith("/platform/login") || pathname.startsWith("/platform/setup");
+      pathname.startsWith("/platform/login") ||
+      pathname.startsWith("/platform/setup") ||
+      pathname.startsWith("/platform/forgot-password") ||
+      pathname.startsWith("/platform/reset-password");
 
     if (isPlatformAuthPage) {
       if (isPlatformAdmin) return NextResponse.redirect(new URL("/platform", req.nextUrl));
