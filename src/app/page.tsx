@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
 import { Button, Card, Logo, ThemeToggle } from "@/components/ui";
 import { ProductMockup } from "@/components/landing/product-mockup";
 import { Reveal } from "@/components/landing/reveal";
@@ -98,49 +99,10 @@ const HOW_IT_WORKS = [
   },
 ];
 
-const PRICING_TIERS = [
-  {
-    name: "Starter",
-    price: "₹1,499",
-    trial: "Free 14-day trial starts automatically, then",
-    tagline: "For a single team getting started.",
-    features: [
-      "Up to 2 channels",
-      "1 team seat",
-      "AI-drafted replies",
-      "Up to 500 sends/day",
-      "Email support",
-    ],
-    highlighted: false,
-  },
-  {
-    name: "Growth",
-    price: "₹3,999",
-    tagline: "For teams running campaigns and reminders daily.",
-    features: [
-      "All 5 channels",
-      "Up to 5 team seats",
-      "AI-drafted replies",
-      "Up to 2,000 sends/day",
-      "WhatsApp template management",
-      "Priority support",
-    ],
-    highlighted: true,
-  },
-  {
-    name: "Scale",
-    price: "₹8,999",
-    tagline: "For multi-location or high-volume businesses.",
-    features: [
-      "Everything in Growth",
-      "Unlimited team seats",
-      "Custom send limits",
-      "Vertical starter packs (e.g. real estate)",
-      "Dedicated onboarding",
-    ],
-    highlighted: false,
-  },
-];
+function formatPrice(amount: number, currency: string) {
+  if (amount === 0) return "Free";
+  return new Intl.NumberFormat("en-IN", { style: "currency", currency, maximumFractionDigits: 0 }).format(amount);
+}
 
 const FAQ_BLURB =
   "Answers to the questions we get most. Anything else — support@evernaro.com.";
@@ -151,6 +113,12 @@ export const dynamic = "force-dynamic";
 export default async function Home() {
   const session = await auth();
   if (session) redirect("/dashboard");
+
+  const plans = await prisma.subscriptionPlan.findMany({
+    where: { isActive: true, isCustom: false },
+    include: { features: { orderBy: { key: "asc" } } },
+    orderBy: { displayOrder: "asc" },
+  });
 
   return (
     <div className="flex flex-1 flex-col bg-surface">
@@ -363,50 +331,53 @@ export default async function Home() {
               Prices in INR, billed monthly. Start with a 14-day free trial — no credit card required, cancel anytime.
             </p>
           </Reveal>
-          <div className="grid gap-6 lg:grid-cols-3">
-            {PRICING_TIERS.map((tier, i) => (
-              <Reveal key={tier.name} delay={i * 80}>
-                <Card
-                  className={`relative flex h-full flex-col gap-5 p-6 ${
-                    tier.highlighted ? "border-primary shadow-[var(--shadow-elevated)]" : ""
-                  }`}
-                >
-                  {tier.highlighted && (
-                    <span className="absolute -top-3 left-6 rounded-full bg-primary px-3 py-1 text-xs font-semibold text-white">
-                      Most popular
-                    </span>
-                  )}
-                  <div>
-                    <h3 className="text-base font-bold text-text">{tier.name}</h3>
-                    <p className="mt-1 text-sm text-text-secondary">{tier.tagline}</p>
-                  </div>
-                  <div>
-                    {tier.trial && (
-                      <p className="text-xs font-medium text-success">{tier.trial}</p>
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {plans.map((plan, i) => {
+              const highlighted = plan.slug === "growth";
+              return (
+                <Reveal key={plan.id} delay={i * 80}>
+                  <Card
+                    className={`relative flex h-full flex-col gap-5 p-6 ${
+                      highlighted ? "border-primary shadow-[var(--shadow-elevated)]" : ""
+                    }`}
+                  >
+                    {highlighted && (
+                      <span className="absolute -top-3 left-6 rounded-full bg-primary px-3 py-1 text-xs font-semibold text-white">
+                        Most popular
+                      </span>
                     )}
-                    <p className="text-3xl font-extrabold text-text">
-                      {tier.price}
-                      <span className="text-sm font-medium text-text-muted">/month</span>
-                    </p>
-                  </div>
-                  <ul className="flex flex-1 flex-col gap-2">
-                    {tier.features.map((feature) => (
-                      <li key={feature} className="flex items-start gap-2 text-sm text-text-secondary">
-                        <Check className="mt-0.5 h-4 w-4 flex-shrink-0 text-primary" aria-hidden="true" />
-                        {feature}
-                      </li>
-                    ))}
-                  </ul>
-                  <Link href={tier.name === "Scale" ? "mailto:contact@evernaro.com?subject=Evernaro%20Scale%20plan" : "/signup"}>
-                    <Button variant={tier.highlighted ? "primary" : "secondary"} className="w-full">
-                      {tier.name === "Starter" && "Start free trial"}
-                      {tier.name === "Growth" && "Start free trial"}
-                      {tier.name === "Scale" && "Contact sales"}
-                    </Button>
-                  </Link>
-                </Card>
-              </Reveal>
-            ))}
+                    <div>
+                      <h3 className="text-base font-bold text-text">{plan.name}</h3>
+                      <p className="mt-1 text-sm text-text-secondary">{plan.description}</p>
+                    </div>
+                    <div>
+                      {plan.trialDays > 0 && (
+                        <p className="text-xs font-medium text-success">
+                          Free {plan.trialDays}-day trial starts automatically, then
+                        </p>
+                      )}
+                      <p className="text-3xl font-extrabold text-text">
+                        {formatPrice(plan.monthlyPriceInr, plan.currency)}
+                        <span className="text-sm font-medium text-text-muted">/month</span>
+                      </p>
+                    </div>
+                    <ul className="flex flex-1 flex-col gap-2">
+                      {plan.features.map((feature) => (
+                        <li key={feature.id} className="flex items-start gap-2 text-sm text-text-secondary">
+                          <Check className={`mt-0.5 h-4 w-4 flex-shrink-0 ${feature.included ? "text-primary" : "text-text-muted"}`} aria-hidden="true" />
+                          <span className={feature.included ? "" : "line-through opacity-60"}>{feature.label}{feature.value ? `: ${feature.value}` : ""}</span>
+                        </li>
+                      ))}
+                    </ul>
+                    <Link href="/signup">
+                      <Button variant={highlighted ? "primary" : "secondary"} className="w-full">
+                        {plan.monthlyPriceInr === 0 ? "Start for free" : "Start free trial"}
+                      </Button>
+                    </Link>
+                  </Card>
+                </Reveal>
+              );
+            })}
           </div>
           <Reveal>
             <p className="text-center text-sm text-text-muted">

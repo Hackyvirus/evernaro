@@ -101,7 +101,7 @@ async function seedDemoOrg(template: IndustryTemplate) {
   await prisma.organizationIndustryConfig.create({
     data: {
       orgId: org.id,
-      templateId: org.industryTemplateId,
+      templateId: org.industryTemplateId!,
       config: {},
     },
   });
