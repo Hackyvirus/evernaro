@@ -85,8 +85,8 @@ const NAV_REGISTRY: NavItemDef[] = [
   { key: "knowledge", href: "/knowledge", icon: BookOpen, label: "Knowledge Base", section: "config" },
   { key: "team", href: "/team", icon: Users, label: "Team", roles: ["ADMIN", "OWNER"], section: "config" },
 
-  // Account
-  { key: "billing", href: "/billing", icon: Receipt, label: "Billing", roles: ["ADMIN", "OWNER"], section: "account" },
+  // Billing is part of the main navigation so plan/billing status is always visible.
+  { key: "billing", href: "/billing", icon: Receipt, label: "Billing", roles: ["ADMIN", "OWNER"], section: "main" },
   { key: "settings", href: "/settings", icon: Settings, label: "Settings", section: "account" },
 ];
 

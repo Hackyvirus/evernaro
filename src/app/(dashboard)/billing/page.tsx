@@ -95,6 +95,12 @@ function formatPaise(paise: number) {
   return `₹${(paise / 100).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
+function daysUntil(date: string | Date | null | undefined) {
+  if (!date) return null;
+  const diff = new Date(date).getTime() - Date.now();
+  return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)));
+}
+
 const TX_LABEL: Record<WalletTx["type"], string> = {
   TOPUP: "Top-up",
   MESSAGE_DEBIT: "WhatsApp message",
@@ -343,6 +349,80 @@ function BillingPageContent() {
           </Card>
         )}
 
+        {!subscriptionLoading && subscription?.status === "TRIALING" && (
+          <Card className="flex flex-col items-center gap-3 border border-info bg-info-light p-4 text-center sm:flex-row sm:items-start sm:text-start">
+            <Sparkles className="mt-0.5 h-5 w-5 flex-shrink-0 text-info" aria-hidden="true" />
+            <div>
+              <p className="text-sm font-medium text-text">
+                Trial active — {daysUntil(subscription.trialEnd)} days remaining
+              </p>
+              <p className="text-xs text-text-secondary">
+                Trial ends {subscription.trialEnd ? new Date(subscription.trialEnd).toLocaleDateString() : "soon"}. Add a payment method before then to keep your subscription active.
+              </p>
+            </div>
+          </Card>
+        )}
+
+        {!subscriptionLoading && subscription?.status === "PAST_DUE" && (
+          <Card className="flex flex-col items-center gap-3 border border-warning bg-warning-light p-4 text-center sm:flex-row sm:items-start sm:text-start">
+            <AlertCircle className="mt-0.5 h-5 w-5 flex-shrink-0 text-warning" aria-hidden="true" />
+            <div>
+              <p className="text-sm font-medium text-text">Subscription past due</p>
+              <p className="text-xs text-text-secondary">
+                We couldn&apos;t process your latest payment. Please pay the outstanding invoice to avoid service interruption.
+              </p>
+            </div>
+          </Card>
+        )}
+
+        {!subscriptionLoading && subscription?.status === "PAYMENT_FAILED" && (
+          <Card className="flex flex-col items-center gap-3 border border-danger bg-danger-light p-4 text-center sm:flex-row sm:items-start sm:text-start">
+            <AlertCircle className="mt-0.5 h-5 w-5 flex-shrink-0 text-danger" aria-hidden="true" />
+            <div>
+              <p className="text-sm font-medium text-text">Payment failed</p>
+              <p className="text-xs text-text-secondary">
+                Your subscription payment failed. Update your payment method or retry the invoice to restore access.
+              </p>
+            </div>
+          </Card>
+        )}
+
+        {!subscriptionLoading && subscription?.status === "CANCELLED" && (
+          <Card className="flex flex-col items-center gap-3 border border-danger bg-danger-light p-4 text-center sm:flex-row sm:items-start sm:text-start">
+            <AlertCircle className="mt-0.5 h-5 w-5 flex-shrink-0 text-danger" aria-hidden="true" />
+            <div>
+              <p className="text-sm font-medium text-text">Subscription cancelled</p>
+              <p className="text-xs text-text-secondary">
+                Your subscription has been cancelled. Choose a new plan to reactivate your account.
+              </p>
+            </div>
+          </Card>
+        )}
+
+        {!subscriptionLoading && subscription?.cancelAtPeriodEnd && subscription.status !== "CANCELLED" && (
+          <Card className="flex flex-col items-center gap-3 border border-warning bg-warning-light p-4 text-center sm:flex-row sm:items-start sm:text-start">
+            <AlertCircle className="mt-0.5 h-5 w-5 flex-shrink-0 text-warning" aria-hidden="true" />
+            <div>
+              <p className="text-sm font-medium text-text">Subscription scheduled to cancel</p>
+              <p className="text-xs text-text-secondary">
+                Your subscription will cancel at the end of the current billing period. You can reactivate anytime before then.
+              </p>
+            </div>
+          </Card>
+        )}
+
+        {!subscriptionLoading && !subscription && (
+          <Card className="flex flex-col items-center gap-3 border border-info bg-info-light p-4 text-center sm:flex-row sm:items-start sm:text-start">
+            <Sparkles className="mt-0.5 h-5 w-5 flex-shrink-0 text-info" aria-hidden="true" />
+            <div>
+              <p className="text-sm font-medium text-text">No active plan</p>
+              <p className="text-xs text-text-secondary">
+                You&apos;re on the Free plan. Upgrade to unlock more features and higher usage limits.
+              </p>
+            </div>
+          </Card>
+        )}
+
         <div className="grid gap-6 lg:grid-cols-2">
           <Card className="flex flex-col justify-between p-5">
             <div>
@@ -366,6 +446,11 @@ function BillingPageContent() {
                   {subscription.trialEnd && (
                     <p className="mt-1 text-xs text-text-muted">
                       Trial ends {new Date(subscription.trialEnd).toLocaleDateString()}
+                    </p>
+                  )}
+                  {!subscription.trialEnd && subscription.currentPeriodEnd && subscription.totalAmountInr > 0 && (
+                    <p className="mt-1 text-xs text-text-muted">
+                      Next billing {new Date(subscription.currentPeriodEnd).toLocaleDateString()}
                     </p>
                   )}
                   {subscription.cancelAtPeriodEnd && (

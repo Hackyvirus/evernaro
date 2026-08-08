@@ -1,12 +1,14 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { QRCodeSVG } from "qrcode.react";
 import { Badge, Button, Card, Input, Select, Textarea, PageHeader, Tabs } from "@/components/ui";
 import { VERTICAL_PRESETS } from "@/lib/vertical-presets";
 import { RoleAwareAdminGuard } from "../role";
 import { NotificationPreferencesTab } from "./notification-preferences-tab";
+import { Receipt } from "lucide-react";
 
 type Tab = "profile" | "telegram" | "email" | "whatsapp" | "instagram" | "voice" | "notifications" | "security";
 
@@ -136,6 +138,28 @@ function SettingsPageContent() {
         title="Settings"
         description="Connect channels and tell the AI about your business."
       />
+
+      <div className="px-6 pb-4">
+        <Card className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-start gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary-lighter">
+              <Receipt className="h-5 w-5 text-primary" />
+            </div>
+            <div>
+              <p className="font-semibold text-text">Billing & subscription</p>
+              <p className="text-sm text-text-secondary">
+                Manage your plan, payment method, invoices, and WhatsApp wallet.
+              </p>
+            </div>
+          </div>
+          <Link
+            href="/billing"
+            className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary-hover"
+          >
+            Open billing
+          </Link>
+        </Card>
+      </div>
 
       <div className="px-6">
         <Tabs
