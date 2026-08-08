@@ -11,7 +11,20 @@ export const getPlatformAnalytics = cache(async () => {
   const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
   const limit = dailyCampaignRecipientLimit();
 
-  const [orgs, messageCounts, usageAgg] = await Promise.all([
+  const now = new Date();
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+
+  const [
+    orgs,
+    messageCounts,
+    usageAgg,
+    activeSubscriptions,
+    recentSubscriptions,
+    subscriptionCounts,
+    revenueAgg,
+    revenueThisMonth,
+    planBreakdown,
+  ] = await Promise.all([
     prisma.organization.findMany({
       select: {
         id: true,
@@ -29,6 +42,35 @@ export const getPlatformAnalytics = cache(async () => {
       where: { createdAt: { gte: since } },
       _sum: { totalRecipients: true },
     }),
+    prisma.customerSubscription.findMany({
+      where: { status: "ACTIVE" },
+      select: { totalAmountInr: true, frequency: true },
+    }),
+    prisma.customerSubscription.findMany({
+      where: { status: { in: ["ACTIVE", "TRIALING", "PAST_DUE", "PAUSED"] } },
+      include: { plan: true, org: { select: { id: true, name: true } } },
+      orderBy: { createdAt: "desc" },
+      take: 10,
+    }),
+    prisma.customerSubscription.groupBy({
+      by: ["status"],
+      where: { status: { in: ["ACTIVE", "TRIALING", "PAST_DUE", "PAUSED"] } },
+      _count: { _all: true },
+    }),
+    prisma.invoice.aggregate({
+      where: { status: "PAID" },
+      _sum: { amountInr: true },
+    }),
+    prisma.invoice.aggregate({
+      where: { status: "PAID", paidAt: { gte: monthStart } },
+      _sum: { amountInr: true },
+    }),
+    prisma.customerSubscription.groupBy({
+      by: ["planId"],
+      where: { status: "ACTIVE" },
+      _sum: { totalAmountInr: true },
+      _count: { _all: true },
+    }),
   ]);
 
   const activeClientCount = orgs.filter(
@@ -40,12 +82,65 @@ export const getPlatformAnalytics = cache(async () => {
     .filter((o) => (usageByOrg.get(o.id) ?? 0) >= limit * 0.8)
     .map((o) => ({ orgId: o.id, orgName: o.name, used: usageByOrg.get(o.id) ?? 0, limit }));
 
+  const statusCount = (status: string) =>
+    subscriptionCounts.find((c) => c.status === status)?._count._all ?? 0;
+  const activeCount = statusCount("ACTIVE");
+  const trialingCount = statusCount("TRIALING");
+  const pastDueCount = statusCount("PAST_DUE");
+  const pausedCount = statusCount("PAUSED");
+
+  const mrrInr = activeSubscriptions.reduce(
+    (sum, s) => sum + (s.frequency === "YEARLY" ? s.totalAmountInr / 12 : s.totalAmountInr),
+    0
+  );
+
+  const planMap = new Map(planBreakdown.map((p) => [p.planId, p]));
+  const plans = await prisma.subscriptionPlan.findMany({
+    where: { id: { in: Array.from(planMap.keys()) } },
+    select: { id: true, name: true },
+  });
+
+  const revenueByPlan = plans
+    .map((p) => {
+      const agg = planMap.get(p.id);
+      return {
+        planId: p.id,
+        planName: p.name,
+        activeSubscriptions: agg?._count._all ?? 0,
+        mrrInr: Math.round((agg?._sum.totalAmountInr ?? 0) / 12),
+      };
+    })
+    .sort((a, b) => b.mrrInr - a.mrrInr);
+
   return {
     totalClients: orgs.length,
     activeClientCount,
     messagesSent: messageCounts.find((m) => m.direction === "OUTBOUND")?._count._all ?? 0,
     messagesReceived: messageCounts.find((m) => m.direction === "INBOUND")?._count._all ?? 0,
     nearCapClients,
+    subscriptions: {
+      active: activeCount,
+      trialing: trialingCount,
+      pastDue: pastDueCount,
+      paused: pausedCount,
+      recent: recentSubscriptions.map((s) => ({
+        id: s.id,
+        orgId: s.orgId,
+        orgName: s.org.name,
+        planName: s.plan.name,
+        status: s.status,
+        totalAmountInr: s.totalAmountInr,
+        frequency: s.frequency,
+        createdAt: s.createdAt.toISOString(),
+      })),
+    },
+    revenue: {
+      totalPaidInr: revenueAgg._sum.amountInr ?? 0,
+      thisMonthInr: revenueThisMonth._sum.amountInr ?? 0,
+      mrrInr: Math.round(mrrInr),
+      arrInr: Math.round(mrrInr * 12),
+      byPlan: revenueByPlan,
+    },
   };
 });
 

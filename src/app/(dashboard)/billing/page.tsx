@@ -344,10 +344,10 @@ function BillingPageContent() {
             </div>
             <div className="mt-4 flex flex-col gap-2">
               <Link
-                href="/pricing"
-                className="inline-flex h-8 items-center justify-center rounded-md border border-border bg-card px-3 text-sm font-medium text-text transition-colors hover:bg-surface"
+                href="/billing/plans"
+                className="inline-flex h-8 items-center justify-center rounded-md bg-primary px-3 text-sm font-medium text-white transition-colors hover:bg-primary-hover"
               >
-                View plans
+                {subscription ? "Change plan" : "Choose a plan"}
               </Link>
               {subscription && (subscription.status === "ACTIVE" || subscription.status === "TRIALING") && !subscription.cancelAtPeriodEnd && (
                 <Button variant="danger" size="sm" loading={cancelling} onClick={cancelSubscription}>Cancel subscription</Button>

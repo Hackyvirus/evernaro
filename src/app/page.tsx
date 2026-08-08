@@ -160,7 +160,7 @@ const CAPABILITIES = [
   {
     icon: CreditCard,
     title: "Payments",
-    description: "Razorpay-integrated billing and wallet top-ups.",
+    description: "Choose a plan, pay online with Razorpay, and upgrade or downgrade anytime.",
   },
   {
     icon: Sparkles,
