@@ -1,5 +1,7 @@
 import { prisma } from "@/lib/prisma";
-import { AppointmentStatus, type Prisma } from "@prisma/client";
+import { AppointmentStatus, CustomerEventType, type Prisma } from "@prisma/client";
+import { recordCustomerEvent } from "@/lib/customer-events";
+import { scheduleAppointmentReminders } from "./appointment-reminders";
 
 export type CreateAppointmentInput = {
   orgId: string;
@@ -14,7 +16,7 @@ export type CreateAppointmentInput = {
 };
 
 export async function createAppointment(input: CreateAppointmentInput) {
-  return prisma.appointment.create({
+  const appointment = await prisma.appointment.create({
     data: {
       orgId: input.orgId,
       contactId: input.contactId,
@@ -34,6 +36,29 @@ export async function createAppointment(input: CreateAppointmentInput) {
       resource: true,
     },
   });
+
+  // Schedule automatic reminders in the background; do not fail appointment
+  // creation if reminder scheduling hits a missing template/channel.
+  scheduleAppointmentReminders(appointment.id).catch((err) => {
+    console.error("Failed to schedule appointment reminders:", err);
+  });
+
+  // Record timeline event for the customer.
+  void recordCustomerEvent(
+    appointment.orgId,
+    appointment.contactId,
+    CustomerEventType.APPOINTMENT_BOOKED,
+    "appointment",
+    appointment.id,
+    {
+      serviceName: appointment.service?.name ?? null,
+      staffName: appointment.staff?.name ?? null,
+      resourceName: appointment.resource?.name ?? null,
+      startsAt: appointment.startsAt.toISOString(),
+    }
+  );
+
+  return appointment;
 }
 
 export async function getAppointmentsByOrg(orgId: string, options?: { from?: Date; to?: Date; status?: AppointmentStatus }) {
@@ -91,10 +116,36 @@ export async function updateAppointment(
 }
 
 export async function updateAppointmentStatus(id: string, orgId: string, status: AppointmentStatus) {
-  return prisma.appointment.updateMany({
+  const result = await prisma.appointment.updateMany({
     where: { id, orgId },
     data: { status },
   });
+
+  if (result.count > 0 && status === AppointmentStatus.COMPLETED) {
+    const appointment = await prisma.appointment.findFirst({
+      where: { id, orgId },
+      select: {
+        contactId: true,
+        service: { select: { name: true } },
+        startsAt: true,
+      },
+    });
+    if (appointment) {
+      void recordCustomerEvent(
+        orgId,
+        appointment.contactId,
+        CustomerEventType.SERVICE_COMPLETED,
+        "appointment",
+        id,
+        {
+          serviceName: appointment.service?.name ?? null,
+          startsAt: appointment.startsAt.toISOString(),
+        }
+      );
+    }
+  }
+
+  return result;
 }
 
 export async function deleteAppointment(id: string, orgId: string) {

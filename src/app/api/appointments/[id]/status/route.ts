@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { auth } from "@/lib/auth";
 import { updateAppointmentStatus } from "@/lib/services/appointment-service";
+import { scheduleReviewRequest } from "@/lib/services/review-requests";
 import { AppointmentStatus } from "@prisma/client";
 
 const statusSchema = z.object({
@@ -22,5 +23,12 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   }
 
   await updateAppointmentStatus(id, session.user.orgId, parsed.data.status);
+
+  if (parsed.data.status === AppointmentStatus.COMPLETED) {
+    scheduleReviewRequest(id).catch((err) => {
+      console.error("Failed to schedule review request:", err);
+    });
+  }
+
   return NextResponse.json({ ok: true });
 }

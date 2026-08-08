@@ -1,0 +1,90 @@
+"server-only";
+
+import crypto from "node:crypto";
+import { prisma } from "@/lib/prisma";
+import { enqueueReminder } from "@/lib/queue";
+import { ChannelType } from "@prisma/client";
+
+const REVIEW_TOKEN_TTL_HOURS = 72;
+
+function getSecret() {
+  const secret = process.env.AUTH_SECRET;
+  if (!secret) throw new Error("AUTH_SECRET is required to sign review links");
+  return secret;
+}
+
+export function generateReviewToken(contactId: string, appointmentId: string) {
+  const secret = getSecret();
+  const expiresAt = Date.now() + REVIEW_TOKEN_TTL_HOURS * 60 * 60 * 1000;
+  const payload = `${contactId}:${appointmentId}:${expiresAt}`;
+  const signature = crypto.createHmac("sha256", secret).update(payload).digest("hex");
+  return { token: `${Buffer.from(payload).toString("base64url")}.${signature}`, expiresAt: new Date(expiresAt) };
+}
+
+export function verifyReviewToken(token: string) {
+  const [encoded, signature] = token.split(".");
+  if (!encoded || !signature) return null;
+
+  const payload = Buffer.from(encoded, "base64url").toString("utf-8");
+  const expected = crypto.createHmac("sha256", getSecret()).update(payload).digest("hex");
+  if (!crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected))) return null;
+
+  const [contactId, appointmentId, expiresAtStr] = payload.split(":");
+  if (!contactId || !appointmentId || !expiresAtStr) return null;
+  if (Date.now() > Number(expiresAtStr)) return null;
+
+  return { contactId, appointmentId };
+}
+
+function chooseChannel(orgId: string) {
+  return prisma.channel.findFirst({
+    where: { orgId, isActive: true, type: { in: [ChannelType.WHATSAPP, ChannelType.TELEGRAM, ChannelType.EMAIL] } },
+    orderBy: { type: "asc" },
+  });
+}
+
+async function chooseWhatsAppTemplate(channelId: string) {
+  return prisma.whatsAppTemplate.findFirst({
+    where: { channelId, status: "APPROVED", name: { contains: "review", mode: "insensitive" } },
+  });
+}
+
+export async function scheduleReviewRequest(appointmentId: string) {
+  const appointment = await prisma.appointment.findUnique({
+    where: { id: appointmentId },
+    include: { contact: true, service: true, org: true },
+  });
+  if (!appointment || appointment.status !== "COMPLETED") return;
+
+  const channel = await chooseChannel(appointment.orgId);
+  if (!channel) return;
+
+  let whatsappTemplateId: string | undefined;
+  if (channel.type === ChannelType.WHATSAPP) {
+    const template = await chooseWhatsAppTemplate(channel.id);
+    if (!template) return;
+    whatsappTemplateId = template.id;
+  }
+
+  const { token } = generateReviewToken(appointment.contactId, appointment.id);
+  const reviewUrl = `${process.env.NEXT_PUBLIC_BASE_URL}/business/${appointment.org.slug}/review?t=${token}`;
+  const serviceName = appointment.service?.name ?? "your visit";
+  const message = `Hi {{name}}, how was ${serviceName}? Please rate your experience here: ${reviewUrl}`;
+
+  const scheduledFor = new Date(Date.now() + 2 * 60 * 60 * 1000); // 2 hours after completion
+
+  const reminder = await prisma.reminder.create({
+    data: {
+      orgId: appointment.orgId,
+      contactId: appointment.contactId,
+      channelId: channel.id,
+      title: "Review request",
+      type: "FOLLOW_UP",
+      message,
+      scheduledFor,
+      whatsappTemplateId: whatsappTemplateId ?? null,
+    },
+  });
+
+  await enqueueReminder(reminder.id, scheduledFor);
+}

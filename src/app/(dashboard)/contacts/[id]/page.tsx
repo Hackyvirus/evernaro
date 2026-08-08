@@ -22,6 +22,10 @@ import {
   Star,
   Receipt,
   Activity,
+  CheckCircle,
+  MessageSquare,
+  Users,
+  type LucideIcon,
 } from "lucide-react";
 import { Button, Card, Input, PageHeader, Skeleton, Badge, Textarea, Avatar, Tabs } from "@/components/ui";
 import { useToast } from "@/components/ui/toast";
@@ -659,6 +663,65 @@ function InvoicesTab({ contactId }: { contactId: string }) {
   );
 }
 
+const EVENT_LABELS: Record<string, string> = {
+  REGISTERED: "Registered",
+  APPOINTMENT_BOOKED: "Appointment booked",
+  APPOINTMENT_CHANGED: "Appointment changed",
+  QUEUE_JOINED: "Joined queue",
+  QUEUE_CALLED: "Called from queue",
+  SERVICE_STARTED: "Service started",
+  SERVICE_COMPLETED: "Service completed",
+  PAYMENT_RECEIVED: "Payment received",
+  REVIEW_RECEIVED: "Review received",
+  FOLLOW_UP_DUE: "Follow-up due",
+  MEMBERSHIP_EXPIRING: "Membership expiring",
+};
+
+const EVENT_ICONS: Record<string, LucideIcon> = {
+  REGISTERED: Users,
+  APPOINTMENT_BOOKED: Calendar,
+  APPOINTMENT_CHANGED: Clock,
+  QUEUE_JOINED: ClipboardList,
+  QUEUE_CALLED: ClipboardList,
+  SERVICE_STARTED: Activity,
+  SERVICE_COMPLETED: CheckCircle,
+  PAYMENT_RECEIVED: Receipt,
+  REVIEW_RECEIVED: Star,
+  FOLLOW_UP_DUE: MessageSquare,
+  MEMBERSHIP_EXPIRING: Gift,
+};
+
+function formatEventTitle(ev: CustomerEvent): string {
+  const meta = ev.metadata ?? {};
+  switch (ev.type) {
+    case "APPOINTMENT_BOOKED":
+      return meta.serviceName ? `Appointment booked · ${meta.serviceName}` : "Appointment booked";
+    case "SERVICE_COMPLETED":
+      return meta.serviceName ? `Service completed · ${meta.serviceName}` : "Service completed";
+    case "REVIEW_RECEIVED":
+      return meta.rating ? `Review received · ${meta.rating}/5` : "Review received";
+    case "PAYMENT_RECEIVED":
+      return meta.amountInr ? `Payment received · ₹${meta.amountInr}` : "Payment received";
+    case "QUEUE_JOINED":
+      return meta.queueName ? `Joined queue · ${meta.queueName}` : "Joined queue";
+    default:
+      return EVENT_LABELS[ev.type] ?? ev.type;
+  }
+}
+
+function formatEventSubtitle(ev: CustomerEvent): string {
+  const parts: string[] = [];
+  if (ev.entityType) {
+    parts.push(`${ev.entityType}${ev.entityId ? ` · #${ev.entityId.slice(-6)}` : ""}`);
+  }
+  if (ev.metadata && typeof ev.metadata === "object") {
+    const meta = ev.metadata as Record<string, unknown>;
+    if (meta.staffName) parts.push(`Staff: ${meta.staffName}`);
+    if (meta.comment && typeof meta.comment === "string") parts.push(`"${meta.comment.slice(0, 60)}${meta.comment.length > 60 ? "…" : ""}"`);
+  }
+  return parts.join(" · ");
+}
+
 function EventsTab({ contactId }: { contactId: string }) {
   const { data: json, loading, error } = useTabData<unknown>(`/api/contacts/${contactId}/events`);
   const events = ((json as unknown as { events?: CustomerEvent[] })?.events ?? []);
@@ -669,18 +732,29 @@ function EventsTab({ contactId }: { contactId: string }) {
 
   return (
     <ul className="divide-y divide-border">
-      {events.map((ev) => (
-        <li key={ev.id} className="py-3">
-          <div className="flex items-start gap-3">
-            <Activity className="mt-0.5 h-4 w-4 text-primary" aria-hidden="true" />
-            <div>
-              <p className="text-sm font-medium text-text">{ev.type}</p>
-              {ev.entityType && <p className="text-xs text-text-secondary">{ev.entityType} · {ev.entityId}</p>}
-              <p className="text-xs text-text-muted">{new Date(ev.createdAt).toLocaleString()}</p>
+      {events.map((ev) => {
+        const Icon = EVENT_ICONS[ev.type] ?? Activity;
+        return (
+          <li key={ev.id} className="py-3">
+            <div className="flex items-start gap-3">
+              <Icon className="mt-0.5 h-4 w-4 text-primary" aria-hidden="true" />
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium text-text">{formatEventTitle(ev)}</p>
+                {formatEventSubtitle(ev) && <p className="text-xs text-text-secondary">{formatEventSubtitle(ev)}</p>}
+                <p className="text-xs text-text-muted">{new Date(ev.createdAt).toLocaleString()}</p>
+              </div>
+              {ev.entityType === "appointment" && ev.entityId && (
+                <Link
+                  href={`/appointments/${ev.entityId}`}
+                  className="flex-shrink-0 text-xs text-primary hover:text-primary-hover"
+                >
+                  View
+                </Link>
+              )}
             </div>
-          </div>
-        </li>
-      ))}
+          </li>
+        );
+      })}
     </ul>
   );
 }

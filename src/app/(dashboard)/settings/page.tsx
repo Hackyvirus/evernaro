@@ -6,8 +6,9 @@ import { QRCodeSVG } from "qrcode.react";
 import { Badge, Button, Card, Input, Select, Textarea, PageHeader, Tabs } from "@/components/ui";
 import { VERTICAL_PRESETS } from "@/lib/vertical-presets";
 import { RoleAwareAdminGuard } from "../role";
+import { NotificationPreferencesTab } from "./notification-preferences-tab";
 
-type Tab = "profile" | "telegram" | "email" | "whatsapp" | "instagram" | "voice" | "security";
+type Tab = "profile" | "telegram" | "email" | "whatsapp" | "instagram" | "voice" | "notifications" | "security";
 
 const TABS: { id: Tab; label: string }[] = [
   { id: "profile", label: "Business profile" },
@@ -16,6 +17,7 @@ const TABS: { id: Tab; label: string }[] = [
   { id: "whatsapp", label: "WhatsApp" },
   { id: "instagram", label: "Instagram" },
   { id: "voice", label: "Voice" },
+  { id: "notifications", label: "Notifications" },
   { id: "security", label: "Security" },
 ];
 
@@ -124,6 +126,7 @@ function SettingsPageContent() {
         }
       />
     ),
+    notifications: <NotificationPreferencesTab />,
     security: <SecurityTab />,
   };
 

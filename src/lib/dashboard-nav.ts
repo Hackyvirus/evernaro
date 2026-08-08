@@ -62,6 +62,7 @@ const NAV_REGISTRY: NavItemDef[] = [
   { key: "technicians", href: "/staff", icon: Wrench, label: "Technicians", section: "main" },
   { key: "lawyers", href: "/staff", icon: Users, label: "Lawyers", section: "main" },
   { key: "tables", href: "/resources", icon: LayoutGrid, label: "Tables", section: "main" },
+  { key: "resources", href: "/resources", icon: LayoutGrid, label: "Resources", section: "main" },
   { key: "jobs", href: "/jobs", icon: Wrench, label: "Jobs", section: "main" },
   { key: "vehicles", href: "/jobs", icon: Wrench, label: "Vehicles", section: "main" },
   { key: "bookings", href: "/appointments", icon: Calendar, label: "Bookings", section: "main" },
@@ -116,7 +117,7 @@ export function buildNavFromKeys(keys: string[], role: string): { main: NavItemD
 // Fallback nav for orgs without an industry template.
 export function getDefaultNav(role: string): { main: NavItemDef[]; config: NavItemDef[]; account: NavItemDef[] } {
   return buildNavFromKeys(
-    ["overview", "inbox", "contacts", "campaigns", "reminders", "analytics", "channels", "knowledge", "team", "billing", "settings"],
+    ["overview", "inbox", "contacts", "jobs", "resources", "campaigns", "reminders", "appointments", "queue", "services", "staff", "analytics", "channels", "knowledge", "team", "billing", "settings"],
     role
   );
 }

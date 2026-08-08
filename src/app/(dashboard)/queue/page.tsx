@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button, Card, Input, PageHeader } from "@/components/ui";
 
 type QueueEntry = {
@@ -21,32 +21,128 @@ type Queue = {
 type ContactOption = { id: string; name: string | null; phone: string | null };
 type ServiceOption = { id: string; name: string };
 
+const POLL_INTERVAL_MS = 7000;
+
+function playStatusBeep() {
+  if (typeof window === "undefined") return;
+  try {
+    const AudioContext =
+      window.AudioContext ||
+      (
+        window as unknown as {
+          webkitAudioContext: typeof window.AudioContext;
+        }
+      ).webkitAudioContext;
+    const ctx = new AudioContext();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = "sine";
+    osc.frequency.value = 880;
+    gain.gain.value = 0.05;
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start();
+    osc.stop(ctx.currentTime + 0.12);
+  } catch {
+    // Audio is optional; ignore any playback errors.
+  }
+}
+
 export default function QueuePage() {
   const [queues, setQueues] = useState<Queue[]>([]);
   const [contacts, setContacts] = useState<ContactOption[]>([]);
   const [services, setServices] = useState<ServiceOption[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [newQueueName, setNewQueueName] = useState("");
   const [selectedQueueId, setSelectedQueueId] = useState("");
   const [contactId, setContactId] = useState("");
   const [serviceId, setServiceId] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const [pollError, setPollError] = useState<string | null>(null);
+  const [statusNotice, setStatusNotice] = useState<{
+    message: string;
+    visible: boolean;
+  }>({ message: "", visible: false });
 
-  async function load() {
-    const [queueRes, contactRes, serviceRes] = await Promise.all([
-      fetch("/api/queue"),
-      fetch("/api/contacts"),
-      fetch("/api/services"),
-    ]);
-    const queueData = await queueRes.json();
-    const contactData = await contactRes.json();
-    const serviceData = await serviceRes.json();
-    const q = queueData.queues ?? [];
-    setQueues(q);
-    setContacts(contactData.contacts ?? []);
-    setServices(serviceData.services ?? []);
-    if (q.length > 0 && !selectedQueueId) setSelectedQueueId(q[0].id);
-    setLoading(false);
+  const isFetchingRef = useRef(false);
+  const noticeTimeoutRef = useRef<number | null>(null);
+  const prevQueuesRef = useRef<Queue[]>([]);
+
+  function detectStatusChanges(nextQueues: Queue[]) {
+    const prevStatuses = new Map<string, string>();
+    for (const queue of prevQueuesRef.current) {
+      for (const entry of queue.entries) {
+        prevStatuses.set(entry.id, entry.status);
+      }
+    }
+
+    const changes: string[] = [];
+    for (const queue of nextQueues) {
+      for (const entry of queue.entries) {
+        const prevStatus = prevStatuses.get(entry.id);
+        if (prevStatus && prevStatus !== entry.status) {
+          changes.push(
+            `${entry.token} is now ${entry.status.toLowerCase().replace(/_/g, " ")}`
+          );
+        }
+      }
+    }
+
+    prevQueuesRef.current = nextQueues;
+
+    if (changes.length > 0) {
+      if (noticeTimeoutRef.current) {
+        window.clearTimeout(noticeTimeoutRef.current);
+      }
+      setStatusNotice({ message: changes.join(", "), visible: true });
+      playStatusBeep();
+      noticeTimeoutRef.current = window.setTimeout(() => {
+        setStatusNotice((current) => ({ ...current, visible: false }));
+      }, 4000);
+    }
+  }
+
+  async function load({ silent = false }: { silent?: boolean } = {}) {
+    if (!silent) setLoading(true);
+    setPollError(null);
+    isFetchingRef.current = true;
+
+    try {
+      const [queueRes, contactRes, serviceRes] = await Promise.all([
+        fetch("/api/queue"),
+        fetch("/api/contacts"),
+        fetch("/api/services"),
+      ]);
+
+      if (!queueRes.ok || !contactRes.ok || !serviceRes.ok) {
+        throw new Error("Failed to refresh queue data");
+      }
+
+      const queueData = await queueRes.json();
+      const contactData = await contactRes.json();
+      const serviceData = await serviceRes.json();
+      const q = queueData.queues ?? [];
+
+      detectStatusChanges(q);
+      setQueues(q);
+      setContacts(contactData.contacts ?? []);
+      setServices(serviceData.services ?? []);
+      setSelectedQueueId((prev) => (q.length > 0 && !prev ? q[0].id : prev));
+      setLastUpdated(new Date());
+    } catch (err) {
+      setPollError(err instanceof Error ? err.message : "Refresh failed");
+    } finally {
+      isFetchingRef.current = false;
+      if (!silent) setLoading(false);
+    }
+  }
+
+  async function refresh() {
+    setIsRefreshing(true);
+    await load({ silent: true });
+    setIsRefreshing(false);
   }
 
   useEffect(() => {
@@ -55,6 +151,24 @@ export default function QueuePage() {
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedQueueId]);
+
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      if (!isFetchingRef.current) {
+        load({ silent: true });
+      }
+    }, POLL_INTERVAL_MS);
+    return () => window.clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (noticeTimeoutRef.current) {
+        window.clearTimeout(noticeTimeoutRef.current);
+      }
+    };
+  }, []);
 
   async function createQueue(e: React.FormEvent) {
     e.preventDefault();
@@ -92,7 +206,10 @@ export default function QueuePage() {
   }
 
   async function callNext(queueId: string) {
-    await fetch(`/api/queue/${queueId}/call-next`, { method: "POST", body: JSON.stringify({}) });
+    await fetch(`/api/queue/${queueId}/call-next`, {
+      method: "POST",
+      body: JSON.stringify({}),
+    });
     load();
   }
 
@@ -184,11 +301,35 @@ export default function QueuePage() {
           <p className="text-sm text-text-secondary">Loading...</p>
         ) : activeQueue ? (
           <Card className="p-4">
-            <div className="mb-4 flex items-center justify-between">
-              <h3 className="font-semibold text-text">{activeQueue.name}</h3>
-              <Button size="sm" onClick={() => callNext(activeQueue.id)}>
-                Call next
-              </Button>
+            {statusNotice.visible && (
+              <div className="mb-4 rounded-md bg-success-light px-3 py-2 text-sm text-success animate-message-in">
+                {statusNotice.message}
+              </div>
+            )}
+            <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h3 className="font-semibold text-text">{activeQueue.name}</h3>
+                <p className="mt-0.5 flex items-center gap-2 text-xs text-text-muted">
+                  <span className="inline-flex items-center gap-1.5">
+                    <span className="h-1.5 w-1.5 rounded-full bg-success animate-live-pulse" />
+                    Live
+                  </span>
+                  {lastUpdated ? (
+                    <span>Last updated {lastUpdated.toLocaleTimeString()}</span>
+                  ) : (
+                    <span>Waiting for first update…</span>
+                  )}
+                  {pollError && <span className="text-danger">· {pollError}</span>}
+                </p>
+              </div>
+              <div className="flex gap-2">
+                <Button size="sm" variant="secondary" onClick={refresh} loading={isRefreshing}>
+                  Refresh
+                </Button>
+                <Button size="sm" onClick={() => callNext(activeQueue.id)}>
+                  Call next
+                </Button>
+              </div>
             </div>
             {activeQueue.entries.length === 0 ? (
               <p className="text-sm text-text-secondary">No one in queue.</p>
