@@ -224,6 +224,34 @@ model PlatformAdmin {
   auditLogs                   AuditLog[]
 }
 
+enum EmailLogCategory {
+  AUTH
+  BILLING
+  SUPPORT
+  CONTACT
+  NOTIFICATIONS
+  SECURITY
+  MARKETING
+}
+
+model EmailLog {
+  id        String           @id @default(cuid())
+  category  EmailLogCategory
+  from      String
+  to        String
+  replyTo   String?
+  subject   String
+  body      String           @db.Text
+  status    String           // SENT | FAILED | QUEUED
+  error     String?          @db.Text
+  metadata  Json?
+  createdAt DateTime         @default(now())
+
+  @@index([category, createdAt])
+  @@index([status, createdAt])
+  @@index([createdAt])
+}
+
 enum AuditLogAction {
   ORG_CREATED
   ORG_SUSPENDED
