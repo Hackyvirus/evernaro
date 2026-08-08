@@ -3,12 +3,14 @@ import { z } from "zod";
 import { auth } from "@/lib/auth";
 import { createAppointment, getAppointmentsByOrg, checkAvailability } from "@/lib/services/appointment-service";
 import { AppointmentStatus } from "@prisma/client";
+import { getOrgActiveLocationId } from "@/lib/location-scope";
 
 const appointmentSchema = z.object({
   contactId: z.string().min(1),
   serviceId: z.string().optional(),
   staffId: z.string().optional(),
   resourceId: z.string().optional(),
+  locationId: z.string().optional(),
   startsAt: z.string().datetime(),
   endsAt: z.string().datetime(),
   notes: z.string().optional(),
@@ -25,11 +27,13 @@ export async function GET(req: Request) {
   const from = searchParams.get("from");
   const to = searchParams.get("to");
   const status = searchParams.get("status") as AppointmentStatus | null;
+  const activeLocationId = await getOrgActiveLocationId(session.user.orgId);
 
   const appointments = await getAppointmentsByOrg(session.user.orgId, {
     from: from ? new Date(from) : undefined,
     to: to ? new Date(to) : undefined,
     status: status ?? undefined,
+    locationId: activeLocationId,
   });
 
   return NextResponse.json({ appointments });
@@ -50,6 +54,7 @@ export async function POST(req: Request) {
   const { startsAt, endsAt, ...rest } = parsed.data;
   const start = new Date(startsAt);
   const end = new Date(endsAt);
+  const activeLocationId = rest.locationId ?? (await getOrgActiveLocationId(session.user.orgId));
 
   if (end <= start) {
     return NextResponse.json({ error: "End time must be after start time" }, { status: 400 });
@@ -58,6 +63,7 @@ export async function POST(req: Request) {
   const available = await checkAvailability(session.user.orgId, start, end, {
     staffId: rest.staffId,
     resourceId: rest.resourceId,
+    locationId: activeLocationId,
   });
 
   if (!available) {
@@ -67,6 +73,7 @@ export async function POST(req: Request) {
   const appointment = await createAppointment({
     orgId: session.user.orgId,
     ...rest,
+    locationId: activeLocationId,
     startsAt: start,
     endsAt: end,
   });

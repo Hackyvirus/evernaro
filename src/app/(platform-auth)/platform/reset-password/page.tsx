@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button, Card, Input } from "@/components/ui";
@@ -15,11 +15,7 @@ export default function PlatformResetPasswordPage() {
   const [confirm, setConfirm] = useState("");
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!token) setError("Reset link is missing or invalid.");
-  }, [token]);
+  const [error, setError] = useState<string | null>(token ? null : "Reset link is missing or invalid.");
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();

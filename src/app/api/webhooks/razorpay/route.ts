@@ -7,6 +7,11 @@ import { sendPaymentSuccessEmail, sendPaymentFailedEmail } from "@/lib/billing-e
 import { getPeriodDates } from "@/lib/billing/pricing-engine";
 import { logBillingEvent } from "@/lib/billing/events";
 import { recordSubscriptionPayment } from "@/lib/billing/subscription-service";
+import {
+  recordSubscriptionChargeSuccess,
+  recordSubscriptionPaymentFailure,
+} from "@/lib/billing/billing-run";
+import { syncPaymentMethods } from "@/lib/billing/payment-methods";
 
 interface RazorpayWebhookPaymentEntity {
   id?: string;
@@ -27,6 +32,14 @@ interface RazorpayWebhookPayload {
         current_end?: number;
       };
     };
+  };
+}
+
+interface RazorpayWebhookSubscriptionChargedPayload {
+  event: "subscription.charged";
+  payload?: {
+    subscription?: { entity?: { id?: string; status?: string; current_start?: number; current_end?: number } };
+    payment?: { entity?: { id?: string; order_id?: string; amount?: number; status?: string } };
   };
 }
 
@@ -120,6 +133,8 @@ export async function POST(req: Request) {
             }
           }
         }
+        // Sync any saved cards/tokens back from Razorpay.
+        syncPaymentMethods(invoice.orgId).catch((err) => console.error("Failed to sync payment methods:", err));
       }
     }
   }
@@ -170,6 +185,14 @@ export async function POST(req: Request) {
         if (Object.keys(update).length > 0) {
           await prisma.customerSubscription.update({ where: { id: subscription.id }, data: update });
         }
+        if (body.event === "subscription.charged") {
+          const payment = (body as RazorpayWebhookSubscriptionChargedPayload).payload?.payment?.entity;
+          await recordSubscriptionChargeSuccess(subscription.id, {
+            id: payment?.id ?? "unknown",
+            order_id: payment?.order_id,
+            amount: payment?.amount ?? subscription.totalAmountInr * 100,
+          });
+        }
         await logBillingEvent(subscription.orgId, subscription.id, body.event.toUpperCase(), {
           razorpayStatus: entity.status,
         });
@@ -189,6 +212,9 @@ export async function POST(req: Request) {
           where: { id: subscription.id },
           data: { status },
         });
+        if (body.event === "subscription.payment.failed" || body.event === "subscription.halted") {
+          await recordSubscriptionPaymentFailure(subscription.id, `Razorpay event: ${body.event}`);
+        }
         await logBillingEvent(subscription.orgId, subscription.id, body.event.toUpperCase(), {
           razorpayStatus: entity.status,
         });

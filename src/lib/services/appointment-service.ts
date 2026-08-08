@@ -9,6 +9,7 @@ export type CreateAppointmentInput = {
   serviceId?: string;
   staffId?: string;
   resourceId?: string;
+  locationId?: string | null;
   startsAt: Date;
   endsAt: Date;
   notes?: string;
@@ -19,6 +20,7 @@ export async function createAppointment(input: CreateAppointmentInput) {
   const appointment = await prisma.appointment.create({
     data: {
       orgId: input.orgId,
+      locationId: input.locationId,
       contactId: input.contactId,
       serviceId: input.serviceId,
       staffId: input.staffId,
@@ -61,7 +63,7 @@ export async function createAppointment(input: CreateAppointmentInput) {
   return appointment;
 }
 
-export async function getAppointmentsByOrg(orgId: string, options?: { from?: Date; to?: Date; status?: AppointmentStatus }) {
+export async function getAppointmentsByOrg(orgId: string, options?: { from?: Date; to?: Date; status?: AppointmentStatus; locationId?: string | null }) {
   const where: Prisma.AppointmentWhereInput = { orgId };
   if (options?.from || options?.to) {
     where.startsAt = {};
@@ -69,6 +71,7 @@ export async function getAppointmentsByOrg(orgId: string, options?: { from?: Dat
     if (options.to) where.startsAt.lte = options.to;
   }
   if (options?.status) where.status = options.status;
+  if (options?.locationId) where.locationId = options.locationId;
 
   return prisma.appointment.findMany({
     where,
@@ -158,7 +161,7 @@ export async function checkAvailability(
   orgId: string,
   startsAt: Date,
   endsAt: Date,
-  options?: { staffId?: string; resourceId?: string; excludeId?: string }
+  options?: { staffId?: string; resourceId?: string; excludeId?: string; locationId?: string | null }
 ) {
   const where: Prisma.AppointmentWhereInput = {
     orgId,
@@ -171,6 +174,7 @@ export async function checkAvailability(
   if (options?.staffId) where.staffId = options.staffId;
   if (options?.resourceId) where.resourceId = options.resourceId;
   if (options?.excludeId) where.id = { not: options.excludeId };
+  if (options?.locationId) where.locationId = options.locationId;
 
   const conflicts = await prisma.appointment.findMany({
     where,

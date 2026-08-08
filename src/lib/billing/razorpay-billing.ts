@@ -81,3 +81,30 @@ export async function fetchRazorpaySubscription(razorpaySubscriptionId: string) 
   const client = getRazorpayBillingClient();
   return client.subscriptions.fetch(razorpaySubscriptionId);
 }
+
+export async function fetchRazorpayTokens(razorpayCustomerId: string) {
+  const client = getRazorpayBillingClient();
+  return client.customers.fetchTokens(razorpayCustomerId) as unknown as Promise<
+    Array<{
+      id: string;
+      entity: string;
+      token: string;
+      bank?: string;
+      wallet?: string;
+      vpa?: string;
+      card?: {
+        last4: string;
+        network: string;
+        type: string;
+        issuer?: string;
+      };
+      status: string;
+      recurring?: string;
+    }>
+  >;
+}
+
+export async function deleteRazorpayToken(razorpayCustomerId: string, tokenId: string) {
+  const client = getRazorpayBillingClient();
+  return client.customers.deleteToken(razorpayCustomerId, tokenId);
+}

@@ -68,6 +68,16 @@ model Organization {
   payments           Payment[]
   couponRedemptions  CouponRedemption[]
   billingEvents      BillingEvent[]
+  paymentMethods     PaymentMethod[]
+  dunningRecords     DunningRecord[]
+
+  // Multi-location
+  locations          Location[]
+  activeLocationId   String?
+  activeLocation     Location?          @relation("OrganizationActiveLocation", fields: [activeLocationId], references: [id], onDelete: SetNull)
+
+  // External API access
+  apiKeys            ApiKey[]
 }
 
 // ---------- Billing (Razorpay) ----------
@@ -407,11 +417,13 @@ enum ChannelType {
 }
 
 model Channel {
-  id       String       @id @default(cuid())
-  orgId    String
-  org      Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  type     ChannelType
-  isActive Boolean      @default(true)
+  id         String       @id @default(cuid())
+  orgId      String
+  org        Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  locationId String?
+  location   Location?    @relation(fields: [locationId], references: [id], onDelete: SetNull)
+  type       ChannelType
+  isActive   Boolean      @default(true)
 
   // Telegram
   telegramBotToken    String?
@@ -779,6 +791,8 @@ model Service {
   id          String       @id @default(cuid())
   orgId       String
   org         Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  locationId  String?
+  location    Location?    @relation(fields: [locationId], references: [id], onDelete: SetNull)
   name        String
   description String?
   durationMin Int? // default duration in minutes
@@ -802,6 +816,8 @@ model StaffProfile {
   id           String       @id @default(cuid())
   orgId        String
   org          Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  locationId   String?
+  location     Location?    @relation(fields: [locationId], references: [id], onDelete: SetNull)
   userId       String?      @unique
   user         User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
   name         String
@@ -842,11 +858,13 @@ enum ResourceType {
 }
 
 model Resource {
-  id        String       @id @default(cuid())
-  orgId     String
-  org       Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  name      String
-  type      ResourceType @default(OTHER)
+  id         String       @id @default(cuid())
+  orgId      String
+  org        Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  locationId String?
+  location   Location?    @relation(fields: [locationId], references: [id], onDelete: SetNull)
+  name       String
+  type       ResourceType @default(OTHER)
   capacity  Int          @default(1)
   isActive  Boolean      @default(true)
   metadata  Json         @default("{}")
@@ -872,6 +890,8 @@ model Appointment {
   id             String            @id @default(cuid())
   orgId          String
   org            Organization      @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  locationId     String?
+  location       Location?         @relation(fields: [locationId], references: [id], onDelete: SetNull)
   contactId      String
   contact        Contact           @relation(fields: [contactId], references: [id], onDelete: Cascade)
   serviceId      String?
@@ -910,6 +930,8 @@ model Queue {
   id                     String       @id @default(cuid())
   orgId                  String
   org                    Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  locationId             String?
+  location               Location?    @relation(fields: [locationId], references: [id], onDelete: SetNull)
   name                   String       @default("Main Queue")
   serviceId              String?
   service                Service?     @relation(fields: [serviceId], references: [id], onDelete: SetNull)
@@ -974,6 +996,8 @@ model JobCard {
   id          String        @id @default(cuid())
   orgId       String
   org         Organization  @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  locationId  String?
+  location    Location?     @relation(fields: [locationId], references: [id], onDelete: SetNull)
   contactId   String
   contact     Contact       @relation(fields: [contactId], references: [id], onDelete: Cascade)
   serviceId   String?
@@ -1364,6 +1388,15 @@ model CustomerSubscription {
   invoices               Invoice[]
   payments               Payment[]
   billingEvents          BillingEvent[]
+  dunningRecords         DunningRecord[]
+  paymentMethods         PaymentMethod[]
+
+  // Dunning / retry tracking
+  dunningRetries         Int                @default(0)
+  dunningNextRetryAt     DateTime?
+  paymentFailureCount    Int                @default(0)
+  lastPaymentFailureAt   DateTime?
+
   createdAt              DateTime           @default(now())
   updatedAt              DateTime           @updatedAt
 
@@ -1516,4 +1549,99 @@ model BillingEvent {
 
   @@index([orgId, eventType, createdAt])
   @@index([subscriptionId])
+}
+
+// ---------- Saved payment methods ----------
+model PaymentMethod {
+  id                 String             @id @default(cuid())
+  orgId              String
+  org                Organization       @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  subscriptionId     String?
+  subscription       CustomerSubscription? @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+  type               String // card | upi | netbanking | wallet
+  network            String? // Visa, Mastercard, etc.
+  last4              String?
+  token              String // Razorpay token id
+  razorpayCustomerId String?
+  status             String             @default("active") // active | expired | revoked
+  isDefault          Boolean            @default(false)
+  metadata           Json               @default("{}")
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+
+  @@index([orgId, status])
+  @@index([subscriptionId])
+}
+
+// ---------- Automated billing runs & dunning ----------
+model BillingRun {
+  id                String        @id @default(cuid())
+  runAt             DateTime      @default(now())
+  status            String        @default("running") // running | completed | failed
+  invoicesCreated   Int           @default(0)
+  paymentsProcessed Int           @default(0)
+  failures          Int           @default(0)
+  errors            Json          @default("[]")
+  createdAt         DateTime      @default(now())
+}
+
+model DunningRecord {
+  id             String               @id @default(cuid())
+  orgId          String
+  org            Organization         @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  subscriptionId String
+  subscription   CustomerSubscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  attempt        Int
+  status         String               @default("pending") // pending | resolved | failed | cancelled
+  dueAt          DateTime
+  resolvedAt     DateTime?
+  failureReason  String?
+  createdAt      DateTime             @default(now())
+
+  @@index([orgId, subscriptionId])
+  @@index([status, dueAt])
+}
+
+// ---------- Multi-location ----------
+model Location {
+  id          String       @id @default(cuid())
+  orgId       String
+  org         Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  name        String
+  address     String?
+  phone       String?
+  isDefault   Boolean      @default(false)
+  isActive    Boolean      @default(true)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  channels      Channel[]
+  services      Service[]
+  staffProfiles StaffProfile[]
+  appointments  Appointment[]
+  queues        Queue[]
+  resources     Resource[]
+  jobCards      JobCard[]
+
+  activeForOrganizations Organization[] @relation("OrganizationActiveLocation")
+
+  @@index([orgId, isActive])
+}
+
+// ---------- External API access ----------
+model ApiKey {
+  id              String       @id @default(cuid())
+  orgId           String
+  org             Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  name            String
+  keyHash         String       @unique
+  scopes          String[]     @default(["read"])
+  lastUsedAt      DateTime?
+  expiresAt       DateTime?
+  isActive        Boolean      @default(true)
+  createdByUserId String?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  @@index([orgId, isActive])
 }

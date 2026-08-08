@@ -120,6 +120,7 @@ function BillingPlansPageContent() {
   const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null);
   const [selectedAddOns, setSelectedAddOns] = useState<Record<string, number>>({});
   const [couponCode, setCouponCode] = useState("");
+  const [prorate, setProrate] = useState(false);
 
   const [quote, setQuote] = useState<Quote | null>(null);
   const [quoting, setQuoting] = useState(false);
@@ -253,6 +254,7 @@ function BillingPlansPageContent() {
           frequency,
           addOns,
           couponCode: couponCode || null,
+          prorate,
         }),
       });
       const data = await res.json();
@@ -463,6 +465,18 @@ function BillingPlansPageContent() {
                       placeholder="Optional"
                     />
                   </div>
+
+                  {currentSubscription && currentSubscription.planId !== selectedPlanId && (
+                    <label className="flex items-center gap-2 pt-1 text-sm text-text-secondary">
+                      <input
+                        type="checkbox"
+                        checked={prorate}
+                        onChange={(e) => setProrate(e.target.checked)}
+                        className="h-4 w-4 rounded border-border text-primary focus:ring-primary"
+                      />
+                      Prorate unused time from current plan
+                    </label>
+                  )}
 
                   <Button
                     loading={changing}

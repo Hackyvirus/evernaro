@@ -18,9 +18,11 @@
 
 **FACT:** The most recent development cycle turned the billing schema into a real subscription lifecycle: plan-feature/usage entitlement enforcement (campaigns + team seats), Razorpay webhook-driven payment recording and status transitions, a platform-admin billing control center (MRR, revenue, subscription search + detail), an enhanced client billing page (plan features, usage bars, payment history, invoices, wallet, reactivation), and navigation/settings integration.
 
+**FACT:** A subsequent full-stack cycle closed the remaining billing and operational gaps: automated recurring invoice generation with a daily billing-run worker, dunning retry tracking, saved payment-method sync from Razorpay, invoice PDF downloads and payment receipts, proration on plan changes, a first-class multi-location model with location scoping for services/staff/appointments/queues/resources, and external client API access via scoped API keys (`/api/v1/contacts`, `/api/v1/appointments`).
+
 **RECOMMENDATION:** Before adding more schema or industries, narrow to one beachhead market, make its highest-value workflow 10× better than spreadsheets/WhatsApp Business, and sell it to 10 paying customers. The technology is ready; the strategy is not.
 
-**Startup readiness score: 6.3 / 10** (see §33 for breakdown).
+**Startup readiness score: 6.7 / 10** (see §33 for breakdown).
 
 ---
 
@@ -39,8 +41,10 @@ Evernaro is positioned as a unified customer communication platform: one inbox f
 - OTP verification for queue hand-off; auto no-show marking when a called customer does not arrive.
 - Prepaid WhatsApp wallet that debits per message and blocks sends when empty.
 - Razorpay checkout for subscription invoices and wallet top-ups.
-- End-to-end subscription lifecycle: plan feature/usage entitlements, Razorpay webhook payment recording, status transitions, reactivation, and client + platform-admin billing dashboards.
-- Platform admin surface for client management, invoice generation, rate cards, analytics, audit logs, billing control center, and self-service password reset.
+- End-to-end subscription lifecycle: plan feature/usage entitlements, Razorpay webhook payment recording, status transitions, reactivation, automated recurring invoices, dunning, proration on plan changes, saved payment methods, invoice PDFs/receipts, and client + platform-admin billing dashboards.
+- Platform admin surface for client management, invoice generation, rate cards, analytics, audit logs, billing control center, manual billing runs, and self-service password reset.
+- Multi-location support with org-level active location, branch selector in the sidebar, and location-scoped services, staff, appointments, queues, and resources.
+- External API access with scoped API keys and example `/api/v1/contacts` and `/api/v1/appointments` endpoints.
 - Demo orgs and trial accounts for sales demos.
 
 **What is promised but not live (FACT):**
@@ -85,7 +89,13 @@ Evernaro is positioned as a unified customer communication platform: one inbox f
 | Billing | Plan feature + usage-limit enforcement (campaigns, team seats) | **IMPLEMENTED** | `src/lib/billing/entitlements.ts`, campaign + team APIs | Eversity + customers | **High** — prevents abuse |
 | Billing | Platform-admin billing control center (MRR, revenue, subscriptions, detail) | **IMPLEMENTED** | `src/app/(platform-protected)/platform/billing/**` | Eversity ops | **High** — operations |
 | Billing | Client billing dashboard (plan, usage, invoices, payments, wallet) | **IMPLEMENTED** | `src/app/(dashboard)/billing/**` | Admins | **High** — self-service |
+| Billing | Automated recurring invoices + dunning | **IMPLEMENTED** | `src/lib/billing/billing-run.ts`, worker, webhooks | Eversity + customers | **High** — collections |
+| Billing | Saved payment methods (Razorpay tokens) | **IMPLEMENTED** | `src/lib/billing/payment-methods.ts` | Customers | Medium — convenience |
+| Billing | Invoice PDFs / payment receipts | **IMPLEMENTED** | `src/lib/billing/pdf.ts`, `/api/billing/invoices/[id]/pdf` | Customers | Medium — professionalism |
+| Billing | Proration on plan changes | **IMPLEMENTED** | `src/lib/billing/proration.ts`, subscription service | Customers | Medium — fairness |
 | Billing | Configurable plans/add-ons/usage | **IMPLEMENTED** | Prisma + pricing engine | Eversity | Medium — future pricing |
+| Operations | Multi-location (branches, active location, scoping) | **IMPLEMENTED** | `Location` model, `/api/locations`, dashboard shell | Admins | **High** — expansion |
+| Integrations | Scoped API keys + external v1 endpoints | **IMPLEMENTED** | `src/lib/api-key-auth.ts`, `/api/v1/**` | Developers | Medium — extensibility |
 | Team | Invite, roles, suspend, remove | **IMPLEMENTED** | `src/app/(dashboard)/team/**` | Admins | Medium — collaboration |
 | Analytics | Message volume, response rate, campaigns, reminders | **IMPLEMENTED** | `src/app/(dashboard)/analytics/**` | Managers | Medium — retention |
 | Platform Admin | Client mgmt, invoices, wallet, audit logs | **IMPLEMENTED** | `src/app/(platform-protected)/**` | Eversity ops | Critical — operations |
@@ -512,7 +522,7 @@ A WhatsApp-first appointment reminder + unified inbox tool for **Indian salons a
 | No custom fields on contacts | **Medium** | Limits CRM depth | P3 |
 | Limited analytics (no revenue, CSAT, cohorts) | **Medium** | Current analytics are message-centric | P3 |
 | WhatsApp template sync unverified live | **Medium** | Code uses Gupshup docs; no live account tested | P1 — validate before launch |
-| Automated invoice renewal/collection for SaaS subscriptions | **Medium** | Razorpay webhooks now record payments and update subscription status; period-end invoice generation/dunning still requires a scheduled job | P1 |
+| ~~Automated invoice renewal/collection for SaaS subscriptions~~ | **Resolved** | Daily billing-run worker creates period-end invoices; dunning records track retries and cancellation after max failures | N/A |
 
 ---
 
@@ -777,19 +787,19 @@ A WhatsApp-first appointment reminder + unified inbox tool for **Indian salons a
 
 | Dimension | Score | Weight | Weighted | Rationale |
 |---|---|---|---|---|
-| Product completeness (core loop) | 9 | 15% | 1.35 | Core inbox + campaigns + reminders + public booking + reviews + queue OTP/auto no-show |
-| Vertical depth | 6 | 15% | 0.90 | Public pages and queue automation add salon depth; still needs salon-first UX |
+| Product completeness (core loop) | 9.5 | 15% | 1.425 | Core loop plus billing lifecycle, multi-location, and external API keys |
+| Vertical depth | 7 | 15% | 1.05 | Public pages, queue automation, and multi-location add salon depth; still needs salon-first UX |
 | Market validation | 1 | 15% | 0.15 | No evidence of paid pilots |
-| Security / multi-tenancy | 7 | 10% | 0.70 | Solid foundation, needs CI/tests |
-| Billing / monetization | 7 | 10% | 0.70 | Razorpay + subscription lifecycle + entitlements + admin/client dashboards live |
+| Security / multi-tenancy | 7 | 10% | 0.70 | Solid foundation, API-key auth added, needs CI/tests |
+| Billing / monetization | 8 | 10% | 0.80 | Razorpay + subscription lifecycle + entitlements + invoices/dunning + payment methods + PDFs + proration |
 | GTM clarity | 3 | 10% | 0.30 | No validated channel |
 | UX / onboarding | 6 | 10% | 0.60 | Clean UI; public pages and queue polling improve experience |
 | Team execution velocity | 8 | 10% | 0.80 | Strong engineering output across many areas |
-| Production readiness | 6 | 10% | 0.60 | Docker + tests + migrations; missing CI |
+| Production readiness | 7 | 10% | 0.70 | Docker + tests + migrations + lint clean; missing CI |
 | Unit economics / financial model | 3 | 5% | 0.15 | All assumptions |
-| **Total** | | | **6.25 / 10** | |
+| **Total** | | | **6.675 / 10** | |
 
-Rounded: **6.3 / 10**.
+Rounded: **6.7 / 10**.
 
 **Interpretation:** Engineering is ahead of the business. Do not launch broadly. Launch a narrow, paid pilot.
 

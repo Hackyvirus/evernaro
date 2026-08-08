@@ -245,7 +245,7 @@ async function seedDemoOrg(template: IndustryTemplate) {
   }
 
   // Contacts
-  const contacts: any[] = [];
+  const contacts: { id: string }[] = [];
   for (let i = 0; i < 6; i++) {
     const contact = await prisma.contact.create({
       data: {

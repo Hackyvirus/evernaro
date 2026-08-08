@@ -70,23 +70,34 @@ export default function MembershipsPage() {
   const [editSessionsUsed, setEditSessionsUsed] = useState("");
   const [editStatus, setEditStatus] = useState<"ACTIVE" | "EXPIRED" | "CANCELLED">("ACTIVE");
 
-  async function load() {
-    try {
-      const [mRes, cRes] = await Promise.all([fetch("/api/memberships"), fetch("/api/contacts")]);
-      const mData = await mRes.json().catch(() => ({}));
-      const cData = await cRes.json().catch(() => ({}));
-      setMemberships(mData.memberships ?? []);
-      setContacts(cData.contacts ?? []);
-      setLoaded(true);
-    } catch {
-      showToast("error", "Failed to load memberships");
-      setLoaded(true);
-    }
+  function fetchData() {
+    return Promise.all([fetch("/api/memberships"), fetch("/api/contacts")])
+      .then(([mRes, cRes]) => Promise.all([mRes.json().catch(() => ({})), cRes.json().catch(() => ({}))]))
+      .then(([mData, cData]) => ({
+        memberships: mData.memberships ?? [],
+        contacts: cData.contacts ?? [],
+      }));
+  }
+
+  function refresh() {
+    return fetchData().then(({ memberships, contacts }) => {
+      setMemberships(memberships);
+      setContacts(contacts);
+    });
   }
 
   useEffect(() => {
-    load();
-  }, []);
+    fetchData()
+      .then(({ memberships, contacts }) => {
+        setMemberships(memberships);
+        setContacts(contacts);
+        setLoaded(true);
+      })
+      .catch(() => {
+        showToast("error", "Failed to load memberships");
+        setLoaded(true);
+      });
+  }, [showToast]);
 
   const filtered = useMemo(() => {
     let list = memberships;
@@ -128,7 +139,7 @@ export default function MembershipsPage() {
         setSessionsTotal("");
         setExpiresAt("");
         setStatus("ACTIVE");
-        load();
+        refresh();
       }
     } catch {
       showToast("error", "Network error");
@@ -165,7 +176,7 @@ export default function MembershipsPage() {
       } else {
         showToast("success", "Membership updated");
         setEditingId(null);
-        load();
+        refresh();
       }
     } catch {
       showToast("error", "Network error");
@@ -181,7 +192,7 @@ export default function MembershipsPage() {
         showToast("error", data.error ?? "Failed to delete membership");
       } else {
         showToast("success", "Membership deleted");
-        load();
+        refresh();
       }
     } catch {
       showToast("error", "Network error");

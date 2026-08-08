@@ -6,9 +6,9 @@ import { enqueueNoShow, cancelNoShowJob } from "@/lib/queue";
 const OTP_TTL_MS = 5 * 60 * 1000;
 const DEFAULT_SERVICE_MINUTES = 5;
 
-export async function getQueuesByOrg(orgId: string) {
+export async function getQueuesByOrg(orgId: string, locationId?: string | null) {
   return prisma.queue.findMany({
-    where: { orgId, isActive: true },
+    where: { orgId, isActive: true, ...(locationId ? { locationId } : {}) },
     include: {
       service: true,
       entries: {
@@ -33,10 +33,11 @@ export async function getQueueById(id: string, orgId: string) {
   });
 }
 
-export async function createQueue(orgId: string, data: { name: string; serviceId?: string }) {
+export async function createQueue(orgId: string, data: { name: string; serviceId?: string; locationId?: string | null }) {
   return prisma.queue.create({
     data: {
       orgId,
+      locationId: data.locationId,
       name: data.name,
       serviceId: data.serviceId,
     },

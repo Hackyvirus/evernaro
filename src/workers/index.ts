@@ -5,7 +5,7 @@
 // background worker service) alongside the web app in production.
 
 import * as Sentry from "@sentry/node";
-import { Worker, type Job } from "bullmq";
+import { Queue, Worker, type Job } from "bullmq";
 import fs from "node:fs";
 import { redisConnection } from "../lib/redis";
 import { prisma } from "../lib/prisma";
@@ -20,12 +20,15 @@ import {
   CAMPAIGN_SEND_QUEUE,
   REMINDER_SEND_QUEUE,
   NO_SHOW_QUEUE,
+  BILLING_RUN_QUEUE,
   enqueueReminder,
   type CampaignSendJob,
   type ReminderSendJob,
   type NoShowJob,
+  type BillingRunJob,
 } from "../lib/queue";
 import { markNoShow } from "../lib/services/queue-service";
+import { runDailyBilling, runDunningReminders } from "../lib/billing/billing-run";
 
 // This process runs outside Next.js (`npm run worker`), so it isn't covered
 // by src/instrumentation.ts — needs its own Sentry init. No-op until
@@ -66,7 +69,7 @@ async function shutdown(signal: NodeJS.Signals) {
   } catch {}
 
   try {
-    await Promise.all([campaignWorker.close(), reminderWorker.close(), noShowWorker.close()]);
+    await Promise.all([campaignWorker.close(), reminderWorker.close(), noShowWorker.close(), billingRunWorker.close()]);
   } catch (err) {
     console.error("Error closing BullMQ workers:", err);
   }
@@ -301,6 +304,14 @@ async function processNoShowJob(job: Job<NoShowJob>) {
   await markNoShow(queueEntryId, orgId);
 }
 
+async function processBillingJob(job: Job<BillingRunJob>) {
+  if (job.data.type === "daily") {
+    await runDailyBilling();
+  } else if (job.data.type === "dunning") {
+    await runDunningReminders();
+  }
+}
+
 const campaignWorker = new Worker<CampaignSendJob>(CAMPAIGN_SEND_QUEUE, processCampaignJob, {
   connection: redisConnection,
   concurrency: CAMPAIGN_WORKER_CONCURRENCY,
@@ -317,6 +328,24 @@ const noShowWorker = new Worker<NoShowJob>(NO_SHOW_QUEUE, processNoShowJob, {
   concurrency: NO_SHOW_WORKER_CONCURRENCY,
 });
 
+const billingRunWorker = new Worker<BillingRunJob>(BILLING_RUN_QUEUE, processBillingJob, {
+  connection: redisConnection,
+  concurrency: 1,
+});
+
+// Schedule the daily billing run (invoices + dunning) at 00:05 UTC.
+const billingRunQueue = new Queue(BILLING_RUN_QUEUE, { connection: redisConnection });
+billingRunQueue.upsertJobScheduler(
+  "daily-billing",
+  { pattern: "5 0 * * *" },
+  { name: "daily", data: { type: "daily" } satisfies BillingRunJob }
+);
+billingRunQueue.upsertJobScheduler(
+  "dunning-check",
+  { pattern: "0 */6 * * *" },
+  { name: "dunning", data: { type: "dunning" } satisfies BillingRunJob }
+);
+
 campaignWorker.on("failed", (job, err) => {
   Sentry.captureException(err, { tags: { queue: CAMPAIGN_SEND_QUEUE }, extra: { jobId: job?.id } });
   console.error(`Campaign job ${job?.id} failed:`, err);
@@ -329,5 +358,9 @@ noShowWorker.on("failed", (job, err) => {
   Sentry.captureException(err, { tags: { queue: NO_SHOW_QUEUE }, extra: { jobId: job?.id } });
   console.error(`No-show job ${job?.id} failed:`, err);
 });
+billingRunWorker.on("failed", (job, err) => {
+  Sentry.captureException(err, { tags: { queue: BILLING_RUN_QUEUE }, extra: { jobId: job?.id } });
+  console.error(`Billing run job ${job?.id} failed:`, err);
+});
 
-console.log("Evernaro worker running — listening for campaign-send, reminder-send, and queue-no-show jobs.");
+console.log("Evernaro worker running — listening for campaign-send, reminder-send, queue-no-show, and billing-run jobs.");

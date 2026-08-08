@@ -9,6 +9,7 @@ import {
   ClipboardList,
   Gift,
   LayoutGrid,
+  MapPin,
   Megaphone,
   MessageSquare,
   Receipt,
@@ -84,6 +85,7 @@ const NAV_REGISTRY: NavItemDef[] = [
   { key: "channels", href: "/channels", icon: Cable, label: "Channels", section: "config" },
   { key: "knowledge", href: "/knowledge", icon: BookOpen, label: "Knowledge Base", section: "config" },
   { key: "team", href: "/team", icon: Users, label: "Team", roles: ["ADMIN", "OWNER"], section: "config" },
+  { key: "locations", href: "/locations", icon: MapPin, label: "Locations", roles: ["ADMIN", "OWNER"], section: "config" },
 
   // Billing is part of the main navigation so plan/billing status is always visible.
   { key: "billing", href: "/billing", icon: Receipt, label: "Billing", roles: ["ADMIN", "OWNER"], section: "main" },
@@ -117,7 +119,7 @@ export function buildNavFromKeys(keys: string[], role: string): { main: NavItemD
 // Fallback nav for orgs without an industry template.
 export function getDefaultNav(role: string): { main: NavItemDef[]; config: NavItemDef[]; account: NavItemDef[] } {
   return buildNavFromKeys(
-    ["overview", "inbox", "contacts", "jobs", "resources", "campaigns", "reminders", "appointments", "queue", "services", "staff", "analytics", "channels", "knowledge", "team", "billing", "settings"],
+    ["overview", "inbox", "contacts", "jobs", "resources", "campaigns", "reminders", "appointments", "queue", "services", "staff", "reviews", "memberships", "analytics", "channels", "knowledge", "team", "locations", "billing", "settings"],
     role
   );
 }

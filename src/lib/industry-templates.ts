@@ -105,7 +105,7 @@ export const INDUSTRY_TEMPLATES: IndustryTemplate[] = [
         jobStatuses: ["NEW", "CONTACTED", "QUALIFIED", "SITE_VISIT", "NEGOTIATION", "BOOKED", "CLOSED"],
       },
       dashboard: {
-        nav: ["overview", "leads", "siteVisits", "deals", "customers", "inbox", "analytics", "settings"],
+        nav: ["overview", "leads", "siteVisits", "deals", "customers", "inbox", "campaigns", "reminders", "analytics", "locations", "channels", "knowledge", "team", "billing", "settings"],
         overviewCards: ["newLeads", "hotLeads", "followUpsToday", "siteVisitsToday", "closedDeals"],
       },
       defaultServices: [
@@ -148,7 +148,7 @@ export const INDUSTRY_TEMPLATES: IndustryTemplate[] = [
         queueStatuses: ["WAITING", "CALLED", "IN_PROGRESS", "COMPLETED", "CANCELLED", "NO_SHOW"],
       },
       dashboard: {
-        nav: ["overview", "queue", "appointments", "customers", "services", "staff", "memberships", "inbox", "reviews", "analytics", "settings"],
+        nav: ["overview", "queue", "appointments", "customers", "services", "staff", "memberships", "inbox", "reviews", "campaigns", "reminders", "analytics", "locations", "channels", "knowledge", "team", "billing", "settings"],
         overviewCards: ["waiting", "inService", "appointmentsToday", "revenueToday", "noShows"],
       },
       defaultServices: [
@@ -192,7 +192,7 @@ export const INDUSTRY_TEMPLATES: IndustryTemplate[] = [
         queueStatuses: ["WAITING", "CALLED", "IN_PROGRESS", "COMPLETED", "CANCELLED", "NO_SHOW"],
       },
       dashboard: {
-        nav: ["overview", "appointments", "queue", "customers", "services", "staff", "followUps", "inbox", "payments", "analytics", "settings"],
+        nav: ["overview", "appointments", "queue", "customers", "services", "staff", "followUps", "inbox", "reviews", "campaigns", "analytics", "locations", "channels", "knowledge", "team", "billing", "settings"],
         overviewCards: ["appointmentsToday", "waiting", "inProgress", "completed", "noShows", "averageWait"],
       },
       defaultServices: [
@@ -235,7 +235,7 @@ export const INDUSTRY_TEMPLATES: IndustryTemplate[] = [
         queueStatuses: ["WAITING", "CALLED", "IN_PROGRESS", "COMPLETED", "CANCELLED", "NO_SHOW"],
       },
       dashboard: {
-        nav: ["overview", "appointments", "queue", "customers", "services", "staff", "followUps", "payments", "analytics", "settings"],
+        nav: ["overview", "appointments", "queue", "customers", "services", "staff", "followUps", "inbox", "reviews", "campaigns", "analytics", "locations", "channels", "knowledge", "team", "billing", "settings"],
         overviewCards: ["appointmentsToday", "waiting", "inTreatment", "completed", "followUpsDue"],
       },
       defaultServices: [
@@ -279,7 +279,7 @@ export const INDUSTRY_TEMPLATES: IndustryTemplate[] = [
         queueStatuses: ["WAITING", "TABLE_READY", "SEATED", "COMPLETED", "CANCELLED", "NO_SHOW"],
       },
       dashboard: {
-        nav: ["overview", "tables", "reservations", "waitlist", "customers", "staff", "reviews", "analytics", "settings"],
+        nav: ["overview", "tables", "reservations", "waitlist", "customers", "staff", "reviews", "campaigns", "reminders", "analytics", "locations", "channels", "knowledge", "team", "billing", "settings"],
         overviewCards: ["availableTables", "occupiedTables", "waitingGroups", "averageWait", "todayRevenue"],
       },
       defaultServices: [],
@@ -320,7 +320,7 @@ export const INDUSTRY_TEMPLATES: IndustryTemplate[] = [
         jobStatuses: ["RECEIVED", "INSPECTION", "ESTIMATE", "APPROVED", "IN_PROGRESS", "QUALITY_CHECK", "READY", "DELIVERED"],
       },
       dashboard: {
-        nav: ["overview", "jobs", "vehicles", "queue", "technicians", "customers", "estimates", "payments", "analytics", "settings"],
+        nav: ["overview", "jobs", "vehicles", "queue", "technicians", "customers", "estimates", "reviews", "campaigns", "analytics", "locations", "channels", "knowledge", "team", "billing", "settings"],
         overviewCards: ["vehiclesToday", "waiting", "inService", "qualityCheck", "ready", "delivered"],
       },
       defaultServices: [
@@ -364,7 +364,7 @@ export const INDUSTRY_TEMPLATES: IndustryTemplate[] = [
         jobStatuses: ["BOOKED", "ASSIGNED", "ON_THE_WAY", "ARRIVED", "IN_PROGRESS", "COMPLETED"],
       },
       dashboard: {
-        nav: ["overview", "bookings", "dispatch", "technicians", "customers", "serviceStatus", "payments", "analytics", "settings"],
+        nav: ["overview", "bookings", "dispatch", "technicians", "customers", "serviceStatus", "reviews", "campaigns", "analytics", "locations", "channels", "knowledge", "team", "billing", "settings"],
         overviewCards: ["newBookings", "unassigned", "onTheWay", "inProgress", "completed"],
       },
       defaultServices: [
@@ -409,7 +409,7 @@ export const INDUSTRY_TEMPLATES: IndustryTemplate[] = [
         queueStatuses: ["WAITING", "CALLED", "IN_PROGRESS", "COMPLETED", "CANCELLED", "NO_SHOW"],
       },
       dashboard: {
-        nav: ["overview", "enquiries", "counselling", "admissions", "students", "courses", "batches", "followUps", "payments", "analytics", "settings"],
+        nav: ["overview", "enquiries", "counselling", "admissions", "students", "courses", "batches", "followUps", "inbox", "campaigns", "analytics", "locations", "channels", "knowledge", "team", "billing", "settings"],
         overviewCards: ["newEnquiries", "counsellingToday", "demos", "admissions", "feesPending"],
       },
       defaultServices: [
@@ -454,7 +454,7 @@ export const INDUSTRY_TEMPLATES: IndustryTemplate[] = [
         queueStatuses: ["WAITING", "CALLED", "IN_PROGRESS", "COMPLETED", "CANCELLED", "NO_SHOW"],
       },
       dashboard: {
-        nav: ["overview", "leads", "clients", "matters", "tasks", "appointments", "billing", "analytics", "settings"],
+        nav: ["overview", "leads", "clients", "matters", "tasks", "appointments", "inbox", "campaigns", "reminders", "analytics", "locations", "channels", "knowledge", "team", "billing", "settings"],
         overviewCards: ["newLeads", "consultations", "activeClients", "overdueFollowUps", "pendingPayments"],
       },
       defaultServices: [
@@ -497,7 +497,7 @@ export const INDUSTRY_TEMPLATES: IndustryTemplate[] = [
         queueStatuses: ["WAITING", "CALLED", "IN_PROGRESS", "COMPLETED", "CANCELLED", "NO_SHOW"],
       },
       dashboard: {
-        nav: ["overview", "appointments", "queue", "customers", "services", "staff", "memberships", "packages", "reviews", "analytics", "settings"],
+        nav: ["overview", "appointments", "queue", "customers", "services", "staff", "memberships", "packages", "reviews", "inbox", "campaigns", "reminders", "analytics", "locations", "channels", "knowledge", "team", "billing", "settings"],
         overviewCards: ["appointments", "inService", "availableStaff", "memberships", "expiringPackages"],
       },
       defaultServices: [
@@ -540,7 +540,7 @@ export const INDUSTRY_TEMPLATES: IndustryTemplate[] = [
         queueStatuses: ["WAITING", "CALLED", "IN_PROGRESS", "COMPLETED", "CANCELLED", "NO_SHOW"],
       },
       dashboard: {
-        nav: ["overview", "queue", "appointments", "customers", "services", "staff", "inbox", "reviews", "analytics", "settings"],
+        nav: ["overview", "queue", "appointments", "customers", "services", "staff", "inbox", "reviews", "campaigns", "reminders", "analytics", "locations", "channels", "knowledge", "team", "billing", "settings"],
         overviewCards: ["waiting", "inService", "appointmentsToday", "revenueToday"],
       },
       defaultServices: [],

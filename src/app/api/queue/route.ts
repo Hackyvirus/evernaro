@@ -2,10 +2,12 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { auth } from "@/lib/auth";
 import { getQueuesByOrg, createQueue, joinQueue } from "@/lib/services/queue-service";
+import { getOrgActiveLocationId } from "@/lib/location-scope";
 
 const createQueueSchema = z.object({
   name: z.string().min(1),
   serviceId: z.string().optional(),
+  locationId: z.string().optional(),
 });
 
 const joinQueueSchema = z.object({
@@ -21,7 +23,8 @@ export async function GET() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const queues = await getQueuesByOrg(session.user.orgId);
+  const activeLocationId = await getOrgActiveLocationId(session.user.orgId);
+  const queues = await getQueuesByOrg(session.user.orgId, activeLocationId);
   return NextResponse.json({ queues, orgSlug: session.user.orgSlug });
 }
 
@@ -37,7 +40,8 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid input" }, { status: 400 });
   }
 
-  const queue = await createQueue(session.user.orgId, parsed.data);
+  const activeLocationId = parsed.data.locationId ?? (await getOrgActiveLocationId(session.user.orgId));
+  const queue = await createQueue(session.user.orgId, { ...parsed.data, locationId: activeLocationId });
   return NextResponse.json({ queue }, { status: 201 });
 }
 

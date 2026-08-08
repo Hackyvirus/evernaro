@@ -61,6 +61,8 @@ function SidebarContent({
   userEmail,
   role,
   nav,
+  locations,
+  activeLocation,
   collapsed = false,
   onToggleCollapse,
 }: {
@@ -69,9 +71,20 @@ function SidebarContent({
   userEmail: string;
   role: string;
   nav: { main: NavItemDef[]; config: NavItemDef[]; account: NavItemDef[] };
+  locations: { id: string; name: string }[];
+  activeLocation: { id: string; name: string } | null;
   collapsed?: boolean;
   onToggleCollapse?: () => void;
 }) {
+  async function switchLocation(locationId: string) {
+    if (locationId === activeLocation?.id) return;
+    await fetch("/api/organization/active-location", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ locationId }),
+    });
+    window.location.reload();
+  }
   return (
     <>
       <div className={`mb-6 flex items-center ${collapsed ? "justify-center" : "justify-between px-2"}`}>
@@ -97,6 +110,24 @@ function SidebarContent({
           </IconButton>
         )}
       </div>
+
+      {locations.length > 0 && !collapsed && (
+        <div className="mb-4 px-2">
+          <label htmlFor="location-switcher" className="sr-only">Location</label>
+          <select
+            id="location-switcher"
+            value={activeLocation?.id ?? ""}
+            onChange={(e) => switchLocation(e.target.value)}
+            className="w-full rounded-md border border-border bg-surface px-2 py-1.5 text-xs text-text focus:border-primary focus:outline-none"
+          >
+            {locations.map((loc) => (
+              <option key={loc.id} value={loc.id}>
+                {loc.name}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
 
       <nav className="flex flex-1 flex-col gap-6 overflow-y-auto">
         <div className="flex flex-col gap-1">
@@ -158,6 +189,8 @@ export function DashboardShell({
   role,
   emailVerified,
   industry,
+  locations,
+  activeLocation,
   children,
 }: {
   orgName: string;
@@ -166,6 +199,8 @@ export function DashboardShell({
   role: string;
   emailVerified?: boolean;
   industry: { templateCode: string; config: { dashboard: { nav: string[] } } } | null;
+  locations: { id: string; name: string }[];
+  activeLocation: { id: string; name: string } | null;
   children: React.ReactNode;
 }) {
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -196,7 +231,15 @@ export function DashboardShell({
             onClick={() => setMobileOpen(false)}
           />
           <aside className="relative flex h-full w-64 flex-col bg-card p-4 shadow-[var(--shadow-elevated)]">
-            <SidebarContent nav={nav} orgName={orgName} userName={userName} userEmail={userEmail} role={role} />
+            <SidebarContent
+              nav={nav}
+              orgName={orgName}
+              userName={userName}
+              userEmail={userEmail}
+              role={role}
+              locations={locations}
+              activeLocation={activeLocation}
+            />
           </aside>
         </div>
       )}
@@ -213,6 +256,8 @@ export function DashboardShell({
           userName={userName}
           userEmail={userEmail}
           role={role}
+          locations={locations}
+          activeLocation={activeLocation}
           collapsed={collapsed}
           onToggleCollapse={() => setCollapsed(!collapsed)}
         />

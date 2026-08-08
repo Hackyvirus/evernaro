@@ -6,7 +6,7 @@ export async function createInvoiceFromQuote(
   orgId: string,
   subscriptionId: string | null,
   quote: Quote,
-  opts?: { status?: "PENDING"; dueDays?: number }
+  opts?: { status?: "PENDING"; dueDays?: number; overrideAmount?: number }
 ) {
   const status = opts?.status ?? "PENDING";
 
@@ -14,7 +14,7 @@ export async function createInvoiceFromQuote(
     data: {
       orgId,
       type: "SUBSCRIPTION",
-      amountInr: quote.totalInr,
+      amountInr: opts?.overrideAmount ?? quote.totalInr,
       status,
       subscriptionId,
       invoiceItems: {

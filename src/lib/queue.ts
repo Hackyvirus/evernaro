@@ -4,11 +4,13 @@ import { redisConnection } from "@/lib/redis";
 export const CAMPAIGN_SEND_QUEUE = "campaign-send";
 export const REMINDER_SEND_QUEUE = "reminder-send";
 export const NO_SHOW_QUEUE = "queue-no-show";
+export const BILLING_RUN_QUEUE = "billing-run";
 
 const globalForQueues = globalThis as unknown as {
   campaignQueue: Queue | undefined;
   reminderQueue: Queue | undefined;
   noShowQueue: Queue | undefined;
+  billingRunQueue: Queue | undefined;
 };
 
 function getCampaignQueue(): Queue {
@@ -32,6 +34,13 @@ function getNoShowQueue(): Queue {
   return globalForQueues.noShowQueue;
 }
 
+function getBillingRunQueue(): Queue {
+  if (!globalForQueues.billingRunQueue) {
+    globalForQueues.billingRunQueue = new Queue(BILLING_RUN_QUEUE, { connection: redisConnection });
+  }
+  return globalForQueues.billingRunQueue;
+}
+
 export interface CampaignSendJob {
   campaignRecipientId: string;
 }
@@ -43,6 +52,10 @@ export interface ReminderSendJob {
 export interface NoShowJob {
   queueEntryId: string;
   orgId: string;
+}
+
+export interface BillingRunJob {
+  type: "daily" | "dunning";
 }
 
 export async function enqueueCampaignRecipient(campaignRecipientId: string, delayMs?: number) {
@@ -113,4 +126,11 @@ export async function cancelNoShowJob(queueEntryId: string): Promise<{ removed: 
   } catch {
     return { removed: false };
   }
+}
+
+export async function enqueueBillingRun(job: BillingRunJob, delayMs?: number) {
+  await getBillingRunQueue().add(job.type, job, {
+    jobId: `${job.type}:${Date.now()}`,
+    delay: delayMs && delayMs > 0 ? delayMs : undefined,
+  });
 }

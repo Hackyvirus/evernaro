@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { Button, Card } from "@/components/ui";
 
@@ -21,7 +21,6 @@ type QueueStatus = {
 
 export default function PublicQueueTrackerPage() {
   const params = useParams();
-  const slug = params.slug as string;
   const token = params.token as string;
 
   const [status, setStatus] = useState<QueueStatus | null>(null);
@@ -29,25 +28,23 @@ export default function PublicQueueTrackerPage() {
   const [error, setError] = useState<string | null>(null);
   const [cancelling, setCancelling] = useState(false);
 
-  async function load() {
-    try {
-      const res = await fetch(`/api/public/queue/${token}/status`);
-      if (!res.ok) throw new Error("Entry not found");
-      const data = await res.json();
-      setStatus(data.status);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not load queue status");
-    } finally {
-      setLoading(false);
-    }
-  }
+  const refresh = useCallback(() => {
+    return fetch(`/api/public/queue/${token}/status`)
+      .then((res) => {
+        if (!res.ok) throw new Error("Entry not found");
+        return res.json();
+      })
+      .then((data) => setStatus(data.status as QueueStatus))
+      .catch((err) => setError(err instanceof Error ? err.message : "Could not load queue status"))
+      .finally(() => setLoading(false));
+  }, [token]);
 
   useEffect(() => {
     if (!token) return;
-    load();
-    const id = setInterval(load, 5000);
+    refresh();
+    const id = setInterval(refresh, 5000);
     return () => clearInterval(id);
-  }, [token]);
+  }, [token, refresh]);
 
   async function cancel() {
     if (!confirm("Leave the queue? This cannot be undone.")) return;
@@ -55,7 +52,7 @@ export default function PublicQueueTrackerPage() {
     const res = await fetch(`/api/public/queue/${token}/status`, { method: "DELETE" });
     setCancelling(false);
     if (res.ok) {
-      await load();
+      await refresh();
     } else {
       const data = await res.json().catch(() => ({}));
       setError(data.error ?? "Could not cancel");

@@ -48,21 +48,22 @@ export default function ReviewsPage() {
   const [search, setSearch] = useState("");
   const [ratingFilter, setRatingFilter] = useState<string>("");
 
-  async function load() {
-    try {
-      const res = await fetch("/api/reviews");
-      const data = await res.json().catch(() => ({}));
-      setReviews(data.reviews ?? []);
-    } catch {
-      showToast("error", "Failed to load reviews");
-    } finally {
-      setLoaded(true);
-    }
+  function fetchReviews() {
+    return fetch("/api/reviews")
+      .then((res) => res.json().catch(() => ({})))
+      .then((data) => data.reviews ?? []);
+  }
+
+  function refresh() {
+    return fetchReviews().then(setReviews);
   }
 
   useEffect(() => {
-    load();
-  }, []);
+    fetchReviews()
+      .then(setReviews)
+      .catch(() => showToast("error", "Failed to load reviews"))
+      .finally(() => setLoaded(true));
+  }, [showToast]);
 
   const stats = useMemo(() => {
     if (reviews.length === 0) return { average: 0, count: 0 };
@@ -97,7 +98,7 @@ export default function ReviewsPage() {
         showToast("error", data.error ?? "Failed to delete review");
       } else {
         showToast("success", "Review deleted");
-        load();
+        refresh();
       }
     } catch {
       showToast("error", "Network error");

@@ -10,7 +10,7 @@ import { RoleAwareAdminGuard } from "../role";
 import { NotificationPreferencesTab } from "./notification-preferences-tab";
 import { Receipt } from "lucide-react";
 
-type Tab = "profile" | "telegram" | "email" | "whatsapp" | "instagram" | "voice" | "notifications" | "security";
+type Tab = "profile" | "telegram" | "email" | "whatsapp" | "instagram" | "voice" | "notifications" | "security" | "apiKeys";
 
 const TABS: { id: Tab; label: string }[] = [
   { id: "profile", label: "Business profile" },
@@ -21,6 +21,7 @@ const TABS: { id: Tab; label: string }[] = [
   { id: "voice", label: "Voice" },
   { id: "notifications", label: "Notifications" },
   { id: "security", label: "Security" },
+  { id: "apiKeys", label: "API keys" },
 ];
 
 interface BusinessProfileForm {
@@ -130,6 +131,7 @@ function SettingsPageContent() {
     ),
     notifications: <NotificationPreferencesTab />,
     security: <SecurityTab />,
+    apiKeys: <ApiKeysTab />,
   };
 
   return (
@@ -1198,4 +1200,89 @@ function SecurityTab() {
     </div>
   );
 }
+
+function ApiKeysTab() {
+  const [keys, setKeys] = useState<Array<{ id: string; name: string; scopes: string[]; lastUsedAt: string | null; expiresAt: string | null; isActive: boolean; createdAt: string }>>([]);
+  const [name, setName] = useState("");
+  const [newKey, setNewKey] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  function fetchKeys() {
+    return fetch("/api/settings/api-keys")
+      .then((r) => r.json())
+      .then((data) => data.keys ?? []);
+  }
+
+  function refresh() {
+    return fetchKeys().then(setKeys);
+  }
+
+  useEffect(() => {
+    fetchKeys()
+      .then(setKeys)
+      .finally(() => setLoading(false));
+  }, []);
+
+  async function create(e: React.FormEvent) {
+    e.preventDefault();
+    if (!name.trim()) return;
+    const res = await fetch("/api/settings/api-keys", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, scopes: ["read", "contacts", "appointments"] }),
+    });
+    const data = await res.json();
+    if (data.key?.plaintext) {
+      setNewKey(data.key.plaintext);
+      setName("");
+      await refresh();
+    }
+  }
+
+  async function revoke(id: string) {
+    if (!confirm("Revoke this API key?")) return;
+    await fetch(`/api/settings/api-keys/${id}`, { method: "DELETE" });
+    await refresh();
+  }
+
+  return (
+    <div className="flex flex-col gap-4">
+      <Card className="p-4">
+        <form onSubmit={create} className="flex flex-col gap-3 sm:flex-row sm:items-end">
+          <div className="flex-1">
+            <label className="mb-1 block text-sm font-medium text-text">Key name</label>
+            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Zapier integration" />
+          </div>
+          <Button type="submit">Create key</Button>
+        </form>
+        {newKey && (
+          <div className="mt-4 rounded-md border border-success bg-success/10 p-3">
+            <p className="text-sm font-medium text-text">Copy this key now — it won&apos;t be shown again.</p>
+            <code className="mt-1 block break-all text-xs text-text-secondary">{newKey}</code>
+            <Button size="sm" variant="secondary" className="mt-2" onClick={() => setNewKey(null)}>Done</Button>
+          </div>
+        )}
+      </Card>
+
+      {loading ? (
+        <p className="text-text-secondary">Loading keys...</p>
+      ) : keys.length === 0 ? (
+        <Card className="p-6 text-center text-text-secondary">No API keys yet.</Card>
+      ) : (
+        <div className="flex flex-col gap-2">
+          {keys.map((k) => (
+            <Card key={k.id} className="flex flex-col gap-1 p-4 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="font-medium text-text">{k.name}</p>
+                <p className="text-xs text-text-secondary">Scopes: {k.scopes.join(", ")} · Created {new Date(k.createdAt).toLocaleDateString()}</p>
+              </div>
+              <Button size="sm" variant="danger" onClick={() => revoke(k.id)}>Revoke</Button>
+            </Card>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 

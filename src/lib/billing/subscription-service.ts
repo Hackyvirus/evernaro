@@ -10,7 +10,9 @@ import {
   cancelRazorpaySubscription,
 } from "./razorpay-billing";
 import { createRazorpayOrder } from "@/lib/razorpay";
+import { creditWallet } from "@/lib/whatsapp-wallet";
 import { logBillingEvent } from "./events";
+import { calculateProration } from "./proration";
 import type { AddOnSelection } from "./types";
 
 export type CreateSubscriptionInput = {
@@ -216,7 +218,7 @@ export async function getActiveSubscription(orgId: string) {
   });
 }
 
-export async function changeSubscriptionPlan(input: CreateSubscriptionInput & { prorate?: boolean }) {
+export async function changeSubscriptionPlan(input: CreateSubscriptionInput & { prorate?: boolean; currentSubscriptionId?: string }) {
   const existing = await prisma.customerSubscription.findFirst({
     where: { orgId: input.orgId, status: { in: ["TRIALING", "ACTIVE", "PAST_DUE", "PAUSED"] } },
   });
@@ -359,21 +361,66 @@ export async function changeSubscriptionPlan(input: CreateSubscriptionInput & { 
 
   let invoice = null;
   let razorpayOrderId: string | undefined;
+  let proration = null;
   if (!trialEnd && !isFreePlan) {
-    try {
-      const order = await createRazorpayOrder({
-        amountInr: quote.totalInr,
-        receipt: `sub-change-${existing.id}`,
-      });
-      razorpayOrderId = order.id;
-    } catch (err) {
-      console.error("Failed to create Razorpay order for changed subscription:", err);
+    if (input.prorate) {
+      proration = calculateProration(existing, quote.totalInr);
     }
-    invoice = await createInvoiceFromQuote(input.orgId, existing.id, quote, { status: "PENDING" });
+    const invoiceAmount = proration ? Math.abs(proration.netInr) : quote.totalInr;
+
+    if (!proration || proration.netInr > 0) {
+      try {
+        const order = await createRazorpayOrder({
+          amountInr: invoiceAmount,
+          receipt: `sub-change-${existing.id}`,
+        });
+        razorpayOrderId = order.id;
+      } catch (err) {
+        console.error("Failed to create Razorpay order for changed subscription:", err);
+      }
+    }
+
+    if (proration && proration.netInr < 0) {
+      // Downgrade credit applied to WhatsApp wallet.
+      await creditWallet(input.orgId, Math.abs(proration.netInr) * 100, "MANUAL_CREDIT", {
+        note: `Proration credit for plan downgrade (${existing.id})`,
+      });
+    }
+
+    invoice = await createInvoiceFromQuote(input.orgId, existing.id, quote, {
+      status: "PENDING",
+      overrideAmount: invoiceAmount,
+    });
+
+    if (invoice && proration) {
+      await prisma.invoiceItem.createMany({
+        data: [
+          {
+            invoiceId: invoice.id,
+            orgId: input.orgId,
+            type: "DISCOUNT",
+            description: `Proration credit for unused time on previous plan`,
+            quantity: 1,
+            unitPriceInr: -proration.creditInr,
+            amountInr: -proration.creditInr,
+          },
+          {
+            invoiceId: invoice.id,
+            orgId: input.orgId,
+            type: "PLAN",
+            description: `Prorated charge for new plan until ${existing.currentPeriodEnd?.toLocaleDateString() ?? "period end"}`,
+            quantity: 1,
+            unitPriceInr: proration.debitInr,
+            amountInr: proration.debitInr,
+          },
+        ],
+      });
+    }
+
     if (razorpayOrderId && invoice) {
       invoice = await prisma.invoice.update({
         where: { id: invoice.id },
-        data: { razorpayOrderId },
+        data: { razorpayOrderId, amountInr: invoiceAmount },
       });
     }
   }

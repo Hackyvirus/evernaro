@@ -46,6 +46,8 @@ interface Subscription {
   trialEnd: string | null;
   cancelAtPeriodEnd: boolean;
   totalAmountInr: number;
+  paymentFailureCount: number;
+  dunningNextRetryAt: string | null;
   plan: {
     name: string;
     description: string | null;
@@ -208,6 +210,9 @@ function BillingPageContent() {
   const [payments, setPayments] = useState<Payment[]>([]);
   const [paymentsLoaded, setPaymentsLoaded] = useState(false);
 
+  const [paymentMethods, setPaymentMethods] = useState<Array<{ id: string; type: string; network: string | null; last4: string | null; isDefault: boolean }>>([]);
+  const [paymentMethodsLoaded, setPaymentMethodsLoaded] = useState(false);
+
   function refresh() {
     fetch("/api/invoices")
       .then((r) => r.json())
@@ -235,6 +240,13 @@ function BillingPageContent() {
         setPaymentsLoaded(true);
       })
       .catch(() => setPaymentsLoaded(true));
+    fetch("/api/billing/payment-methods")
+      .then((r) => r.json())
+      .then((d) => {
+        setPaymentMethods(d.methods ?? []);
+        setPaymentMethodsLoaded(true);
+      })
+      .catch(() => setPaymentMethodsLoaded(true));
   }
 
   function refreshWallet() {
@@ -369,7 +381,10 @@ function BillingPageContent() {
             <div>
               <p className="text-sm font-medium text-text">Subscription past due</p>
               <p className="text-xs text-text-secondary">
-                We couldn&apos;t process your latest payment. Please pay the outstanding invoice to avoid service interruption.
+                We couldn&apos;t process your latest payment{subscription.paymentFailureCount > 0 ? ` (${subscription.paymentFailureCount} attempt${subscription.paymentFailureCount === 1 ? "" : "s"})` : ""}.{" "}
+                {subscription.dunningNextRetryAt
+                  ? `Next automatic retry on ${new Date(subscription.dunningNextRetryAt).toLocaleDateString()}.`
+                  : "Please pay the outstanding invoice to avoid service interruption."}
               </p>
             </div>
           </Card>
@@ -543,6 +558,49 @@ function BillingPageContent() {
               </>
             )}
           </Card>
+
+          <Card className="p-5">
+            <div className="mb-3 flex items-center gap-2">
+              <CreditCard className="h-4 w-4 text-primary" aria-hidden="true" />
+              <h2 className="text-sm font-bold text-text">Payment methods</h2>
+            </div>
+            {!paymentMethodsLoaded ? (
+              <Skeleton className="h-16" />
+            ) : paymentMethods.length === 0 ? (
+              <p className="text-sm text-text-secondary">
+                Pay an invoice with Razorpay Checkout to save your card/UPI for next time.
+              </p>
+            ) : (
+              <ul className="flex flex-col gap-2">
+                {paymentMethods.map((m) => (
+                  <li key={m.id} className="flex items-center justify-between text-sm">
+                    <span className="text-text">
+                      {m.type.toUpperCase()} {m.network && `· ${m.network}`} {m.last4 && `· ${m.last4}`}
+                      {m.isDefault && <span className="ml-2 text-xs text-success">Default</span>}
+                    </span>
+                    <div className="flex items-center gap-2">
+                      {!m.isDefault && (
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          onClick={() => fetch(`/api/billing/payment-methods/${m.id}`, { method: "PATCH", body: JSON.stringify({ isDefault: true }) }).then(refresh)}
+                        >
+                          Default
+                        </Button>
+                      )}
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => fetch(`/api/billing/payment-methods/${m.id}`, { method: "DELETE" }).then(refresh)}
+                      >
+                        Remove
+                      </Button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Card>
         </div>
 
         {usage.length > 0 && (
@@ -616,6 +674,13 @@ function BillingPageContent() {
                     </div>
                     <div className="flex items-center gap-3">
                       <Badge variant={statusVariant(inv.status)}>{inv.status}</Badge>
+                      <a
+                        href={`/api/billing/invoices/${inv.id}/pdf`}
+                        download
+                        className="text-xs font-medium text-primary hover:text-primary-hover"
+                      >
+                        PDF
+                      </a>
                       {inv.status === "PENDING" && inv.razorpayOrderId && (
                         <Button size="sm" loading={payingId === inv.id} onClick={() => pay(inv)}>
                           Pay now
@@ -655,6 +720,15 @@ function BillingPageContent() {
                     </div>
                     <div className="flex items-center gap-3">
                       <Badge variant={statusVariant(p.status)}>{p.status}</Badge>
+                      {p.status === "PAID" && (
+                        <a
+                          href={`/api/billing/payments/${p.id}/receipt`}
+                          download
+                          className="text-xs font-medium text-primary hover:text-primary-hover"
+                        >
+                          Receipt
+                        </a>
+                      )}
                     </div>
                   </Card>
                 </li>

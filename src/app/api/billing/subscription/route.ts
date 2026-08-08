@@ -58,6 +58,7 @@ const changeSchema = z.discriminatedUnion("action", [
       .array(z.object({ addOnId: z.string().cuid(), quantity: z.number().int().positive() }))
       .optional(),
     couponCode: z.string().optional().nullable(),
+    prorate: z.boolean().default(false),
   }),
   z.object({
     action: z.literal("reactivate"),
@@ -96,6 +97,7 @@ export async function PATCH(req: Request) {
       frequency: parsed.data.frequency,
       addOns: parsed.data.addOns,
       couponCode: parsed.data.couponCode,
+      prorate: parsed.data.prorate,
     });
 
     return NextResponse.json(result, { status: 200 });
