@@ -3,26 +3,34 @@ import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { Button, Card, Logo, ThemeToggle } from "@/components/ui";
-import { ProductMockup } from "@/components/landing/product-mockup";
+import { FlowMockup } from "@/components/landing/flow-mockup";
 import { Reveal } from "@/components/landing/reveal";
 import { Faq } from "@/components/landing/faq";
 import {
+  ArrowRight,
   Bell,
   Bot,
+  CalendarClock,
   Camera,
   Check,
+  ChevronRight,
+  Clock,
+  CreditCard,
   Eye,
   LineChart,
   Mail,
-  Megaphone,
   MessageSquare,
   PhoneCall,
-  PlugZap,
+  QrCode,
+  ScanLine,
   Send,
-  ShieldCheck,
   Sparkles,
-  Wallet,
+  Users,
 } from "lucide-react";
+
+const DEMO_URL =
+  process.env.NEXT_PUBLIC_DEMO_BOOKING_URL ??
+  "mailto:contact@evernaro.com?subject=Book%20a%20demo";
 
 const CHANNELS = [
   { icon: MessageSquare, label: "Telegram" },
@@ -32,80 +40,203 @@ const CHANNELS = [
   { icon: PhoneCall, label: "Voice reminders" },
 ];
 
-const STATS = [
-  { value: "5", label: "channels unified" },
-  { value: "1", label: "shared inbox" },
-  { value: "AI", label: "drafted replies" },
-  { value: "24h", label: "compliance guard" },
+const JOURNEY_STEPS = [
+  {
+    number: "01",
+    title: "Join or book",
+    description: "Customer scans a QR code, opens a link, or books online.",
+  },
+  {
+    number: "02",
+    title: "Get your place",
+    description: "Receive a token, appointment, position, and estimated wait.",
+  },
+  {
+    number: "03",
+    title: "Track in real time",
+    description: "Position and status update automatically.",
+  },
+  {
+    number: "04",
+    title: "Get notified",
+    description: "Evernaro lets customers know when their turn is approaching.",
+  },
+  {
+    number: "05",
+    title: "Get served",
+    description: "Your team sees exactly who needs attention next.",
+  },
+  {
+    number: "06",
+    title: "Bring them back",
+    description: "Payment, feedback, reminders and rebooking keep customers coming back.",
+  },
 ];
 
-const FEATURES = [
+const INDUSTRIES = [
   {
-    icon: Sparkles,
-    title: "AI drafts, you decide",
-    description:
-      "Every reply starts as an AI-drafted suggestion pulled from your business knowledge base — a person reviews, edits, and sends. Nothing goes out on its own.",
+    title: "Salon & Beauty",
+    flow: ["Join queue", "Track position", "Get notified", "Get served"],
+    description: "Manage walk-ins, appointments, stylists, queues, payments and rebooking.",
+  },
+  {
+    title: "Healthcare / Clinics",
+    flow: ["Register", "Wait", "Get called", "Consultation", "Follow-up"],
+    description: "Manage patient queues, appointments, doctors and follow-ups.",
+  },
+  {
+    title: "Restaurants",
+    flow: ["Join waitlist", "Track position", "Table ready", "Notify", "Seat"],
+    description: "Replace uncertain waiting with a live digital waitlist.",
+  },
+  {
+    title: "Auto Service",
+    flow: ["Vehicle received", "Service", "Progress", "Ready", "Pickup"],
+    description: "Keep customers informed from vehicle drop-off to pickup.",
+  },
+  {
+    title: "Home Services",
+    flow: ["Book", "Assign", "On the way", "Arrive", "Complete"],
+    description: "Electrician, plumbing, cleaning, appliance repair dispatch.",
+  },
+  {
+    title: "Real Estate",
+    flow: ["Lead", "Contact", "Site visit", "Follow-up", "Booking"],
+    description: "Never lose a lead between first message and site visit.",
+  },
+  {
+    title: "Education",
+    flow: ["Enquiry", "Counselling", "Demo", "Admission"],
+    description: "Enquiries, counselling, admissions, batches and fee tracking.",
+  },
+  {
+    title: "Legal",
+    flow: ["Request", "Consultation", "Matter", "Follow-up"],
+    description: "Client intake, consultations, matters, tasks and billing.",
+  },
+  {
+    title: "Dental",
+    flow: ["Book", "Wait", "Consultation", "Treatment", "Follow-up"],
+    description: "Dental appointments, treatments, and patient follow-ups.",
+  },
+  {
+    title: "Wellness",
+    flow: ["Book", "Arrive", "Session", "Payment", "Rebook"],
+    description: "Appointments, memberships, packages, and retention.",
+  },
+];
+
+const CAPABILITIES = [
+  {
+    icon: Clock,
+    title: "Live Queues",
+    description: "Let customers join remotely and see their live position.",
+  },
+  {
+    icon: CalendarClock,
+    title: "Appointments",
+    description: "Manage bookings, availability, staff and scheduling.",
+  },
+  {
+    icon: Bell,
+    title: "Real-Time Notifications",
+    description: "Keep customers informed about queues, appointments and service status.",
+  },
+  {
+    icon: QrCode,
+    title: "QR Customer Entry",
+    description: "Customers scan a QR code to join your queue or book a service.",
+  },
+  {
+    icon: Users,
+    title: "Customer Management",
+    description: "Keep customer history, appointments, conversations and interactions together.",
   },
   {
     icon: MessageSquare,
-    title: "A real unified inbox",
-    description:
-      "Telegram, email, WhatsApp, Instagram and voice all land in one thread list with the channel tagged — your team stops tab-hopping to answer customers.",
+    title: "Unified Inbox",
+    description: "Connect WhatsApp, Email, Telegram and Instagram in one thread list.",
   },
   {
-    icon: Megaphone,
-    title: "Campaigns and reminders",
-    description:
-      "Send one message to every reachable contact on a channel, or schedule one-off and recurring reminders — appointments, payments, follow-ups.",
+    icon: CreditCard,
+    title: "Payments",
+    description: "Razorpay-integrated billing and wallet top-ups.",
   },
   {
-    icon: ShieldCheck,
-    title: "Built for compliance",
-    description:
-      "WhatsApp template enforcement outside the 24-hour window, and Voice calling scoped only to individually-scheduled reminders — never bulk or cold calling.",
-  },
-  {
-    icon: Wallet,
-    title: "No surprise WhatsApp bills",
-    description:
-      "A prepaid wallet meters real Meta send cost per message. A connected channel can never silently rack up unbounded spend.",
+    icon: Sparkles,
+    title: "Reviews & Rebooking",
+    description: "Turn completed services into repeat customers with follow-ups.",
   },
   {
     icon: LineChart,
-    title: "Analytics you can act on",
-    description:
-      "See volumes by channel, campaign and reminder performance, and where your attention actually needs to go.",
+    title: "Analytics",
+    description: "Understand waiting time, service volume, cancellations and no-shows.",
   },
+  {
+    icon: Bot,
+    title: "AI Assistance",
+    description: "AI drafts replies, summarizes information and assists your team.",
+  },
+];
+
+const CUSTOMER_FLOW = [
+  "Join remotely",
+  "See position",
+  "Track estimated wait",
+  "Receive notification",
+  "Arrive at the right time",
+  "Get served",
+  "Pay",
+  "Review / Rebook",
+];
+
+const BUSINESS_FLOW = [
+  "See who's waiting",
+  "Manage staff",
+  "Call next customer",
+  "Update status",
+  "Automate notifications",
+  "Complete service",
+  "Collect payment",
+  "Follow up",
 ];
 
 const HOW_IT_WORKS = [
   {
-    icon: PlugZap,
-    title: "Connect your channels",
-    description:
-      "Link Telegram, email, WhatsApp, Instagram, and voice reminders in a few minutes — no code, no IT ticket.",
+    icon: ScanLine,
+    title: "Set up your business",
+    description: "Add services, staff, working hours and customer-flow preferences.",
   },
   {
-    icon: Bot,
-    title: "AI drafts every reply",
-    description:
-      "Incoming messages get an AI-drafted response pulled from your business knowledge base, waiting in your inbox.",
+    icon: Users,
+    title: "Let customers join or book",
+    description: "Customers scan your QR code, use your booking link, or contact your business.",
   },
   {
     icon: Eye,
-    title: "Your team reviews and sends",
-    description:
-      "Nothing goes out unapproved. Edit it, approve it, or write your own — you're always the one who hits send.",
+    title: "Manage the flow",
+    description: "Your team sees appointments, queues, staff availability and customer status in real time.",
+  },
+  {
+    icon: Bell,
+    title: "Keep customers informed",
+    description: "Evernaro updates customers about their queue position, appointment and service status.",
+  },
+  {
+    icon: Check,
+    title: "Complete the journey",
+    description: "Collect payment, request feedback, send follow-ups and encourage rebooking.",
   },
 ];
 
 function formatPrice(amount: number, currency: string) {
   if (amount === 0) return "Free";
-  return new Intl.NumberFormat("en-IN", { style: "currency", currency, maximumFractionDigits: 0 }).format(amount);
+  return new Intl.NumberFormat("en-IN", {
+    style: "currency",
+    currency,
+    maximumFractionDigits: 0,
+  }).format(amount);
 }
-
-const FAQ_BLURB =
-  "Answers to the questions we get most. Anything else — support@evernaro.com.";
 
 // This page reads the session, so it must be rendered dynamically.
 export const dynamic = "force-dynamic";
@@ -124,7 +255,7 @@ export default async function Home() {
     <div className="flex flex-1 flex-col bg-surface">
       <header className="sticky top-0 z-30 border-b border-border/60 bg-surface/80 backdrop-blur-md">
         <div className="mx-auto flex w-full max-w-6xl items-center justify-between px-6 py-4">
-            <Logo width={150} className="w-[130px] sm:w-[150px]" />
+          <Logo width={150} className="w-[130px] sm:w-[150px]" />
           <nav className="flex items-center gap-3">
             <Link href="/pricing" className="cursor-pointer text-sm text-text-secondary hover:text-text">
               Pricing
@@ -145,9 +276,9 @@ export default async function Home() {
         </div>
       </header>
 
-      <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-20 px-6 pt-14 pb-24">
+      <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-24 px-6 pt-14 pb-24">
         {/* Hero */}
-        <section className="grid items-center gap-10 text-center sm:items-start sm:text-start lg:grid-cols-[1fr_1.05fr] lg:gap-12">
+        <section className="grid items-center gap-10 text-center sm:items-start sm:text-start lg:grid-cols-[1fr_1.1fr] lg:gap-12">
           <div className="flex flex-col items-center gap-5 pt-2 sm:items-start lg:pt-8">
             <Reveal>
               <p className="inline-flex items-center gap-2 rounded-full border border-primary-light bg-primary-lighter px-3 py-1 text-xs font-medium text-primary">
@@ -159,41 +290,44 @@ export default async function Home() {
               </p>
             </Reveal>
             <Reveal delay={80}>
-              <h1 className="text-3xl leading-[1.1] font-extrabold tracking-tight text-text sm:text-4xl lg:text-[2.75rem]">
-                Stop juggling tabs. <br className="hidden sm:block" />
-                <span className="inline-block bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
-                  One inbox for every customer.
+              <h1 className="text-4xl leading-[1.05] font-extrabold tracking-tight text-text sm:text-5xl lg:text-[3.25rem]">
+                Stop making customers
+                <span className="block bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
+                  wait blindly.
                 </span>
               </h1>
             </Reveal>
             <Reveal delay={160}>
-              <p className="max-w-lg text-base leading-relaxed text-text-secondary">
-                Telegram, Email, WhatsApp, Instagram, and Voice reminders — all in one place. AI drafts every reply; your team reviews and sends. No message goes out unsupervised.
+              <p className="max-w-lg text-lg font-medium text-text">
+                The real-time customer flow platform for modern businesses.
               </p>
             </Reveal>
-            <Reveal delay={240}>
-              <div className="flex flex-col items-center gap-2 sm:flex-row sm:items-start">
+            <Reveal delay={200}>
+              <p className="max-w-lg text-base leading-relaxed text-text-secondary">
+                Let customers join your queue, book appointments, track their position, receive live
+                updates, and know exactly when it&apos;s their turn. Your team manages the entire customer
+                journey from one place.
+              </p>
+            </Reveal>
+            <Reveal delay={260}>
+              <div className="flex flex-col items-center gap-3 sm:flex-row sm:items-start">
                 <Link href="/signup">
-                  <Button size="lg" className="w-full sm:w-auto">Start free</Button>
-                </Link>
-                <Link href="/login">
-                  <Button variant="secondary" size="lg" className="w-full sm:w-auto">
-                    Log in
+                  <Button size="lg" className="w-full sm:w-auto">
+                    Start free
                   </Button>
                 </Link>
-                <a
-                  href={process.env.NEXT_PUBLIC_DEMO_BOOKING_URL ?? "mailto:contact@evernaro.com?subject=Book%20a%20demo"}
-                  className="flex h-12 items-center justify-center px-4 text-sm font-medium text-text-secondary hover:text-text sm:justify-start"
-                >
-                  Book a demo 
+                <a href={DEMO_URL}>
+                  <Button variant="secondary" size="lg" className="w-full sm:w-auto">
+                    Book a demo
+                  </Button>
                 </a>
               </div>
             </Reveal>
             <Reveal delay={320}>
-              <div className="flex flex-wrap items-center gap-4 text-xs text-text-muted">
+              <div className="flex flex-wrap items-center justify-center gap-4 text-xs text-text-muted sm:justify-start">
                 <span className="flex items-center gap-1.5">
                   <Check className="h-3.5 w-3.5 text-success" aria-hidden="true" />
-                  Free 14-day trial
+                  14-day free trial
                 </span>
                 <span className="flex items-center gap-1.5">
                   <Check className="h-3.5 w-3.5 text-success" aria-hidden="true" />
@@ -205,64 +339,265 @@ export default async function Home() {
                 </span>
               </div>
             </Reveal>
-            <Reveal delay={400}>
-              <div className="flex flex-wrap items-center gap-3 pt-1">
-                <span className="text-xs text-text-muted">Trusted by teams in:</span>
-                {["Real estate", "Healthcare", "Salons", "Education", "Services"].map((t) => (
-                  <span
-                    key={t}
-                    className="rounded-full border border-border bg-card px-2.5 py-1 text-[10px] font-medium text-text-secondary"
-                  >
-                    {t}
-                  </span>
-                ))}
-              </div>
-            </Reveal>
           </div>
 
           <Reveal delay={200} className="min-w-0 overflow-hidden lg:pl-4">
-            <ProductMockup />
+            <FlowMockup />
           </Reveal>
         </section>
 
-        {/* Stats bar */}
-        <section className="grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-4">
-          {STATS.map((s) => (
-            <div key={s.label} className="flex flex-col items-center gap-1 bg-card px-4 py-6">
-              <p className="text-3xl font-extrabold text-primary">{s.value}</p>
-              <p className="text-center text-xs text-text-secondary">{s.label}</p>
+        {/* Problem */}
+        <section className="flex flex-col gap-10">
+          <Reveal className="mx-auto max-w-2xl text-center">
+            <p className="text-xs font-medium tracking-wide text-primary uppercase">The problem</p>
+            <h2 className="mt-2 text-3xl font-extrabold text-text">
+              Waiting shouldn&apos;t be a guessing game.
+            </h2>
+          </Reveal>
+
+          <div className="grid gap-6 md:grid-cols-2">
+            <Reveal delay={80}>
+              <Card className="h-full p-6">
+                <h3 className="mb-4 text-base font-bold text-text">For customers</h3>
+                <ul className="flex flex-col gap-3 text-sm text-text-secondary">
+                  {[
+                    "Sit in crowded waiting areas",
+                    "Call repeatedly asking for updates",
+                    "Wonder when their appointment will start",
+                    "Wait for tables, vehicles, technicians or consultations",
+                    "Wait without knowing their position",
+                  ].map((item) => (
+                    <li key={item} className="flex items-start gap-3">
+                      <span className="mt-1 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-warning" />
+                      {item}
+                    </li>
+                  ))}
+                </ul>
+              </Card>
+            </Reveal>
+            <Reveal delay={160}>
+              <Card className="h-full p-6">
+                <h3 className="mb-4 text-base font-bold text-text">For businesses</h3>
+                <ul className="flex flex-col gap-3 text-sm text-text-secondary">
+                  {[
+                    "Manage queues manually",
+                    "Call customers one by one",
+                    "Track appointments in spreadsheets",
+                    "Coordinate staff manually",
+                    "Lose customers because of long waits",
+                    "Forget follow-ups",
+                  ].map((item) => (
+                    <li key={item} className="flex items-start gap-3">
+                      <span className="mt-1 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-danger" />
+                      {item}
+                    </li>
+                  ))}
+                </ul>
+              </Card>
+            </Reveal>
+          </div>
+
+          <Reveal delay={240}>
+            <div className="mx-auto max-w-2xl rounded-xl border border-primary-light bg-primary-lighter p-6 text-center">
+              <p className="text-lg font-semibold text-text">
+                Customers know what&apos;s happening. Your team knows what to do next.
+              </p>
+              <p className="mt-1 text-sm text-text-secondary">
+                Evernaro keeps both sides synchronized.
+              </p>
             </div>
-          ))}
+          </Reveal>
         </section>
 
-        {/* Trust badges */}
-        <section className="flex flex-col items-center gap-4 rounded-xl border border-border bg-card p-6">
-          <p className="text-center text-xs font-medium tracking-wide text-text-muted uppercase">
-            Built for trust and compliance
-          </p>
-          <div className="flex flex-wrap items-center justify-center gap-6">
-            {[
-              { label: "WhatsApp Business API", icon: ShieldCheck },
-              { label: "Prepaid wallet — no surprise bills", icon: Wallet },
-              { label: "Human-in-the-loop AI", icon: Eye },
-              { label: "Voice only for reminders", icon: PhoneCall },
-            ].map((badge) => (
-              <div key={badge.label} className="flex items-center gap-2 text-sm text-text-secondary">
-                <badge.icon className="h-4 w-4 text-primary" aria-hidden="true" />
-                {badge.label}
-              </div>
+        {/* Journey */}
+        <section className="flex flex-col gap-10">
+          <Reveal className="mx-auto max-w-2xl text-center">
+            <p className="text-xs font-medium tracking-wide text-primary uppercase">Customer journey</p>
+            <h2 className="mt-2 text-3xl font-extrabold text-text">
+              From waiting to served — without the uncertainty.
+            </h2>
+          </Reveal>
+
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {JOURNEY_STEPS.map((step, i) => (
+              <Reveal key={step.title} delay={i * 60}>
+                <Card className="relative h-full p-5">
+                  <span className="mb-3 inline-block text-2xl font-extrabold text-primary/30">
+                    {step.number}
+                  </span>
+                  <h3 className="mb-1 text-base font-bold text-text">{step.title}</h3>
+                  <p className="text-sm text-text-secondary">{step.description}</p>
+                  {i !== JOURNEY_STEPS.length - 1 && (
+                    <ArrowRight className="absolute top-5 right-5 hidden h-4 w-4 text-text-muted lg:block" />
+                  )}
+                </Card>
+              </Reveal>
             ))}
           </div>
         </section>
 
-        {/* Channels */}
-        <section className="flex flex-col items-center gap-6">
-          <Reveal>
-            <h2 className="text-center text-2xl font-extrabold text-text">
-              The channels your customers already use
+        {/* Industries */}
+        <section className="flex flex-col gap-10">
+          <Reveal className="mx-auto max-w-2xl text-center">
+            <p className="text-xs font-medium tracking-wide text-primary uppercase">Industries</p>
+            <h2 className="mt-2 text-3xl font-extrabold text-text">
+              One platform. Built for different customer flows.
             </h2>
           </Reveal>
-          <Reveal delay={100}>
+
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {INDUSTRIES.map((industry, i) => (
+              <Reveal key={industry.title} delay={i * 40}>
+                <Card className="flex h-full flex-col p-5 transition-shadow duration-200 hover:shadow-[var(--shadow-elevated)]">
+                  <h3 className="mb-2 text-base font-bold text-text">{industry.title}</h3>
+                  <p className="mb-4 text-sm text-text-secondary">{industry.description}</p>
+                  <div className="mt-auto flex flex-wrap items-center gap-1.5">
+                    {industry.flow.map((item, idx) => (
+                      <span key={item} className="flex items-center text-xs text-text-muted">
+                        {item}
+                        {idx !== industry.flow.length - 1 && (
+                          <ChevronRight className="mx-1 h-3 w-3 text-text-muted/60" />
+                        )}
+                      </span>
+                    ))}
+                  </div>
+                </Card>
+              </Reveal>
+            ))}
+          </div>
+        </section>
+
+        {/* Capabilities */}
+        <section className="flex flex-col gap-10">
+          <Reveal className="mx-auto max-w-2xl text-center">
+            <p className="text-xs font-medium tracking-wide text-primary uppercase">Capabilities</p>
+            <h2 className="mt-2 text-3xl font-extrabold text-text">
+              Everything you need to manage customer flow.
+            </h2>
+          </Reveal>
+
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {CAPABILITIES.map((cap, i) => (
+              <Reveal key={cap.title} delay={i * 50}>
+                <Card className="flex h-full flex-col gap-3 p-5 transition-shadow duration-200 hover:shadow-[var(--shadow-elevated)]">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-md bg-primary-lighter">
+                    <cap.icon className="h-[18px] w-[18px] text-primary" aria-hidden="true" />
+                  </div>
+                  <h3 className="text-sm font-bold text-text">{cap.title}</h3>
+                  <p className="text-sm text-text-secondary">{cap.description}</p>
+                </Card>
+              </Reveal>
+            ))}
+          </div>
+        </section>
+
+        {/* Customer + Business split */}
+        <section className="flex flex-col gap-10">
+          <Reveal className="mx-auto max-w-2xl text-center">
+            <p className="text-xs font-medium tracking-wide text-primary uppercase">Synchronized</p>
+            <h2 className="mt-2 text-3xl font-extrabold text-text">
+              Customers know. Your team knows. Everyone stays synchronized.
+            </h2>
+          </Reveal>
+
+          <div className="grid gap-6 md:grid-cols-2">
+            <Reveal delay={80}>
+              <Card className="h-full p-6">
+                <h3 className="mb-5 flex items-center gap-2 text-base font-bold text-text">
+                  <Users className="h-4 w-4 text-primary" aria-hidden="true" />
+                  Customer side
+                </h3>
+                <div className="flex flex-col gap-3">
+                  {CUSTOMER_FLOW.map((item, i) => (
+                    <div key={item} className="flex items-center gap-3">
+                      <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary-lighter text-[10px] font-bold text-primary">
+                        {i + 1}
+                      </span>
+                      <span className="text-sm text-text-secondary">{item}</span>
+                    </div>
+                  ))}
+                </div>
+              </Card>
+            </Reveal>
+            <Reveal delay={160}>
+              <Card className="h-full p-6">
+                <h3 className="mb-5 flex items-center gap-2 text-base font-bold text-text">
+                  <Eye className="h-4 w-4 text-primary" aria-hidden="true" />
+                  Business side
+                </h3>
+                <div className="flex flex-col gap-3">
+                  {BUSINESS_FLOW.map((item, i) => (
+                    <div key={item} className="flex items-center gap-3">
+                      <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary-lighter text-[10px] font-bold text-primary">
+                        {i + 1}
+                      </span>
+                      <span className="text-sm text-text-secondary">{item}</span>
+                    </div>
+                  ))}
+                </div>
+              </Card>
+            </Reveal>
+          </div>
+        </section>
+
+        {/* Unified Inbox */}
+        <section className="flex flex-col gap-10">
+          <div className="mx-auto max-w-2xl text-center">
+            <Reveal>
+              <p className="text-xs font-medium tracking-wide text-primary uppercase">Channels</p>
+              <h2 className="mt-2 text-3xl font-extrabold text-text">
+                Every customer interaction, connected to the customer journey.
+              </h2>
+            </Reveal>
+            <Reveal delay={80}>
+              <p className="mt-3 text-base text-text-secondary">
+                Customers may contact you through WhatsApp, Email, Telegram or Instagram. Evernaro
+                connects those conversations with the customer&apos;s broader journey — appointments,
+                queue tokens, services, payments and follow-ups.
+              </p>
+            </Reveal>
+          </div>
+
+          <Reveal delay={120}>
+            <Card className="mx-auto max-w-3xl overflow-hidden p-0">
+              <div className="border-b border-border bg-surface px-5 py-3">
+                <p className="text-sm font-bold text-text">Ananya Sharma</p>
+                <p className="text-xs text-text-muted">Customer journey at a glance</p>
+              </div>
+              <div className="grid gap-4 p-5 sm:grid-cols-2">
+                <div className="space-y-3">
+                  <div className="rounded-lg bg-surface p-3">
+                    <p className="text-xs text-text-muted">WhatsApp</p>
+                    <p className="text-sm text-text">&ldquo;Can I come at 5 PM?&rdquo;</p>
+                  </div>
+                  <div className="rounded-lg bg-surface p-3">
+                    <p className="text-xs text-text-muted">Appointment</p>
+                    <p className="text-sm font-medium text-text">Today · 5:00 PM</p>
+                  </div>
+                  <div className="rounded-lg bg-surface p-3">
+                    <p className="text-xs text-text-muted">Queue</p>
+                    <p className="text-sm font-medium text-text">#A105</p>
+                  </div>
+                </div>
+                <div className="space-y-3">
+                  <div className="rounded-lg bg-surface p-3">
+                    <p className="text-xs text-text-muted">Service</p>
+                    <p className="text-sm font-medium text-text">Haircut</p>
+                  </div>
+                  <div className="rounded-lg bg-surface p-3">
+                    <p className="text-xs text-text-muted">Payment</p>
+                    <p className="text-sm font-medium text-text">₹500</p>
+                  </div>
+                  <div className="rounded-lg border border-dashed border-primary bg-primary-lighter p-3">
+                    <p className="text-xs font-medium text-primary">Follow-up</p>
+                    <p className="text-sm text-text">&ldquo;Book your next appointment&rdquo;</p>
+                  </div>
+                </div>
+              </div>
+            </Card>
+          </Reveal>
+
+          <Reveal delay={180}>
             <div className="flex flex-wrap justify-center gap-3">
               {CHANNELS.map((c) => (
                 <span
@@ -277,21 +612,33 @@ export default async function Home() {
           </Reveal>
         </section>
 
-        {/* Features */}
+        {/* AI */}
         <section className="flex flex-col gap-10">
-          <Reveal className="flex flex-col items-center gap-2 text-center">
-            <p className="text-xs font-medium tracking-wide text-primary uppercase">Features</p>
-            <h2 className="text-3xl font-extrabold text-text">Everything a small business inbox needs.</h2>
-          </Reveal>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {FEATURES.map((f, i) => (
-              <Reveal key={f.title} delay={i * 60}>
-                <Card className="flex h-full flex-col gap-3 p-5 transition-shadow duration-200 hover:shadow-[var(--shadow-elevated)]">
-                  <div className="flex h-9 w-9 items-center justify-center rounded-md bg-primary-lighter">
-                    <f.icon className="h-[18px] w-[18px] text-primary" aria-hidden="true" />
-                  </div>
-                  <h3 className="text-sm font-bold text-text">{f.title}</h3>
-                  <p className="text-sm text-text-secondary">{f.description}</p>
+          <div className="mx-auto max-w-2xl text-center">
+            <Reveal>
+              <p className="text-xs font-medium tracking-wide text-primary uppercase">AI</p>
+              <h2 className="mt-2 text-3xl font-extrabold text-text">
+                AI helps your team respond faster. Your team stays in control.
+              </h2>
+            </Reveal>
+            <Reveal delay={80}>
+              <p className="mt-3 text-base text-text-secondary">
+                AI drafts replies, summarizes conversations and helps with repetitive work. Human
+                approval remains essential — your team reviews, edits and sends every message.
+              </p>
+            </Reveal>
+          </div>
+
+          <div className="grid gap-6 md:grid-cols-3">
+            {[
+              { title: "AI drafts", description: "Suggested replies pulled from your knowledge base." },
+              { title: "Your team reviews", description: "Edit, approve or rewrite before sending." },
+              { title: "Your team decides", description: "Nothing goes out without human approval." },
+            ].map((item, i) => (
+              <Reveal key={item.title} delay={i * 80}>
+                <Card className="h-full p-6 text-center">
+                  <h3 className="mb-2 text-base font-bold text-text">{item.title}</h3>
+                  <p className="text-sm text-text-secondary">{item.description}</p>
                 </Card>
               </Reveal>
             ))}
@@ -299,21 +646,22 @@ export default async function Home() {
         </section>
 
         {/* How it works */}
-        <section className="flex flex-col gap-8">
-          <Reveal className="flex flex-col items-center gap-2 text-center">
+        <section className="flex flex-col gap-10">
+          <Reveal className="mx-auto max-w-2xl text-center">
             <p className="text-xs font-medium tracking-wide text-primary uppercase">How it works</p>
-            <h2 className="text-3xl font-extrabold text-text">
-              From new message to sent reply, in three steps.
-            </h2>
+            <h2 className="mt-2 text-3xl font-extrabold text-text">How Evernaro works</h2>
           </Reveal>
-          <div className="grid gap-6 sm:grid-cols-3">
+
+          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
             {HOW_IT_WORKS.map((step, i) => (
               <Reveal key={step.title} delay={i * 80}>
                 <div className="flex flex-col items-center gap-3 text-center sm:items-start sm:text-start">
                   <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary-lighter">
                     <step.icon className="h-5 w-5 text-primary" aria-hidden="true" />
                   </div>
-                  <p className="text-xs font-semibold tracking-wide text-text-muted uppercase">Step {i + 1}</p>
+                  <p className="text-xs font-semibold tracking-wide text-text-muted uppercase">
+                    Step {i + 1}
+                  </p>
                   <h3 className="text-base font-bold text-text">{step.title}</h3>
                   <p className="text-sm text-text-secondary">{step.description}</p>
                 </div>
@@ -324,13 +672,15 @@ export default async function Home() {
 
         {/* Pricing */}
         <section className="flex flex-col gap-8">
-          <Reveal className="flex flex-col items-center gap-2 text-center">
+          <Reveal className="mx-auto max-w-2xl text-center">
             <p className="text-xs font-medium tracking-wide text-primary uppercase">Pricing</p>
-            <h2 className="text-3xl font-extrabold text-text">Simple pricing that grows with you.</h2>
-            <p className="max-w-md text-sm text-text-secondary">
-              Prices in INR, billed monthly. Start with a 14-day free trial — no credit card required, cancel anytime.
+            <h2 className="mt-2 text-3xl font-extrabold text-text">Simple pricing that grows with you.</h2>
+            <p className="mt-2 text-base text-text-secondary">
+              Prices in INR, billed monthly. Start with a 14-day free trial — no credit card required,
+              cancel anytime.
             </p>
           </Reveal>
+
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {plans.map((plan, i) => {
               const highlighted = plan.slug === "growth";
@@ -363,9 +713,20 @@ export default async function Home() {
                     </div>
                     <ul className="flex flex-1 flex-col gap-2">
                       {plan.features.map((feature) => (
-                        <li key={feature.id} className="flex items-start gap-2 text-sm text-text-secondary">
-                          <Check className={`mt-0.5 h-4 w-4 flex-shrink-0 ${feature.included ? "text-primary" : "text-text-muted"}`} aria-hidden="true" />
-                          <span className={feature.included ? "" : "line-through opacity-60"}>{feature.label}{feature.value ? `: ${feature.value}` : ""}</span>
+                        <li
+                          key={feature.id}
+                          className="flex items-start gap-2 text-sm text-text-secondary"
+                        >
+                          <Check
+                            className={`mt-0.5 h-4 w-4 flex-shrink-0 ${
+                              feature.included ? "text-primary" : "text-text-muted"
+                            }`}
+                            aria-hidden="true"
+                          />
+                          <span className={feature.included ? "" : "line-through opacity-60"}>
+                            {feature.label}
+                            {feature.value ? `: ${feature.value}` : ""}
+                          </span>
                         </li>
                       ))}
                     </ul>
@@ -379,11 +740,15 @@ export default async function Home() {
               );
             })}
           </div>
+
           <Reveal>
             <p className="text-center text-sm text-text-muted">
               WhatsApp send costs billed separately at Meta&apos;s per-conversation rates, capped by your
               prepaid wallet. Need a custom plan?{" "}
-              <a href="mailto:contact@evernaro.com" className="cursor-pointer text-primary hover:text-primary-hover">
+              <a
+                href="mailto:contact@evernaro.com"
+                className="cursor-pointer text-primary hover:text-primary-hover"
+              >
                 Talk to us
               </a>
               .
@@ -393,10 +758,9 @@ export default async function Home() {
 
         {/* FAQ */}
         <section className="flex flex-col gap-8">
-          <Reveal className="flex flex-col items-center gap-2 text-center">
+          <Reveal className="mx-auto max-w-2xl text-center">
             <p className="text-xs font-medium tracking-wide text-primary uppercase">FAQ</p>
-            <h2 className="text-3xl font-extrabold text-text">Questions, answered.</h2>
-            <p className="max-w-md text-sm text-text-secondary">{FAQ_BLURB}</p>
+            <h2 className="mt-2 text-3xl font-extrabold text-text">Questions, answered.</h2>
           </Reveal>
           <Reveal>
             <Faq />
@@ -406,51 +770,139 @@ export default async function Home() {
         {/* Final CTA */}
         <section>
           <Reveal>
-            <Card className="relative flex flex-col items-center gap-3 overflow-hidden p-6 text-center sm:flex-row sm:items-center sm:justify-between sm:text-start sm:p-8">
-              <div className="pointer-events-none absolute -top-16 -right-16 h-48 w-48 rounded-full bg-primary-lighter blur-2xl" aria-hidden="true" />
-              <div className="relative flex flex-col items-center sm:items-start">
-                <h2 className="text-xl font-bold text-text sm:text-2xl">
-                  Ready to bring every channel into one inbox?
+            <Card className="relative flex flex-col items-center gap-5 overflow-hidden p-8 text-center">
+              <div
+                className="pointer-events-none absolute -top-16 -right-16 h-48 w-48 rounded-full bg-primary-lighter blur-2xl"
+                aria-hidden="true"
+              />
+              <div className="relative">
+                <h2 className="text-2xl font-bold text-text sm:text-3xl">
+                  Stop making customers guess when they&apos;ll be served.
                 </h2>
-                <p className="mt-1 flex flex-col items-center gap-1.5 text-sm text-text-secondary sm:flex-row sm:items-center">
-                  <Bell className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
-                  <span>Set up takes a few minutes — connect your first channel right after signing up.</span>
+                <p className="mx-auto mt-2 max-w-md text-sm text-text-secondary">
+                  Give your customers a better way to wait, book and stay informed.
                 </p>
               </div>
-              <div className="relative flex flex-col items-center gap-2 sm:flex-row">
-                <Link href="/signup" className="relative">
+              <div className="relative flex flex-col items-center gap-3 sm:flex-row">
+                <Link href="/signup">
                   <Button size="lg">Start free</Button>
                 </Link>
-                <a
-                  href={process.env.NEXT_PUBLIC_DEMO_BOOKING_URL ?? "mailto:contact@evernaro.com?subject=Book%20a%20demo"}
-                  className="relative"
-                >
-                  <Button variant="secondary" size="lg">Book a demo</Button>
+                <a href={DEMO_URL}>
+                  <Button variant="secondary" size="lg">
+                    Book a demo
+                  </Button>
                 </a>
+              </div>
+              <div className="relative flex flex-wrap items-center justify-center gap-4 text-xs text-text-muted">
+                <span className="flex items-center gap-1.5">
+                  <Check className="h-3.5 w-3.5 text-success" aria-hidden="true" />
+                  14-day free trial
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <Check className="h-3.5 w-3.5 text-success" aria-hidden="true" />
+                  No credit card required
+                </span>
               </div>
             </Card>
           </Reveal>
         </section>
       </main>
 
-      <footer className="border-t border-border px-6 py-8">
-        <div className="mx-auto flex w-full max-w-6xl flex-col gap-4">
-          <div className="flex flex-col items-center justify-between gap-4 sm:flex-row">
-          <Logo width={150} className="w-[130px] sm:w-[150px]" />
-            <div className="flex flex-wrap justify-center gap-2">
-              {CHANNELS.map((c) => (
-                <span
-                  key={c.label}
-                  className="flex items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1 text-xs text-text-muted"
-                >
-                  <c.icon className="h-3 w-3" aria-hidden="true" />
-                  {c.label}
-                </span>
-              ))}
+      <footer className="border-t border-border px-6 py-10">
+        <div className="mx-auto flex w-full max-w-6xl flex-col gap-8">
+          <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
+            <div>
+              <Logo width={130} className="w-[120px]" />
+              <p className="mt-3 max-w-xs text-sm leading-relaxed text-text-secondary">
+                Real-time customer flow management for modern businesses.
+              </p>
+            </div>
+
+            <div>
+              <p className="mb-3 text-xs font-semibold tracking-wide text-text-muted uppercase">
+                Product
+              </p>
+              <ul className="flex flex-col gap-2 text-sm text-text-secondary">
+                {[
+                  { label: "Queue Management", href: "/signup" },
+                  { label: "Appointments", href: "/signup" },
+                  { label: "Customer Management", href: "/signup" },
+                  { label: "Notifications", href: "/signup" },
+                  { label: "Unified Inbox", href: "/signup" },
+                  { label: "Payments", href: "/signup" },
+                  { label: "Analytics", href: "/signup" },
+                ].map((item) => (
+                  <li key={item.label}>
+                    <Link href={item.href} className="hover:text-text">
+                      {item.label}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            <div>
+              <p className="mb-3 text-xs font-semibold tracking-wide text-text-muted uppercase">
+                Industries
+              </p>
+              <ul className="flex flex-col gap-2 text-sm text-text-secondary">
+                {[
+                  "Salon",
+                  "Healthcare",
+                  "Restaurant",
+                  "Auto Service",
+                  "Home Services",
+                  "Real Estate",
+                  "Education",
+                  "Legal",
+                  "Dental",
+                  "Wellness",
+                ].map((item) => (
+                  <li key={item}>
+                    <Link href="/signup" className="hover:text-text">
+                      {item}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            <div>
+              <p className="mb-3 text-xs font-semibold tracking-wide text-text-muted uppercase">
+                Company
+              </p>
+              <ul className="flex flex-col gap-2 text-sm text-text-secondary">
+                <li>
+                  <Link href="/" className="hover:text-text">
+                    About
+                  </Link>
+                </li>
+                <li>
+                  <Link href="/contact" className="hover:text-text">
+                    Contact
+                  </Link>
+                </li>
+                <li>
+                  <Link href="/pricing" className="hover:text-text">
+                    Pricing
+                  </Link>
+                </li>
+                <li>
+                  <Link href="/privacy" className="hover:text-text">
+                    Privacy
+                  </Link>
+                </li>
+                <li>
+                  <Link href="/terms" className="hover:text-text">
+                    Terms
+                  </Link>
+                </li>
+              </ul>
             </div>
           </div>
-          <div className="flex flex-col items-center justify-between gap-3 border-t border-border pt-4 text-xs text-text-muted sm:flex-row">
-            <span>&copy; 2026 Eversity Tech LLP</span>
+
+          <div className="flex flex-col items-center justify-between gap-4 border-t border-border pt-6 text-xs text-text-muted sm:flex-row">
+            <span>Built by Eversity Tech LLP</span>
             <div className="flex items-center gap-4">
               <Link href="/terms" className="cursor-pointer hover:text-text-secondary">
                 Terms
@@ -464,6 +916,10 @@ export default async function Home() {
               <ThemeToggle />
             </div>
           </div>
+
+          <p className="text-center text-xs text-text-muted sm:text-start">
+            &copy; 2026 Eversity Tech LLP
+          </p>
         </div>
       </footer>
     </div>

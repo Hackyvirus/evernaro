@@ -165,7 +165,7 @@ export default function PricingPage() {
             ) : (
               <>
                 <Link href="/login" className="text-sm text-text-secondary hover:text-text">Log in</Link>
-                  <Link href="/register" className="inline-flex h-10 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-white transition-colors hover:bg-primary-hover">Get started</Link>
+                  <Link href="/signup" className="inline-flex h-10 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-white transition-colors hover:bg-primary-hover">Get started</Link>
               </>
             )}
           </div>
@@ -280,7 +280,7 @@ export default function PricingPage() {
                     </div>
                   ) : (
                     <Link
-                      href="/register"
+                      href="/signup"
                       className={`mt-auto inline-flex w-full items-center justify-center rounded-md px-4 py-2 text-sm font-medium transition-colors ${
                         plan.slug === "growth"
                           ? "bg-primary text-white hover:bg-primary-hover"

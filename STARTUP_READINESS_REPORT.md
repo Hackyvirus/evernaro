@@ -10,15 +10,15 @@
 
 ## 1. Executive Summary
 
-**FACT:** Evernaro is a functionally complete *minimum viable* multi-tenant SaaS. The repository contains 235 TypeScript/TSX files, a 1,458-line Prisma schema, 56 passing Vitest tests, Docker build files for both the web app and a BullMQ worker, and a Razorpay-integrated billing engine.
+**FACT:** Evernaro is a functionally complete *minimum viable* multi-tenant SaaS. The repository contains 235+ TypeScript/TSX files, a 1,500+ line Prisma schema, 56 passing Vitest tests, Docker build files for both the web app and a BullMQ worker, and a Razorpay-integrated billing engine.
 
 **FACT:** The core loop works end-to-end: a business connects Telegram / Email / WhatsApp (via Gupshup) / Instagram / Voice (Twilio), receives inbound messages into a unified inbox, gets AI-drafted replies from a configurable knowledge base, and sends campaigns or scheduled reminders. A platform admin dashboard lets Eversity manage clients, invoices, WhatsApp rate cards, and audit logs.
 
-**FACT:** Since the initial audit, the team has wired up most of the previously schema-only surface: Job Cards, Resources, Memberships/Packages, Reviews, Customer Events, Notification Preferences, a public booking page (`/business/[slug]/book`), a public review page (`/business/[slug]/review`), automated appointment reminders, automated review requests, and live polling on the queue dashboard. The strongest implemented use case remains *appointment-based service businesses that need WhatsApp/Telegram reminders*.
+**FACT:** Since the initial audit, the team has shipped the previously schema-only surface: Job Cards, Resources, Memberships/Packages, Reviews, Customer Events, Notification Preferences, automated appointment reminders, automated review requests, and live polling on the queue dashboard. New additions in this cycle include a public queue self check-in page, OTP-based staff verification, an auto no-show worker, dashboard QR codes, a public booking page (`/business/[slug]/book`), a public review page (`/business/[slug]/review`), 11 demo organizations (one per industry), demo account seed/cleanup tooling, and platform-admin forgot/reset-password flows.
 
 **RECOMMENDATION:** Before adding more schema or industries, narrow to one beachhead market, make its highest-value workflow 10× better than spreadsheets/WhatsApp Business, and sell it to 10 paying customers. The technology is ready; the strategy is not.
 
-**Startup readiness score: 5.7 / 10** (see §33 for breakdown).
+**Startup readiness score: 5.9 / 10** (see §33 for breakdown).
 
 ---
 
@@ -32,17 +32,19 @@ Evernaro is positioned as a unified customer communication platform: one inbox f
 - AI draft replies using OpenAI or Anthropic, driven by a business knowledge base (free-text + FAQs + products + policies + guardrails).
 - Bulk campaigns and scheduled/recurring reminders across channels, with WhatsApp template enforcement outside Meta's 24-hour window.
 - Contact CRM with tags, notes, company, CSV import, and per-contact timeline stubs.
-- Basic appointment booking, queue/token management, service catalog, and staff profiles.
+- Appointment booking, queue/token management, service catalog, and staff profiles.
+- Public customer pages: booking, review submission, and queue self check-in with live tracker.
+- OTP verification for queue hand-off; auto no-show marking when a called customer does not arrive.
 - Prepaid WhatsApp wallet that debits per message and blocks sends when empty.
 - Razorpay checkout for subscription invoices and wallet top-ups.
-- Platform admin surface for client management, invoice generation, rate cards, analytics, and audit logs.
+- Platform admin surface for client management, invoice generation, rate cards, analytics, audit logs, and self-service password reset.
+- Demo orgs and trial accounts for sales demos.
 
 **What is promised but not live (FACT):**
-- Job cards, resources, memberships/packages, reviews, automations, customer events, notification preferences — all have Prisma models but no production UI or active engine.
-- Public customer-facing pages (`/business/[slug]/book`, `/queue`, `/status`) do not exist.
-- Real-time SSE/WebSocket status updates are not implemented.
+- Real-time SSE/WebSocket status updates are not implemented (queue uses 5–7 second polling).
 - Industry-specific dashboards beyond navigation labels are not implemented.
 - Attachments/media messages are not supported.
+- A visual automation builder does not exist (auto-reminders/review requests are hard-coded).
 
 ---
 
@@ -67,8 +69,11 @@ Evernaro is positioned as a unified customer communication platform: one inbox f
 | CRM | Contact detail timeline | **PARTIAL** | `src/app/(dashboard)/contacts/[id]/page.tsx` | All users | Medium — needs appointments/jobs |
 | Campaigns | Bulk send, scheduling, audience targeting | **IMPLEMENTED** | `src/app/api/campaigns/**`, UI | Marketers | **High** — revenue driver |
 | Reminders | Scheduled/recurring messages/calls | **IMPLEMENTED** | `src/app/api/reminders/**`, worker | Operations | **High** — retention driver |
-| Appointments | Basic booking with service/staff | **IMPLEMENTED** | `src/app/(dashboard)/appointments/**`, service | Salons/clinics | High — vertical core |
+| Appointments | Basic booking with service/staff | **IMPLEMENTED** | `src/app/(dashboard)/appointments/**`, public booking page | Salons/clinics | High — vertical core |
 | Queue | Token-based queue with status transitions | **IMPLEMENTED** | `src/app/(dashboard)/queue/**`, service | Walk-in businesses | Medium — vertical core |
+| Queue | Public self check-in + live tracker | **IMPLEMENTED** | `src/app/business/[slug]/queue/**`, public API | End customers | Medium — experience differentiation |
+| Queue | OTP verification + no-show worker | **IMPLEMENTED** | `src/app/api/queue/verify/**`, `src/workers/index.ts` | Staff + operations | Medium — reduces ghost slots |
+| Queue | QR code generator | **IMPLEMENTED** | `src/app/(dashboard)/queue/qr-codes/**` | Staff/Managers | Low-Medium |
 | Services | Service catalog CRUD | **IMPLEMENTED** | `src/app/(dashboard)/services/**` | Service businesses | High — vertical core |
 | Staff | Staff profile CRUD | **IMPLEMENTED** | `src/app/(dashboard)/staff/**` | Service businesses | High — scheduling |
 | Knowledge Base | Business profile, FAQs, products, policies, AI guardrails | **IMPLEMENTED** | `src/app/(dashboard)/knowledge/**` | Admins | **High** — AI quality |
@@ -77,6 +82,7 @@ Evernaro is positioned as a unified customer communication platform: one inbox f
 | Team | Invite, roles, suspend, remove | **IMPLEMENTED** | `src/app/(dashboard)/team/**` | Admins | Medium — collaboration |
 | Analytics | Message volume, response rate, campaigns, reminders | **IMPLEMENTED** | `src/app/(dashboard)/analytics/**` | Managers | Medium — retention |
 | Platform Admin | Client mgmt, invoices, wallet, audit logs | **IMPLEMENTED** | `src/app/(platform-protected)/**` | Eversity ops | Critical — operations |
+| Platform Admin | Forgot/reset password | **IMPLEMENTED** | `src/app/api/platform/auth/**` | Platform admin | Medium — self-service |
 | Job Cards | CRUD dashboard + API | **IMPLEMENTED** | `src/app/(dashboard)/jobs/**`, `src/app/api/jobs/**` | Auto/home services | Medium |
 | Resources | CRUD dashboard + API | **IMPLEMENTED** | `src/app/(dashboard)/resources/**`, `src/app/api/resources/**` | Restaurants/salons | Medium |
 | Memberships/Packages | CRUD dashboard + API | **IMPLEMENTED** | `src/app/(dashboard)/memberships/**`, `src/app/api/memberships/**` | Salons/wellness | Medium |
@@ -84,8 +90,9 @@ Evernaro is positioned as a unified customer communication platform: one inbox f
 | Automations | Appointment reminder + review request auto-scheduling | **PARTIALLY IMPLEMENTED** | `src/lib/services/appointment-reminders.ts`, `src/lib/services/review-requests.ts` | All verticals | High |
 | Customer Events | Timeline in contact detail + event recording | **IMPLEMENTED** | `src/lib/customer-events.ts`, `src/app/(dashboard)/contacts/[id]/page.tsx` | All verticals | Medium |
 | Notification Preferences | Settings UI + API | **IMPLEMENTED** | `src/app/(dashboard)/settings/notifications/**`, `src/app/api/notification-preferences/**` | All verticals | Low |
-| Public customer pages | Booking page + review page live | **IMPLEMENTED** | `src/app/business/[slug]/book/**`, `src/app/business/[slug]/review/**` | End customers | High |
-| Real-time updates | Queue page polls every 7 seconds | **PARTIALLY IMPLEMENTED** | `src/app/(dashboard)/queue/page.tsx` | End customers + staff | Medium |
+| Public customer pages | Booking + review + queue pages live | **IMPLEMENTED** | `src/app/business/[slug]/**` | End customers | High |
+| Demo data | 11 demo orgs + trial accounts | **IMPLEMENTED** | `prisma/seed.ts`, `DEMO_ACCOUNTS.md` | Sales + onboarding | Medium |
+| Real-time updates | Queue page polls every 5–7 seconds | **PARTIALLY IMPLEMENTED** | `src/app/(dashboard)/queue/page.tsx`, public tracker | End customers + staff | Medium |
 | Attachments | Do not exist | **UNKNOWN** | Not found | All users | N/A |
 
 ---
@@ -94,8 +101,8 @@ Evernaro is positioned as a unified customer communication platform: one inbox f
 
 **FACT:**
 - **Frontend:** Next.js 16.3.0 App Router, React 19.2.4, Tailwind CSS v4, TypeScript 5.x.
-- **Backend:** Next.js API routes + separate `src/workers/index.ts` BullMQ worker for campaigns/reminders/voice.
-- **Database:** PostgreSQL via Prisma 6.19.3 (schema ~1,458 lines, 50+ models).
+- **Backend:** Next.js API routes + separate `src/workers/index.ts` BullMQ worker for campaigns/reminders/voice/no-show checks.
+- **Database:** PostgreSQL via Prisma 6.19.3 (schema ~1,500 lines, 50+ models).
 - **Auth:** next-auth v5 beta with JWT sessions, bcrypt password hashing, TOTP MFA.
 - **Queue:** BullMQ + Redis (ioredis).
 - **Email:** Resend.
@@ -111,7 +118,7 @@ Evernaro is positioned as a unified customer communication platform: one inbox f
 - Constant-time dummy bcrypt hash prevents email enumeration.
 - Role checks on API routes (`requireOrgMember(UserRole.XXX)`).
 
-**VALIDATION REQUIRED:** Whether the Docker build currently passes. The previous internal audit claimed `npm run build` passes, but that was before the latest commits. **RECOMMENDATION:** Run `npm run build` on CI before any launch.
+**VALIDATION REQUIRED:** Whether the Docker build currently passes. `npm run build` and `npm test` pass locally. **RECOMMENDATION:** Run Docker build and add CI before any launch.
 
 ---
 
@@ -127,15 +134,18 @@ Evernaro is positioned as a unified customer communication platform: one inbox f
 7. WhatsApp prepaid wallet with per-message debit and low-balance alerts.
 8. Razorpay subscription billing (plans, add-ons, coupons, usage), wallet top-up, invoice payment.
 9. Team management with role-based UI/API enforcement.
-10. Platform admin: clients, invoices, wallet credits, rate cards, audit logs.
-11. Basic appointments, queue, services, staff.
+10. Platform admin: clients, invoices, wallet credits, rate cards, audit logs, forgot/reset password.
+11. Appointments, services, staff, public booking page.
+12. Token-based queue with public self check-in, live tracker, OTP hand-off, auto no-show, QR codes.
+13. Job cards, resources, memberships/packages, reviews, customer events, notification preferences.
+14. Demo orgs and trial accounts for sales demos.
 
 ### Implemented in schema / API only (no usable UI or engine)
 _None — all previously schema-only features now have at least a working UI/API layer._
 
 ### Partially implemented
 1. **Automations engine:** Appointment reminders and review requests are auto-scheduled, but a visual automation builder does not exist.
-2. **Real-time updates:** Queue dashboard polls every 7 seconds; WebSocket/SSE not implemented.
+2. **Real-time updates:** Queue dashboard and public tracker poll every 5–7 seconds; WebSocket/SSE not implemented.
 
 ### Not implemented
 1. Attachments/media in messages.
@@ -156,7 +166,7 @@ _None — all previously schema-only features now have at least a working UI/API
 | No-shows and forgotten appointments | Salons, clinics, auto service | Manual phone reminders | Time-consuming, inconsistent, costly no-shows | Automated scheduled reminders (WhatsApp/SMS/voice) | **High** — reduces no-shows, increases utilization |
 | Cannot send bulk offers without WhatsApp template approvals | Marketing staff | Personal WhatsApp broadcast | Limited reach, no tracking, risk of number ban | Campaigns with approved WhatsApp templates + analytics | Medium — marketing efficiency |
 | No visibility into who on the team replied to what | Managers | Trust + verbal updates | No accountability, duplicate replies | Assignment, status, audit logs | Medium — operational control |
-| Customers don't know their queue position | Walk-in businesses (salons, clinics, restaurants) | Physical tokens / yelling names | Poor customer experience | Token-based queue with status updates | Medium — experience differentiation |
+| Customers don't know their queue position | Walk-in businesses (salons, clinics, restaurants) | Physical tokens / yelling names | Poor customer experience | Public queue check-in with live tracker and OTP | Medium — experience differentiation |
 | Paying surprise WhatsApp API bills | Anyone using BSPs | Direct BSP with no spend cap | Cost overruns | Prepaid wallet with per-message debit | Medium — cost control |
 
 ---
@@ -193,7 +203,7 @@ Scored 1–5 on: **Pain fit** (do they have the problem?), **Message volume** (e
 | Clinics / Dental | 5 | 4 | 4 | 3 | 3 | 3 | 4 | **23/35** | Strong need, but HIPAA-like sensitivities and longer sales |
 | Wellness / Spa | 4 | 3 | 4 | 4 | 2 | 1 | 4 | **22/35** | Similar to salons, smaller TAM |
 | Real Estate | 4 | 3 | 5 | 2 | 3 | 2 | 3 | **19/35** | High deal value but low frequency; harder to prove ROI |
-| Auto Service | 4 | 3 | 3 | 3 | 3 | 2 | 3 | **18/35** | Job-card need not yet built |
+| Auto Service | 4 | 3 | 3 | 3 | 3 | 2 | 3 | **18/35** | Job-card need now built |
 | Home Services | 4 | 3 | 3 | 3 | 3 | 2 | 3 | **18/35** | Dispatch/location tracking not built |
 | Education / Coaching | 3 | 3 | 3 | 3 | 3 | 1 | 2 | **15/35** | Lower urgency; admissions are seasonal |
 | Legal | 3 | 2 | 4 | 2 | 3 | 3 | 2 | **14/35** | Long sales, matter confidentiality concerns |
@@ -207,8 +217,8 @@ Scored 1–5 on: **Pain fit** (do they have the problem?), **Message volume** (e
 **RECOMMENDATION: Salons and beauty parlors in India.**
 
 **Why salons win (FACT + ASSUMPTION):**
-- **FACT:** Evernaro already has the vertical preset for real estate only, but the *schema and UI* for appointments, services, staff, and queue are all live — the exact modules salons need.
-- **FACT:** The demo org seeded in `prisma/seed.ts` is a salon, suggesting the team intuitively leans this way.
+- **FACT:** Evernaro already has the vertical preset for real estate only, but the *schema and UI* for appointments, services, staff, queue, and public booking are all live — the exact modules salons need.
+- **FACT:** The demo org seeded in `prisma/seed.ts` is a salon, and 11 demo orgs now exist across industries.
 - **ASSUMPTION:** Salon owners feel no-show and last-minute cancellation pain daily; a single no-show is a lost revenue slot that cannot be recovered.
 - **ASSUMPTION:** Salon staff already use WhatsApp to confirm appointments; Evernaro automates what they are doing manually.
 - **ASSUMPTION:** Salon decision makers (owners) are reachable via Instagram/Facebook ads and local WhatsApp groups, keeping CAC low.
@@ -244,22 +254,24 @@ Target: **Salons, beauty parlors, and wellness clinics in India.**
 4. **Connect channel:** Adds WhatsApp Business API via Gupshup or Telegram bot.
 5. **Import customers:** Uploads CSV of phone numbers or waits for inbound messages.
 6. **Daily use:**
-   - Books appointments into the calendar.
+   - Books appointments into the calendar or accepts public bookings.
    - Sees inbound WhatsApp messages in unified inbox.
    - Approves AI-drafted replies or writes own.
    - Sends bulk festival/offer campaign using approved template.
+   - For walk-ins, prints queue QR code; customers check in and track live.
    - Receives low-wallet alert and tops up via Razorpay.
 7. **Value moment:** First week sees 2–3 fewer no-shows and 5+ hours saved on replies.
 8. **Expand:** Adds staff seats, enables queue for walk-ins, asks for reviews after service.
 
 ### End customer
-1. Books appointment via phone/Instagram/WhatsApp.
+1. Books appointment via public booking page, phone, Instagram, or WhatsApp.
 2. Receives automated WhatsApp reminder 24 hours before.
 3. Replies "Yes" or reschedules.
 4. Day of service: receives "Your turn is coming up" message if queue is enabled.
-5. After service: receives review request (planned, not live).
+5. For walk-ins: scans QR code, joins queue, sees live position, gives OTP when called.
+6. After service: receives review request.
 
-**FACT:** The public booking/status pages (steps 1, 4) do not exist yet. End-customer experience is currently outbound/reminder-only.
+**FACT:** Public booking, review, and queue pages now exist. The end-customer experience is no longer outbound-only.
 
 ---
 
@@ -287,10 +299,12 @@ Target: **Salons, beauty parlors, and wellness clinics in India.**
 
 ### Use case 4: Walk-in queue management
 - Customer walks in for a haircut without appointment.
-- Staff adds customer to queue; token "A-12" generated.
-- When previous service ends, staff clicks "Call next"; status moves to CALLED.
-- Customer can be notified via WhatsApp when turn is near (partial — no real-time engine yet, but message can be sent manually).
-- **Value:** Organized waiting, better experience, staff efficiency.
+- Staff prints queue QR code from dashboard.
+- Customer scans code, enters name/phone, joins queue; token "A-12" and 6-digit OTP generated.
+- Staff clicks "Call next"; entry status moves to CALLED; no-show timer starts.
+- Customer shows OTP; staff enters it, status moves to IN_PROGRESS; no-show timer cancels.
+- If customer never arrives, worker auto-marks NO_SHOW after threshold.
+- **Value:** Organized waiting, better experience, staff efficiency, fewer ghost slots.
 
 ### Use case 5: Post-service follow-up and rebooking
 - After appointment marked COMPLETED, owner schedules recurring reminder in 6 weeks: *"Hi {{name}}, it's been 6 weeks since your last facial. Ready to book your next?"*
@@ -344,7 +358,7 @@ Target: **Salons, beauty parlors, and wellness clinics in India.**
 **FACT (backend billing engine):**
 - `SubscriptionPlan`, `PlanFeature`, `PlanLimit`, `BillableService`, `AddOn`, `PlanAddOn`, `Coupon`, `UsageRecord`, `UsageAggregate` models exist.
 - Pricing engine supports monthly/yearly, GST, coupons, add-ons, usage tiers.
-- Actual plan rows are seeded via `prisma/billing-seed.ts` (not inspected in detail, but referenced).
+- Actual plan rows are seeded via `prisma/billing-seed.ts`.
 
 **RECOMMENDATION:**
 1. **Keep it simple for launch.** Hide Scale plan from self-serve; make it "Contact sales."
@@ -397,7 +411,7 @@ Target: **Salons, beauty parlors, and wellness clinics in India.**
 
 | Competitor / Alternative | What they do | Evernaro vs. them | Threat |
 |---|---|---|---|
-| WhatsApp Business App | Free, personal-tool inbox | Evernaro adds multi-user, AI drafts, campaigns, CRM | **High** — good enough for many; free is powerful |
+| WhatsApp Business App | Free, personal-tool inbox | Evernaro adds multi-user, AI drafts, campaigns, CRM, public booking/queue | **High** — good enough for many; free is powerful |
 | Interakt / Wati (India BSPs) | WhatsApp BSP + shared inbox | Stronger on WhatsApp API; weaker on multi-channel/AI | Medium — direct overlap |
 | Zoho CRM + SalesIQ | Full CRM + chat | Much broader; more expensive/complex | Medium — competes at higher end |
 | Freshdesk / Freshchat | Support ticketing | Better ticket workflow; no WhatsApp-first SMB pricing | Medium |
@@ -415,13 +429,14 @@ Target: **Salons, beauty parlors, and wellness clinics in India.**
 1. True multi-channel inbox (not just WhatsApp) with human-in-the-loop AI drafts.
 2. Prepaid WhatsApp wallet preventing bill shock.
 3. Voice reminder calls scoped to compliance-safe use cases.
-4. Industry-aware schema and onboarding (partially implemented).
-5. Built-in Razorpay billing + platform admin for a multi-tenant SaaS operator.
+4. Public booking, review, and queue pages out of the box.
+5. OTP-based queue hand-off with auto no-show handling.
+6. Built-in Razorpay billing + platform admin for a multi-tenant SaaS operator.
 
 **Weak differentiators / commodity:**
 - Campaigns and reminders (many BSPs offer this).
 - Contact CRM (table stakes).
-- Queue/token system (niche, not unique).
+- Basic queue/token system (niche, not unique).
 
 **Differentiation risk:** The product tries to be broad. A focused salon-specific tool with deeper scheduling, staff commissions, and review requests would beat Evernaro in that niche.
 
@@ -437,7 +452,7 @@ Score 1–5, then average.
 |---|---|---|
 | Problem severity | 4 | Salons/clinics lose real money to no-shows and slow replies |
 | Target market clarity | 3 | Salons best, but product still markets broadly |
-| Product-solution fit | 3 | Core loop works; vertical depth missing |
+| Product-solution fit | 4 | Core loop works; public booking/queue now live |
 | Willingness to pay | 3 | Pricing plausible, not validated |
 | Competitive moat | 2 | Feature differentiation is thin vs. free tools + BSPs |
 | Distribution clarity | 2 | No validated GTM channel identified |
@@ -446,7 +461,7 @@ Score 1–5, then average.
 | Team/execution | 4 | Strong engineering; broad scope discipline needed |
 | Unit economics potential | 3 | Good if churn is controlled; unproven |
 
-**Average PMF score: 2.8 / 5.0** — "Pre-PMF." The product is built, but market validation is missing.
+**Average PMF score: 2.9 / 5.0** — "Pre-PMF." The product is built, but market validation is missing.
 
 ---
 
@@ -458,21 +473,22 @@ A WhatsApp-first appointment reminder + unified inbox tool for **Indian salons a
 **MVP feature set:**
 1. WhatsApp Business API connection (Gupshup) + Telegram fallback.
 2. Contact import (CSV) and automatic contact creation from inbound messages.
-3. Appointment booking with service, staff, date/time.
+3. Appointment booking with service, staff, date/time + public booking page.
 4. Automated WhatsApp reminders (24h, 2h, custom) using templates.
 5. Unified inbox for replies with AI drafts from knowledge base.
-6. Prepaid WhatsApp wallet + Razorpay top-up.
+6. Prepaid wallet + Razorpay.
 7. Simple analytics: no-shows prevented, messages sent, response rate.
-8. One plan: ₹2,499/month (5-day free trial) + usage.
+8. Queue check-in + QR codes for walk-ins.
+9. One plan: ₹2,499/month (5-day free trial) + usage.
 
 **What to cut from MVP:**
 - Instagram, Email, Voice channels.
 - Campaigns beyond appointment reminders.
-- Queue, job cards, resources, memberships, reviews, automations.
+- Job cards, resources, memberships, reviews, automations.
 - Multi-industry templates beyond salon/clinic.
 - Scale plan / enterprise features.
 
-**RATIONALE:** Fewer channels = simpler onboarding. Appointment reminders are the highest-value, easiest-to-prove feature. Everything else is a distraction until 10 salons pay.
+**RATIONALE:** Fewer channels = simpler onboarding. Appointment reminders + public booking + queue are the highest-value, easiest-to-prove features. Everything else is a distraction until 10 salons pay.
 
 ---
 
@@ -483,7 +499,7 @@ A WhatsApp-first appointment reminder + unified inbox tool for **Indian salons a
 | No subscription enforcement at worker level (only UI banner) | **Critical** | `src/lib/subscription.ts` only checks `Organization.status`; worker does call `requireActiveSubscription` | P0 — fix before any paid launch |
 | Industry-specific dashboards beyond nav labels | **High** | All industries see same pages | P1 — salon-first |
 | No visual automation builder | **Medium** | Auto-reminders/reviews exist but no UI to configure rules | P2 — manual scheduling suffices initially |
-| No WebSocket/SSE real-time updates | **Medium** | Queue polls every 7 seconds; true push not implemented | P2 |
+| No WebSocket/SSE real-time updates | **Medium** | Queue polls every 5–7 seconds; true push not implemented | P2 |
 | No attachments/media | **Medium** | WhatsApp/Instagram heavily visual | P2 |
 | No calendar sync (Google/Outlook) | **Medium** | Appointments are isolated | P2 |
 | No custom fields on contacts | **Medium** | Limits CRM depth | P3 |
@@ -503,6 +519,8 @@ A WhatsApp-first appointment reminder + unified inbox tool for **Indian salons a
 - Inbox three-column layout works on desktop.
 - WhatsApp 24-hour stale warning prevents user confusion.
 - Help page exists.
+- Public booking, review, and queue pages are simple and mobile-friendly.
+- Queue dashboard has live polling, status change beep, and OTP verification UI.
 
 **Weaknesses (FACT):**
 - **Sign-up page links to `/register` in pricing CTA but route may be `/signup` (pricing page uses `/register`, landing uses `/signup`).** Inconsistency risk.
@@ -510,10 +528,10 @@ A WhatsApp-first appointment reminder + unified inbox tool for **Indian salons a
 - **Campaign creation wizard** not inspected but likely functional; needs user testing.
 - **Knowledge base vertical preset dropdown** only has "Real Estate" option despite salon demo — confusing.
 - **Appointment page** is basic: no calendar view, no conflict visualization, no recurring appointments.
-- **Queue page** requires manual refresh; no auto-push.
+- **Queue page** requires polling; no auto-push.
 - **Settings** mixes business profile and channel config; tabs are fine but channel setup is technical (Gupshup API keys, Meta app review).
 
-**RECOMMENDATION:** Invest in first-run onboarding wizard for salons: import contacts, connect WhatsApp, book first appointment, send test reminder.
+**RECOMMENDATION:** Invest in first-run onboarding wizard for salons: import contacts, connect WhatsApp, book first appointment, send test reminder, print queue QR.
 
 ---
 
@@ -528,7 +546,8 @@ A WhatsApp-first appointment reminder + unified inbox tool for **Indian salons a
 4. **Add one service and one staff member.**
 5. **Book a test appointment** for tomorrow.
 6. **Send a test reminder** to own number.
-7. **Invite one team member** (optional).
+7. **Print a queue QR code** and run a test walk-in.
+8. **Invite one team member** (optional).
 
 **Success metric:** Time to first reminder sent < 10 minutes; first inbound reply handled < 24 hours.
 
@@ -583,10 +602,10 @@ A WhatsApp-first appointment reminder + unified inbox tool for **Indian salons a
 | Area | Status | Notes |
 |---|---|---|
 | Tests | **Pass** | 56/56 Vitest tests pass (verified 2026-08-08). |
-| TypeScript | **Likely pass** | Previous audit claimed pass; run `npx tsc --noEmit` before launch. |
+| TypeScript | **Pass** | `npm run build` passes; typecheck included in build. |
 | Lint | **Unknown** | Not run during audit. |
-| Build | **Unknown** | Previous audit claimed pass; Docker build should be tested. |
-| Database migrations | **Committed?** | `prisma/migrations` not inspected; ensure migrations exist and are deployable. |
+| Build | **Pass** | `npm run build` succeeds (verified 2026-08-08). |
+| Database migrations | **Committed & deployed** | `prisma/migrations` includes all migrations; latest applied to Neon. |
 | Docker | **Ready** | `Dockerfile`, `Dockerfile.worker`, `docker-compose.yml` present and look correct. |
 | Worker | **Ready** | Separate worker with healthcheck, graceful shutdown, Sentry. |
 | CI/CD | **MISSING** | No `.github/workflows` found. **CRITICAL GAP.** |
@@ -657,7 +676,7 @@ A WhatsApp-first appointment reminder + unified inbox tool for **Indian salons a
 - **Duration:** 60–180 days.
 - **Goal:** 50 paying salons/clinics.
 - **Tactics:** Referral program (1 month free for referrer), salon WhatsApp groups, Instagram ads.
-- **Product:** Add public booking page, Google Calendar sync, review requests.
+- **Product:** Add Google Calendar sync, review requests, salon analytics.
 - **Pricing:** Raise to ₹2,499/month; annual plan at ₹24,990.
 
 ### Stage 50–100: Vertical expansion
@@ -717,7 +736,7 @@ A WhatsApp-first appointment reminder + unified inbox tool for **Indian salons a
 | 5 | Churn high after trial | Medium | High | Weekly ROI reports + habit loops |
 | 6 | CAC exceeds LTV | Medium | High | Founder-led sales first; avoid paid ads until unit economics known |
 | 7 | Team builds more features instead of selling | High | High | 90-day sales quota; freeze non-core dev |
-| 8 | Real-time/public pages delayed | Medium | Medium | Launch without them; add in Phase 2 |
+| 8 | Real-time/public pages delayed | Low | Medium | Public pages are live; real-time is a polish item |
 | 9 | Compliance (TRAI/DND) for campaigns | Medium | High | Restrict to opted-in contacts; voice reminder-only |
 | 10 | Security incident / cross-tenant leak | Low | Very High | Tenant-isolation tests, encryption, audits |
 | 11 | Razorpay integration issues | Low | Medium | Test payments in staging |
@@ -736,10 +755,10 @@ A WhatsApp-first appointment reminder + unified inbox tool for **Indian salons a
 ## 32. Investor Assessment
 
 **What an investor would see (FACT-based):**
-- **Team/execution:** Strong. 235 files, clean schema, tests pass, Dockerized, billing engine built. This is not an MVP built on no-code; it's production-grade engineering.
+- **Team/execution:** Strong. 235+ files, clean schema, tests pass, Dockerized, billing engine built, public pages and queue automation shipped. This is not an MVP built on no-code; it's production-grade engineering.
 - **Market:** Large (millions of Indian SMBs), but crowded and price-sensitive.
 - **Traction:** **Unknown / likely pre-revenue.** No evidence of paying customers in code/docs.
-- **Differentiation:** Moderate. Multi-channel + AI drafts + wallet are real, but not defensible long-term.
+- **Differentiation:** Moderate. Multi-channel + AI drafts + wallet + public queue/booking are real, but not defensible long-term without vertical depth.
 - **Focus:** **Weak.** Too many industries, too many schema tables without UX. This is the #1 concern.
 - **Unit economics:** Theoretical only.
 
@@ -751,19 +770,19 @@ A WhatsApp-first appointment reminder + unified inbox tool for **Indian salons a
 
 | Dimension | Score | Weight | Weighted | Rationale |
 |---|---|---|---|---|
-| Product completeness (core loop) | 8 | 15% | 1.20 | Core inbox + campaigns + reminders + public booking + reviews work |
-| Vertical depth | 5 | 15% | 0.75 | Job cards, resources, memberships, reviews, events, automations now wired |
+| Product completeness (core loop) | 9 | 15% | 1.35 | Core inbox + campaigns + reminders + public booking + reviews + queue OTP/auto no-show |
+| Vertical depth | 6 | 15% | 0.90 | Public pages and queue automation add salon depth; still needs salon-first UX |
 | Market validation | 1 | 15% | 0.15 | No evidence of paid pilots |
 | Security / multi-tenancy | 7 | 10% | 0.70 | Solid foundation, needs CI/tests |
 | Billing / monetization | 6 | 10% | 0.60 | Razorpay ready; pricing unvalidated |
 | GTM clarity | 3 | 10% | 0.30 | No validated channel |
 | UX / onboarding | 6 | 10% | 0.60 | Clean UI; public pages and queue polling improve experience |
-| Team execution velocity | 7 | 10% | 0.70 | Strong engineering output |
-| Production readiness | 5 | 10% | 0.50 | Docker + tests, missing CI |
+| Team execution velocity | 8 | 10% | 0.80 | Strong engineering output across many areas |
+| Production readiness | 6 | 10% | 0.60 | Docker + tests + migrations; missing CI |
 | Unit economics / financial model | 3 | 5% | 0.15 | All assumptions |
-| **Total** | | | **5.65 / 10** | |
+| **Total** | | | **6.15 / 10** | |
 
-Rounded: **5.7 / 10**.
+Rounded: **6.2 / 10**.
 
 **Interpretation:** Engineering is ahead of the business. Do not launch broadly. Launch a narrow, paid pilot.
 
@@ -777,7 +796,7 @@ Rounded: **5.7 / 10**.
 |---|---|---|---|
 | 1 | Finalize salon value prop; create 5 WhatsApp templates; fix `/register` vs `/signup` link inconsistency; add CI workflow | Product/Eng | 5 templates approved; CI green |
 | 2 | Recruit 10 salons for pilot; manually onboard 5; track no-show rates | Founder/sales | 5 salons actively using inbox |
-| 3 | Add simple onboarding wizard (connect WhatsApp → import → book test); send weekly ROI report | Eng | Activation rate >60% |
+| 3 | Add simple onboarding wizard (connect WhatsApp → import → book test → print queue QR); send weekly ROI report | Eng | Activation rate >60% |
 | 4 | Collect testimonials; decide pilot pricing; fix any blockers | All | 3+ salons commit to paid plan |
 
 ---
@@ -786,7 +805,6 @@ Rounded: **5.7 / 10**.
 
 **Goal: 15 paying orgs and validated unit economics.**
 
-- Add public customer booking page (`/business/[slug]/book`).
 - Add Google Calendar 2-way sync for appointments.
 - Launch referral program (1 month free).
 - Add salon-specific analytics: no-shows prevented, appointments confirmed, top services.
@@ -812,10 +830,10 @@ Rounded: **5.7 / 10**.
 
 ### V1.0 — Salon Launch (now – 60 days)
 - WhatsApp-first inbox + AI drafts.
-- Appointments + automated reminders.
+- Appointments + automated reminders + public booking page.
 - Contact CRM + CSV import.
 - Prepaid wallet + Razorpay.
-- Public booking page.
+- Queue self check-in + QR codes + OTP + auto no-show.
 - Salon templates + onboarding wizard.
 
 ### V1.1 — Retention & Expansion (60–120 days)
@@ -850,7 +868,7 @@ Rounded: **5.7 / 10**.
 5. **Stop perfecting the multi-plan billing engine.** Launch with one or two plans; usage billing complexity can wait.
 6. **Stop writing architecture docs.** The product is built; sell it.
 
-**What to keep building:** Appointment/reminder UX, onboarding, salon templates, public booking page, no-show ROI reporting.
+**What to keep building:** Appointment/reminder UX, onboarding, salon templates, no-show ROI reporting, queue polish.
 
 ---
 
@@ -871,20 +889,20 @@ Rounded: **5.7 / 10**.
 
 ## 40. Final Startup Verdict
 
-**FACT:** Evernaro is one of the more complete early-stage SaaS codebases this audit has inspected. The engineering is disciplined, security-minded, and production-deployable. The team has built a multi-tenant omnichannel inbox with real AI, real billing, and a real worker architecture.
+**FACT:** Evernaro is one of the more complete early-stage SaaS codebases this audit has inspected. The engineering is disciplined, security-minded, and production-deployable. The team has built a multi-tenant omnichannel inbox with real AI, real billing, a real worker architecture, public customer pages, and now a fully automated queue/no-show flow.
 
 **FACT:** The product's biggest enemy is its own breadth. It can be sold to salons, clinics, real estate agents, auto shops, and restaurants — but in trying to serve all of them, it does not yet *dominate* any of them.
 
-**FACT:** Most previously schema-only features are now wired (job cards, resources, memberships, reviews, customer events, notification preferences, public booking/review pages, automated reminders, review requests, queue polling). This removes the "incomplete product" objection but does not remove the market-risk objection.
+**FACT:** Most previously schema-only features are now wired (job cards, resources, memberships, reviews, customer events, notification preferences, public booking/review/queue pages, automated reminders, review requests, queue OTP, auto no-show, QR codes). This removes the "incomplete product" objection but does not remove the market-risk objection.
 
 **VERDICT:** Evernaro is **not ready for a broad public launch**, but it **is ready for a controlled, vertical-specific paid pilot**. The technology risk is low. The market risk is high and unvalidated.
 
-**RECOMMENDATION:** Choose salons and beauty clinics as the beachhead. Use the new public booking page and automated reminders as the core demo. Sell to 10 paying salons in the next 30 days. Let customer behavior — not the schema — decide what to build next.
+**RECOMMENDATION:** Choose salons and beauty clinics as the beachhead. Use the new public booking page, automated reminders, and queue self check-in as the core demo. Sell to 10 paying salons in the next 30 days. Let customer behavior — not the schema — decide what to build next.
 
 ---
 
 # THE ONE THING WE SHOULD DO NEXT
 
-**Recruit and onboard 5 paying salon or beauty-clinic customers in India within the next 30 days, leading with the new public booking page and automated WhatsApp reminders, and measure no-show reduction.**
+**Recruit and onboard 5 paying salon or beauty-clinic customers in India within the next 30 days, leading with the public booking page, automated WhatsApp reminders, and queue self check-in, and measure no-show reduction.**
 
-The recently built features (job cards, resources, memberships, reviews, events, notification preferences, queue polling) are available for vertical expansion, but the sales pitch should remain narrow: fewer no-shows and faster replies.
+The recently built features (job cards, resources, memberships, reviews, events, notification preferences, queue OTP, auto no-show, QR codes) are available for vertical expansion, but the sales pitch should remain narrow: fewer no-shows, faster replies, and a smoother walk-in experience.

@@ -15,8 +15,21 @@ const jakarta = Plus_Jakarta_Sans({
 });
 
 export const metadata: Metadata = {
-  title: "Evernaro",
-  description: "One inbox for every customer channel — by Eversity Tech LLP",
+  title: "Evernaro — Real-Time Customer Flow Management",
+  description:
+    "Evernaro helps businesses manage queues, appointments, customer communication, notifications and the complete customer journey from one platform.",
+  openGraph: {
+    title: "Evernaro — Real-Time Customer Flow Management",
+    description:
+      "Let customers join your queue, book appointments, track their position, and know exactly when it's their turn.",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Evernaro — Real-Time Customer Flow Management",
+    description:
+      "Let customers join your queue, book appointments, track their position, and know exactly when it's their turn.",
+  },
   icons: {
     icon: [
       { url: "/favicon.svg", type: "image/svg+xml" },
