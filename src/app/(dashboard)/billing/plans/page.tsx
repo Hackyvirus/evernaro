@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button, Card, Skeleton, Badge, Input } from "@/components/ui";
-import { Check, Loader2, Sparkles } from "lucide-react";
+import { Check, Loader2 } from "lucide-react";
 import { RoleAwareAdminGuard } from "../../role";
 
 interface PlanFeature {
@@ -146,43 +146,40 @@ function BillingPlansPageContent() {
       .finally(() => setLoading(false));
   }, []);
 
-  // Fetch quote whenever selection changes.
-  useEffect(() => {
-    if (!selectedPlanId) return;
-
-    const addOns = Object.entries(selectedAddOns)
-      .filter(([, qty]) => qty > 0)
-      .map(([addOnId, quantity]) => ({ addOnId, quantity }));
-
-    const controller = new AbortController();
-    setQuoting(true);
-    fetch("/api/billing/quote", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        planId: selectedPlanId,
-        frequency,
-        addOns,
-        couponCode: couponCode || null,
-      }),
-      signal: controller.signal,
-    })
-      .then(async (res) => {
-        if (!res.ok) throw new Error("Failed to calculate quote");
-        const data = await res.json();
-        setQuote(data.quote);
-      })
-      .catch((err) => {
-        if (err.name !== "AbortError") setQuote(null);
-      })
-      .finally(() => setQuoting(false));
-
-    return () => controller.abort();
-  }, [selectedPlanId, frequency, selectedAddOns, couponCode]);
-
   function updateAddOn(addOnId: string, quantity: number, max: number | null) {
     const qty = Math.max(0, Math.min(quantity, max ?? Infinity));
-    setSelectedAddOns((prev) => ({ ...prev, [addOnId]: qty }));
+    setSelectedAddOns((prev) => {
+      const next = { ...prev, [addOnId]: qty };
+      return next;
+    });
+  }
+
+  async function fetchQuote(planId: string, planFrequency: "MONTHLY" | "YEARLY" = frequency) {
+    setQuoting(true);
+    setError(null);
+    try {
+      const addOns = Object.entries(selectedAddOns)
+        .filter(([, qty]) => qty > 0)
+        .map(([addOnId, quantity]) => ({ addOnId, quantity }));
+      const res = await fetch("/api/billing/quote", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          planId,
+          frequency: planFrequency,
+          addOns,
+          couponCode: couponCode || null,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Failed to calculate quote");
+      setQuote(data.quote);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to calculate quote");
+      setQuote(null);
+    } finally {
+      setQuoting(false);
+    }
   }
 
   async function openRazorpay(
@@ -251,6 +248,7 @@ function BillingPlansPageContent() {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          action: "change",
           planId: selectedPlanId,
           frequency,
           addOns,
@@ -312,7 +310,10 @@ function BillingPlansPageContent() {
               <button
                 key={f}
                 type="button"
-                onClick={() => setFrequency(f)}
+                onClick={() => {
+                  setFrequency(f);
+                  if (selectedPlanId) void fetchQuote(selectedPlanId, f);
+                }}
                 className={`rounded-md px-4 py-1.5 text-sm font-medium transition-colors ${
                   frequency === f ? "bg-primary text-white" : "text-text-secondary hover:text-text"
                 }`}
@@ -383,7 +384,10 @@ function BillingPlansPageContent() {
                               min={0}
                               max={a.maxQuantity ?? undefined}
                               value={selectedAddOns[a.id] ?? 0}
-                              onChange={(e) => updateAddOn(a.id, Number(e.target.value), a.maxQuantity)}
+                              onChange={(e) => {
+                                updateAddOn(a.id, Number(e.target.value), a.maxQuantity);
+                                if (selectedPlanId) void fetchQuote(selectedPlanId);
+                              }}
                               className="w-20 rounded-md border border-border bg-surface px-2 py-1 text-sm"
                             />
                           </div>
@@ -394,7 +398,10 @@ function BillingPlansPageContent() {
                     <Button
                       variant={selectedPlanId === plan.id ? "primary" : "secondary"}
                       className="w-full"
-                      onClick={() => setSelectedPlanId(plan.id)}
+                      onClick={() => {
+                        setSelectedPlanId(plan.id);
+                        void fetchQuote(plan.id);
+                      }}
                     >
                       {selectedPlanId === plan.id ? "Selected" : "Select plan"}
                     </Button>
@@ -449,7 +456,10 @@ function BillingPlansPageContent() {
                     <label className="mb-1 block text-xs font-medium text-text-secondary">Coupon code</label>
                     <Input
                       value={couponCode}
-                      onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
+                      onChange={(e) => {
+                        setCouponCode(e.target.value.toUpperCase());
+                        if (selectedPlanId) void fetchQuote(selectedPlanId);
+                      }}
                       placeholder="Optional"
                     />
                   </div>

@@ -1454,7 +1454,7 @@ model Payment {
   subscription      CustomerSubscription? @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
   amountInr         Int
   status            String
-  razorpayPaymentId String?
+  razorpayPaymentId String? @unique
   razorpayOrderId   String?
   razorpaySignature String?
   failureReason     String?

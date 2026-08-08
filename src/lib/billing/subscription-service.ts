@@ -23,6 +23,32 @@ export type CreateSubscriptionInput = {
   couponCode?: string | null;
 };
 
+export async function createFreeSubscription(orgId: string) {
+  const plan = await prisma.subscriptionPlan.findUnique({ where: { slug: "free" } });
+  if (!plan) return null;
+  const existing = await prisma.customerSubscription.findFirst({
+    where: { orgId, status: { in: ["TRIALING", "ACTIVE", "PAST_DUE", "PAUSED", "INCOMPLETE"] } },
+  });
+  if (existing) return existing;
+
+  const { start, end } = getPeriodDates(BillingFrequency.MONTHLY);
+  return prisma.customerSubscription.create({
+    data: {
+      orgId,
+      planId: plan.id,
+      status: SubscriptionStatus.ACTIVE,
+      frequency: BillingFrequency.MONTHLY,
+      currentPeriodStart: start,
+      currentPeriodEnd: end,
+      baseAmountInr: 0,
+      discountAmountInr: 0,
+      taxAmountInr: 0,
+      totalAmountInr: 0,
+    },
+    include: { plan: true, items: { include: { addOn: true } } },
+  });
+}
+
 export async function createSubscription(input: CreateSubscriptionInput) {
   const existing = await prisma.customerSubscription.findFirst({
     where: { orgId: input.orgId, status: { in: ["TRIALING", "ACTIVE", "PAST_DUE", "INCOMPLETE"] } },
@@ -42,6 +68,7 @@ export async function createSubscription(input: CreateSubscriptionInput) {
 
   const { start, end } = getPeriodDates(quote.frequency);
   const trialEnd = quote.trialEnd;
+  const isFreePlan = quote.totalInr === 0;
 
   const org = await prisma.organization.findUnique({
     where: { id: input.orgId },
@@ -52,42 +79,48 @@ export async function createSubscription(input: CreateSubscriptionInput) {
   let razorpayPlanId: string | null = null;
   let razorpaySubscriptionId: string | null = null;
 
-  try {
-    const customer = await createRazorpayCustomer({
-      email: input.ownerEmail,
-      name: input.ownerName,
-      orgId: input.orgId,
-    });
-    razorpayCustomerId = customer.id;
+  if (!isFreePlan) {
+    try {
+      const customer = await createRazorpayCustomer({
+        email: input.ownerEmail,
+        name: input.ownerName,
+        orgId: input.orgId,
+      });
+      razorpayCustomerId = customer.id;
 
-    const plan = await createRazorpayPlan({
-      period: quote.frequency === BillingFrequency.YEARLY ? "yearly" : "monthly",
-      interval: 1,
-      amountInr: quote.totalInr,
-      name: `${quote.planName} — ${quote.frequency.toLowerCase()}`,
-    });
-    razorpayPlanId = plan.id;
+      const plan = await createRazorpayPlan({
+        period: quote.frequency === BillingFrequency.YEARLY ? "yearly" : "monthly",
+        interval: 1,
+        amountInr: quote.totalInr,
+        name: `${quote.planName} — ${quote.frequency.toLowerCase()}`,
+      });
+      razorpayPlanId = plan.id;
 
-    const subscription = await createRazorpaySubscription({
-      planId: plan.id,
-      customerId: customer.id,
-      totalCount: 12,
-      quantity: 1,
-      startAt: trialEnd ? Math.floor(trialEnd.getTime() / 1000) : Math.floor(start.getTime() / 1000),
-      expireBy: Math.floor(end.getTime() / 1000),
-    });
-    razorpaySubscriptionId = subscription.id;
-  } catch (err) {
-    // Razorpay not configured or call failed — still create local subscription record
-    // so the UI can show the selected plan and prompt for payment setup.
-    console.error("Razorpay subscription setup failed:", err);
+      const subscription = await createRazorpaySubscription({
+        planId: plan.id,
+        customerId: customer.id,
+        totalCount: 12,
+        quantity: 1,
+        startAt: trialEnd ? Math.floor(trialEnd.getTime() / 1000) : Math.floor(start.getTime() / 1000),
+        expireBy: Math.floor(end.getTime() / 1000),
+      });
+      razorpaySubscriptionId = subscription.id;
+    } catch (err) {
+      // Razorpay not configured or call failed — still create local subscription record
+      // so the UI can show the selected plan and prompt for payment setup.
+      console.error("Razorpay subscription setup failed:", err);
+    }
   }
 
   const subscription = await prisma.customerSubscription.create({
     data: {
       orgId: input.orgId,
       planId: input.planId,
-      status: trialEnd ? SubscriptionStatus.TRIALING : SubscriptionStatus.ACTIVE,
+      status: isFreePlan
+        ? SubscriptionStatus.ACTIVE
+        : trialEnd
+          ? SubscriptionStatus.TRIALING
+          : SubscriptionStatus.INCOMPLETE,
       frequency: quote.frequency,
       currentPeriodStart: start,
       currentPeriodEnd: end,
@@ -136,9 +169,9 @@ export async function createSubscription(input: CreateSubscriptionInput) {
     }
   }
 
-  // Create first invoice immediately unless in trial.
+  // Create first invoice immediately unless in trial or on a free plan.
   let firstInvoiceRazorpayOrderId: string | undefined;
-  if (!trialEnd) {
+  if (!trialEnd && !isFreePlan) {
     try {
       const order = await createRazorpayOrder({
         amountInr: quote.totalInr,
@@ -174,8 +207,12 @@ export async function createSubscription(input: CreateSubscriptionInput) {
 
 export async function getActiveSubscription(orgId: string) {
   return prisma.customerSubscription.findFirst({
-    where: { orgId, status: { in: ["TRIALING", "ACTIVE", "PAST_DUE", "PAUSED"] } },
-    include: { plan: true, items: { include: { addOn: true } } },
+    where: { orgId, status: { in: ["TRIALING", "ACTIVE", "PAST_DUE", "PAUSED", "INCOMPLETE"] } },
+    include: {
+      plan: { include: { features: true, limits: { include: { service: true } } } },
+      items: { include: { addOn: true } },
+    },
+    orderBy: { createdAt: "desc" },
   });
 }
 
@@ -198,6 +235,7 @@ export async function changeSubscriptionPlan(input: CreateSubscriptionInput & { 
 
   const { start, end } = getPeriodDates(quote.frequency);
   const trialEnd = quote.trialEnd;
+  const isFreePlan = quote.totalInr === 0;
 
   const org = await prisma.organization.findUnique({
     where: { id: input.orgId },
@@ -217,35 +255,37 @@ export async function changeSubscriptionPlan(input: CreateSubscriptionInput & { 
     }
   }
 
-  try {
-    if (!razorpayCustomerId) {
-      const customer = await createRazorpayCustomer({
-        email: input.ownerEmail,
-        name: input.ownerName,
-        orgId: input.orgId,
+  if (!isFreePlan) {
+    try {
+      if (!razorpayCustomerId) {
+        const customer = await createRazorpayCustomer({
+          email: input.ownerEmail,
+          name: input.ownerName,
+          orgId: input.orgId,
+        });
+        razorpayCustomerId = customer.id;
+      }
+
+      const plan = await createRazorpayPlan({
+        period: quote.frequency === BillingFrequency.YEARLY ? "yearly" : "monthly",
+        interval: 1,
+        amountInr: quote.totalInr,
+        name: `${quote.planName} — ${quote.frequency.toLowerCase()}`,
       });
-      razorpayCustomerId = customer.id;
+      razorpayPlanId = plan.id;
+
+      const subscription = await createRazorpaySubscription({
+        planId: plan.id,
+        customerId: razorpayCustomerId,
+        totalCount: 12,
+        quantity: 1,
+        startAt: trialEnd ? Math.floor(trialEnd.getTime() / 1000) : Math.floor(start.getTime() / 1000),
+        expireBy: Math.floor(end.getTime() / 1000),
+      });
+      razorpaySubscriptionId = subscription.id;
+    } catch (err) {
+      console.error("Razorpay subscription change failed:", err);
     }
-
-    const plan = await createRazorpayPlan({
-      period: quote.frequency === BillingFrequency.YEARLY ? "yearly" : "monthly",
-      interval: 1,
-      amountInr: quote.totalInr,
-      name: `${quote.planName} — ${quote.frequency.toLowerCase()}`,
-    });
-    razorpayPlanId = plan.id;
-
-    const subscription = await createRazorpaySubscription({
-      planId: plan.id,
-      customerId: razorpayCustomerId,
-      totalCount: 12,
-      quantity: 1,
-      startAt: trialEnd ? Math.floor(trialEnd.getTime() / 1000) : Math.floor(start.getTime() / 1000),
-      expireBy: Math.floor(end.getTime() / 1000),
-    });
-    razorpaySubscriptionId = subscription.id;
-  } catch (err) {
-    console.error("Razorpay subscription change failed:", err);
   }
 
   // Delete old add-on items and create new ones inside a transaction with the subscription update.
@@ -255,7 +295,11 @@ export async function changeSubscriptionPlan(input: CreateSubscriptionInput & { 
       where: { id: existing.id },
       data: {
         planId: input.planId,
-        status: trialEnd ? SubscriptionStatus.TRIALING : SubscriptionStatus.ACTIVE,
+        status: isFreePlan
+          ? SubscriptionStatus.ACTIVE
+          : trialEnd
+            ? SubscriptionStatus.TRIALING
+            : SubscriptionStatus.INCOMPLETE,
         frequency: quote.frequency,
         currentPeriodStart: start,
         currentPeriodEnd: end,
@@ -315,7 +359,7 @@ export async function changeSubscriptionPlan(input: CreateSubscriptionInput & { 
 
   let invoice = null;
   let razorpayOrderId: string | undefined;
-  if (!trialEnd) {
+  if (!trialEnd && !isFreePlan) {
     try {
       const order = await createRazorpayOrder({
         amountInr: quote.totalInr,
@@ -372,4 +416,68 @@ export async function cancelSubscription(orgId: string, cancelAtPeriodEnd = true
 
   await logBillingEvent(orgId, subscription.id, cancelAtPeriodEnd ? "SUBSCRIPTION_CANCEL_SCHEDULED" : "SUBSCRIPTION_CANCELLED", {});
   return updated;
+}
+
+export async function reactivateSubscription(orgId: string) {
+  const subscription = await prisma.customerSubscription.findFirst({
+    where: { orgId, status: { in: ["TRIALING", "ACTIVE", "PAST_DUE", "PAUSED", "INCOMPLETE"] } },
+  });
+  if (!subscription) throw new Error("No subscription to reactivate");
+  if (!subscription.cancelAtPeriodEnd && subscription.status !== SubscriptionStatus.PAUSED) {
+    return subscription;
+  }
+
+  if (subscription.razorpaySubscriptionId) {
+    try {
+      const { getRazorpayBillingClient } = await import("./razorpay-billing");
+      const client = getRazorpayBillingClient();
+      // Attempt to resume a subscription that was cancelled at period end.
+      await (client.subscriptions as unknown as { update: (id: string, data: Record<string, unknown>) => Promise<unknown> }).update(
+        subscription.razorpaySubscriptionId,
+        { cancel_at_cycle_end: 0 }
+      );
+    } catch (err) {
+      console.error("Failed to resume Razorpay subscription:", err);
+    }
+  }
+
+  const updated = await prisma.customerSubscription.update({
+    where: { id: subscription.id },
+    data: { cancelAtPeriodEnd: false, status: subscription.status === SubscriptionStatus.PAUSED ? SubscriptionStatus.ACTIVE : subscription.status },
+  });
+
+  await logBillingEvent(orgId, subscription.id, "SUBSCRIPTION_REACTIVATED", {});
+  return updated;
+}
+
+export async function recordSubscriptionPayment(opts: {
+  orgId: string;
+  invoiceId?: string;
+  subscriptionId?: string;
+  amountInr: number;
+  razorpayPaymentId?: string;
+  razorpayOrderId?: string;
+  status: "PAID" | "FAILED" | "PENDING" | "REFUNDED";
+  failureReason?: string;
+  metadata?: Record<string, unknown>;
+}) {
+  const data = {
+    orgId: opts.orgId,
+    invoiceId: opts.invoiceId ?? null,
+    subscriptionId: opts.subscriptionId ?? null,
+    amountInr: opts.amountInr,
+    status: opts.status,
+    razorpayPaymentId: opts.razorpayPaymentId ?? null,
+    razorpayOrderId: opts.razorpayOrderId ?? null,
+    failureReason: opts.failureReason ?? null,
+    metadata: (opts.metadata ?? {}) as never,
+  };
+  if (opts.razorpayPaymentId) {
+    return prisma.payment.upsert({
+      where: { razorpayPaymentId: opts.razorpayPaymentId },
+      update: data,
+      create: data,
+    });
+  }
+  return prisma.payment.create({ data });
 }

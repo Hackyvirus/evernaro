@@ -6,6 +6,7 @@ import { creditWallet } from "@/lib/whatsapp-wallet";
 import { sendPaymentSuccessEmail, sendPaymentFailedEmail } from "@/lib/billing-email";
 import { getPeriodDates } from "@/lib/billing/pricing-engine";
 import { logBillingEvent } from "@/lib/billing/events";
+import { recordSubscriptionPayment } from "@/lib/billing/subscription-service";
 
 interface RazorpayWebhookPaymentEntity {
   id?: string;
@@ -99,6 +100,16 @@ export async function POST(req: Request) {
         if (invoice.type === InvoiceType.WALLET_TOPUP) {
           await creditWallet(invoice.orgId, invoice.amountInr * 100, "TOPUP", { invoiceId: invoice.id });
         }
+        await recordSubscriptionPayment({
+          orgId: invoice.orgId,
+          invoiceId: invoice.id,
+          subscriptionId: invoice.subscriptionId ?? undefined,
+          amountInr: invoice.amountInr,
+          razorpayPaymentId: payment.id,
+          razorpayOrderId: payment.order_id,
+          status: "PAID",
+          metadata: { source: "webhook", event: body.event },
+        }).catch((err) => console.error("Failed to record payment:", err));
         if (!wasAlreadyPaid) {
           const contact = await billingContactForOrg(invoice.orgId);
           if (contact) {
@@ -119,6 +130,16 @@ export async function POST(req: Request) {
       const invoice = await prisma.invoice.findUnique({ where: { razorpayOrderId: payment.order_id } });
       if (invoice && invoice.status === "PENDING") {
         await prisma.invoice.update({ where: { id: invoice.id }, data: { status: "FAILED" } });
+        await recordSubscriptionPayment({
+          orgId: invoice.orgId,
+          invoiceId: invoice.id,
+          subscriptionId: invoice.subscriptionId ?? undefined,
+          amountInr: invoice.amountInr,
+          razorpayPaymentId: payment.id,
+          razorpayOrderId: payment.order_id,
+          status: "FAILED",
+          metadata: { source: "webhook", event: body.event },
+        }).catch((err) => console.error("Failed to record failed payment:", err));
         const contact = await billingContactForOrg(invoice.orgId);
         if (contact) {
           try {
@@ -149,6 +170,25 @@ export async function POST(req: Request) {
         if (Object.keys(update).length > 0) {
           await prisma.customerSubscription.update({ where: { id: subscription.id }, data: update });
         }
+        await logBillingEvent(subscription.orgId, subscription.id, body.event.toUpperCase(), {
+          razorpayStatus: entity.status,
+        });
+      }
+    }
+  }
+
+  if (body.event === "subscription.payment.failed" || body.event === "subscription.pending" || body.event === "subscription.halted") {
+    const entity = body.payload?.subscription?.entity;
+    if (entity?.id) {
+      const subscription = await prisma.customerSubscription.findFirst({
+        where: { razorpaySubscriptionId: entity.id },
+      });
+      if (subscription) {
+        const status = body.event === "subscription.halted" ? SubscriptionStatus.PAYMENT_FAILED : SubscriptionStatus.PAST_DUE;
+        await prisma.customerSubscription.update({
+          where: { id: subscription.id },
+          data: { status },
+        });
         await logBillingEvent(subscription.orgId, subscription.id, body.event.toUpperCase(), {
           razorpayStatus: entity.status,
         });

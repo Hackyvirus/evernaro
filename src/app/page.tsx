@@ -15,7 +15,6 @@ import {
   Check,
   ChevronRight,
   Clock,
-  CreditCard,
   Eye,
   LineChart,
   Mail,
@@ -69,7 +68,7 @@ const JOURNEY_STEPS = [
   {
     number: "06",
     title: "Bring them back",
-    description: "Payment, feedback, reminders and rebooking keep customers coming back.",
+    description: "Send follow-ups, collect feedback, and make rebooking easy.",
   },
 ];
 
@@ -140,7 +139,7 @@ const CAPABILITIES = [
   {
     icon: Bell,
     title: "Real-Time Notifications",
-    description: "Keep customers informed about queues, appointments and service status.",
+    description: "Keep customers informed through the channels you configure — WhatsApp, email, Telegram and voice reminders.",
   },
   {
     icon: QrCode,
@@ -156,11 +155,6 @@ const CAPABILITIES = [
     icon: MessageSquare,
     title: "Unified Inbox",
     description: "Connect WhatsApp, Email, Telegram and Instagram in one thread list.",
-  },
-  {
-    icon: CreditCard,
-    title: "Payments",
-    description: "Choose a plan, pay online with Razorpay, and upgrade or downgrade anytime.",
   },
   {
     icon: Sparkles,
@@ -186,7 +180,6 @@ const CUSTOMER_FLOW = [
   "Receive notification",
   "Arrive at the right time",
   "Get served",
-  "Pay",
   "Review / Rebook",
 ];
 
@@ -197,7 +190,6 @@ const BUSINESS_FLOW = [
   "Update status",
   "Automate notifications",
   "Complete service",
-  "Collect payment",
   "Follow up",
 ];
 
@@ -826,7 +818,6 @@ export default async function Home() {
                   { label: "Customer Management", href: "/signup" },
                   { label: "Notifications", href: "/signup" },
                   { label: "Unified Inbox", href: "/signup" },
-                  { label: "Payments", href: "/signup" },
                   { label: "Analytics", href: "/signup" },
                 ].map((item) => (
                   <li key={item.label}>

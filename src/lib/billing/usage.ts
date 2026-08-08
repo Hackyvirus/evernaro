@@ -42,9 +42,32 @@ export async function getUsageForPeriod(
   return { used: aggregate._sum.quantity ?? 0, serviceId: service.id };
 }
 
+async function getActualUsageForSummary(
+  orgId: string,
+  serviceKey: string,
+  periodStart: Date,
+  periodEnd: Date
+): Promise<number> {
+  switch (serviceKey) {
+    case "contacts":
+      return prisma.contact.count({ where: { orgId } });
+    case "users":
+      return prisma.user.count({ where: { orgId, isActive: true } });
+    case "campaigns": {
+      const agg = await prisma.campaign.aggregate({
+        where: { orgId, createdAt: { gte: periodStart, lte: periodEnd } },
+        _sum: { totalRecipients: true },
+      });
+      return agg._sum.totalRecipients ?? 0;
+    }
+    default:
+      return getUsageForPeriod(orgId, serviceKey, periodStart, periodEnd).then((r) => r.used);
+  }
+}
+
 export async function getOrgUsageSummary(orgId: string): Promise<UsageSummary[]> {
   const subscription = await prisma.customerSubscription.findFirst({
-    where: { orgId, status: { in: ["TRIALING", "ACTIVE", "PAST_DUE"] } },
+    where: { orgId, status: { in: ["TRIALING", "ACTIVE", "PAST_DUE", "PAUSED", "INCOMPLETE"] } },
     include: { plan: { include: { limits: { include: { service: true } } } } },
   });
 
@@ -56,7 +79,7 @@ export async function getOrgUsageSummary(orgId: string): Promise<UsageSummary[]>
 
   const summaries: UsageSummary[] = [];
   for (const limit of subscription.plan.limits) {
-    const { used } = await getUsageForPeriod(orgId, limit.service.key, periodStart, periodEnd);
+    const used = await getActualUsageForSummary(orgId, limit.service.key, periodStart, periodEnd);
     const included = limit.includedQuantity;
     const remaining = Math.max(0, included - used);
     const overage = Math.max(0, used - included);

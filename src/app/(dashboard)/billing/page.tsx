@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Badge, Button, Card, EmptyState, Input, PageHeader, Skeleton } from "@/components/ui";
-import { Receipt, Wallet, AlertCircle, Sparkles } from "lucide-react";
+import { Receipt, Wallet, AlertCircle, Sparkles, CreditCard, RotateCcw } from "lucide-react";
 import { RoleAwareAdminGuard } from "../role";
 import Link from "next/link";
 
@@ -46,7 +46,12 @@ interface Subscription {
   trialEnd: string | null;
   cancelAtPeriodEnd: boolean;
   totalAmountInr: number;
-  plan: { name: string; description: string | null };
+  plan: {
+    name: string;
+    description: string | null;
+    features: { key: string; label: string; value: string | null; included: boolean }[];
+    limits: { service: { key: string; name: string; unit: string }; includedQuantity: number }[];
+  };
   items: { addOn: { name: string } | null; quantity: number; totalPriceInr: number }[];
 }
 
@@ -61,16 +66,28 @@ interface UsageItem {
   percentUsed: number;
 }
 
+interface Payment {
+  id: string;
+  amountInr: number;
+  status: "PAID" | "FAILED" | "PENDING" | "REFUNDED";
+  razorpayPaymentId: string | null;
+  razorpayOrderId: string | null;
+  failureReason: string | null;
+  createdAt: string;
+  invoice: { id: string; type: "SUBSCRIPTION" | "WALLET_TOPUP" } | null;
+  subscription: { id: string; plan: { name: string } } | null;
+}
+
 declare global {
   interface Window {
     Razorpay?: new (options: Record<string, unknown>) => { open: () => void };
   }
 }
 
-function statusVariant(status: Invoice["status"]): "default" | "success" | "warning" | "danger" | "info" {
+function statusVariant(status: Invoice["status"] | Payment["status"]): "default" | "success" | "warning" | "danger" | "info" {
   if (status === "PAID") return "success";
   if (status === "FAILED") return "danger";
-  if (status === "CANCELLED") return "default";
+  if (status === "CANCELLED" || status === "REFUNDED") return "default";
   return "warning";
 }
 
@@ -180,6 +197,10 @@ function BillingPageContent() {
   const [usage, setUsage] = useState<UsageItem[]>([]);
   const [subscriptionLoading, setSubscriptionLoading] = useState(true);
   const [cancelling, setCancelling] = useState(false);
+  const [reactivating, setReactivating] = useState(false);
+
+  const [payments, setPayments] = useState<Payment[]>([]);
+  const [paymentsLoaded, setPaymentsLoaded] = useState(false);
 
   function refresh() {
     fetch("/api/invoices")
@@ -201,6 +222,13 @@ function BillingPageContent() {
     fetch("/api/billing/usage")
       .then((r) => r.json())
       .then((d) => setUsage(d.usage ?? []));
+    fetch("/api/billing/payments")
+      .then((r) => r.json())
+      .then((d) => {
+        setPayments(d.payments ?? []);
+        setPaymentsLoaded(true);
+      })
+      .catch(() => setPaymentsLoaded(true));
   }
 
   function refreshWallet() {
@@ -277,6 +305,24 @@ function BillingPageContent() {
     }
   }
 
+  async function reactivateSubscription() {
+    setReactivating(true);
+    try {
+      const res = await fetch("/api/billing/subscription", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "reactivate" }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Failed to reactivate");
+      refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to reactivate");
+    } finally {
+      setReactivating(false);
+    }
+  }
+
   return (
     <div className="flex flex-1 flex-col overflow-y-auto">
       <PageHeader
@@ -334,6 +380,19 @@ function BillingPageContent() {
                       ))}
                     </ul>
                   )}
+                  {subscription.plan.features.length > 0 && (
+                    <ul className="mt-4 flex flex-col gap-1.5">
+                      {subscription.plan.features
+                        .filter((f) => f.included)
+                        .slice(0, 6)
+                        .map((f) => (
+                          <li key={f.key} className="flex items-start gap-2 text-xs text-text-secondary">
+                            <span className="mt-0.5 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-success" />
+                            {f.label}
+                          </li>
+                        ))}
+                    </ul>
+                  )}
                 </>
               ) : (
                 <>
@@ -349,8 +408,13 @@ function BillingPageContent() {
               >
                 {subscription ? "Change plan" : "Choose a plan"}
               </Link>
-              {subscription && (subscription.status === "ACTIVE" || subscription.status === "TRIALING") && !subscription.cancelAtPeriodEnd && (
+              {subscription && (subscription.status === "ACTIVE" || subscription.status === "TRIALING" || subscription.status === "INCOMPLETE") && !subscription.cancelAtPeriodEnd && (
                 <Button variant="danger" size="sm" loading={cancelling} onClick={cancelSubscription}>Cancel subscription</Button>
+              )}
+              {subscription && subscription.cancelAtPeriodEnd && (
+                <Button variant="secondary" size="sm" loading={reactivating} onClick={reactivateSubscription}>
+                  <RotateCcw className="mr-1.5 h-3.5 w-3.5" /> Keep subscription
+                </Button>
               )}
             </div>
           </Card>
@@ -475,6 +539,37 @@ function BillingPageContent() {
                       {inv.status === "PENDING" && !inv.razorpayOrderId && (
                         <span className="text-xs text-text-muted">Payment link pending</span>
                       )}
+                    </div>
+                  </Card>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        <div>
+          <h2 className="mb-3 text-sm font-bold text-text">Payment history</h2>
+          {!paymentsLoaded ? (
+            <div className="flex flex-col gap-2">
+              <Skeleton className="h-16" />
+              <Skeleton className="h-16" />
+            </div>
+          ) : payments.length === 0 ? (
+            <EmptyState icon={CreditCard} title="No payments yet" description="Payments will appear here once a subscription invoice is paid." />
+          ) : (
+            <ul className="flex flex-col gap-2">
+              {payments.map((p) => (
+                <li key={p.id}>
+                  <Card className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-text">₹{p.amountInr.toLocaleString("en-IN")}</p>
+                      <p className="text-xs text-text-secondary">
+                        {p.razorpayPaymentId ? `Payment ${p.razorpayPaymentId}` : "Payment"} ·{" "}
+                        {new Date(p.createdAt).toLocaleDateString()}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <Badge variant={statusVariant(p.status)}>{p.status}</Badge>
                     </div>
                   </Card>
                 </li>

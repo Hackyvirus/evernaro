@@ -1,13 +1,8 @@
-"use client";
-
-import { useState } from "react";
-import { ChevronDown } from "lucide-react";
-
 const FAQS = [
   {
     question: "What exactly does Evernaro do?",
     answer:
-      "Evernaro helps businesses manage the complete customer journey — from queue check-ins and appointment bookings to live position tracking, notifications, service completion, payments, and follow-ups. The unified inbox, WhatsApp, email, Telegram, Instagram and AI assistance are built in to support that journey.",
+      "Evernaro helps businesses manage the complete customer journey — from queue check-ins and appointment bookings to live status tracking, notifications, service completion, and follow-ups. The unified inbox, WhatsApp, email, Telegram, Instagram and AI assistance are built in to support that journey.",
   },
   {
     question: "Can customers join a queue remotely?",
@@ -27,7 +22,7 @@ const FAQS = [
   {
     question: "Can Evernaro automatically notify customers?",
     answer:
-      "Yes. You can schedule appointment reminders, payment reminders, follow-ups and review requests. Customers also see live tracker updates for their queue position.",
+      "Yes. You can schedule appointment reminders, follow-ups and review requests through the channels you configure. Customers also see live tracker updates for their queue position.",
   },
   {
     question: "Which industries can use Evernaro?",
@@ -47,7 +42,7 @@ const FAQS = [
   {
     question: "Does Evernaro support payments?",
     answer:
-      "Yes. Evernaro includes Razorpay integration for subscription billing and a prepaid WhatsApp wallet. Direct customer payment collection for services is on the roadmap.",
+      "Evernaro includes Razorpay integration for your own subscription billing and a prepaid WhatsApp wallet. Direct customer payment collection for services is on the roadmap.",
   },
   {
     question: "How does the AI assistant work?",
@@ -62,7 +57,7 @@ const FAQS = [
   {
     question: "What does Evernaro cost?",
     answer:
-      "Plans start at ₹1,499/month. WhatsApp send costs are billed separately from your prepaid wallet at Meta's per-conversation rates. Start with a 14-day free trial — no credit card required.",
+      "Plans start at ₹499/month. WhatsApp send costs are billed separately from your prepaid wallet at Meta's per-conversation rates. Start with a 14-day free trial — no credit card required.",
   },
   {
     question: "Do I need technical help to set up?",
@@ -72,40 +67,17 @@ const FAQS = [
 ];
 
 export function Faq() {
-  const [open, setOpen] = useState<number | null>(0);
-
   return (
-    <div className="mx-auto flex w-full max-w-2xl flex-col gap-3">
-      {FAQS.map((item, i) => {
-        const isOpen = open === i;
-        return (
-          <div key={item.question} className="rounded-lg border border-border bg-card">
-            <button
-              type="button"
-              onClick={() => setOpen(isOpen ? null : i)}
-              aria-expanded={isOpen}
-              className="flex w-full cursor-pointer items-center justify-between gap-4 px-5 py-4 text-start"
-            >
-              <span className="text-sm font-semibold text-text">{item.question}</span>
-              <ChevronDown
-                className={`h-4 w-4 flex-shrink-0 text-text-muted transition-transform duration-200 ${
-                  isOpen ? "rotate-180" : ""
-                }`}
-                aria-hidden="true"
-              />
-            </button>
-            <div
-              className={`grid transition-[grid-template-rows] duration-200 ease-out ${
-                isOpen ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
-              }`}
-            >
-              <div className="overflow-hidden">
-                <p className="px-5 pb-4 text-sm leading-relaxed text-text-secondary">{item.answer}</p>
-              </div>
-            </div>
-          </div>
-        );
-      })}
+    <div className="mx-auto grid w-full max-w-4xl gap-4 sm:grid-cols-2">
+      {FAQS.map((item) => (
+        <div
+          key={item.question}
+          className="rounded-lg border border-border bg-card p-5"
+        >
+          <h3 className="mb-2 text-sm font-bold text-text">{item.question}</h3>
+          <p className="text-sm leading-relaxed text-text-secondary">{item.answer}</p>
+        </div>
+      ))}
     </div>
   );
 }

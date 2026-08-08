@@ -1,9 +1,19 @@
 "use client";
 
 import { useState } from "react";
-import { Button, Card, Input } from "@/components/ui";
-import { Badge } from "@/components/ui";
-import { Layers, Package, Tag, Percent, ReceiptIndianRupee } from "lucide-react";
+import { Button, Card, Input, Badge } from "@/components/ui";
+import {
+  Layers,
+  Package,
+  Tag,
+  Percent,
+  ReceiptIndianRupee,
+  LayoutDashboard,
+  Users,
+  Search,
+  Eye,
+  X,
+} from "lucide-react";
 
 interface Plan {
   id: string;
@@ -16,6 +26,8 @@ interface Plan {
   isActive: boolean;
   isCustom: boolean;
   _count: { subscriptions: number };
+  features: { key: string; label: string; value: string | null; included: boolean }[];
+  limits: { includedQuantity: number; service: { key: string; name: string; unit: string } }[];
 }
 
 interface Service {
@@ -55,7 +67,50 @@ interface TaxConfig {
   inclusive: boolean;
 }
 
+interface Metrics {
+  mrr: number;
+  arr: number;
+  revenueThisMonth: number;
+  totalRevenue: number;
+  totalCustomers: number;
+  statusCounts: {
+    active: number;
+    trialing: number;
+    pastDue: number;
+    paymentFailed: number;
+    cancelled: number;
+    paused: number;
+  };
+  customersByPlan: { planId: string; planName: string; active: number; trialing: number }[];
+}
+
+interface SubscriptionRow {
+  id: string;
+  status: string;
+  frequency: string;
+  currentPeriodStart: string | Date | null;
+  currentPeriodEnd: string | Date | null;
+  trialEnd: string | Date | null;
+  cancelledAt: string | Date | null;
+  cancelAtPeriodEnd: boolean;
+  razorpaySubscriptionId: string | null;
+  razorpayCustomerId: string | null;
+  baseAmountInr: number;
+  discountAmountInr: number;
+  taxAmountInr: number;
+  totalAmountInr: number;
+  createdAt: string | Date;
+  updatedAt: string | Date;
+  org: { id: string; name: string; slug: string; status: string; users: { email: string; name: string }[] };
+  plan: { id: string; name: string; slug: string; monthlyPriceInr: number; annualPriceInr: number };
+  items: { addOn: { name: string } | null; quantity: number; totalPriceInr: number }[];
+  invoices: { id: string; amountInr: number; status: string; createdAt: string | Date; paidAt: string | Date | null }[];
+  payments: { id: string; amountInr: number; status: string; createdAt: string | Date; razorpayPaymentId: string | null }[];
+}
+
 const TABS = [
+  { id: "overview", label: "Overview", icon: LayoutDashboard },
+  { id: "subscriptions", label: "Subscriptions", icon: Users },
   { id: "plans", label: "Plans", icon: Layers },
   { id: "services", label: "Services", icon: Package },
   { id: "addOns", label: "Add-ons", icon: Tag },
@@ -69,11 +124,29 @@ interface Props {
   addOns: AddOn[];
   coupons: Coupon[];
   tax: TaxConfig | null;
+  metrics: Metrics;
+  initialSubscriptions: SubscriptionRow[];
 }
 
-export function BillingCatalogTabs({ plans, services, addOns, coupons, tax }: Props) {
-  const [tab, setTab] = useState("plans");
+function formatCurrency(amount: number) {
+  return `₹${amount.toLocaleString("en-IN")}`;
+}
+
+function statusVariant(status: string): "default" | "success" | "warning" | "danger" | "info" {
+  const s = status.toLowerCase();
+  if (s === "active" || s === "paid") return "success";
+  if (s === "trialing") return "info";
+  if (s === "past_due" || s === "pending") return "warning";
+  if (s === "cancelled" || s === "failed" || s === "payment_failed") return "danger";
+  return "default";
+}
+
+export function BillingCatalogTabs({ plans, services, addOns, coupons, tax, metrics, initialSubscriptions }: Props) {
+  const [tab, setTab] = useState("overview");
   const [saving, setSaving] = useState(false);
+  const [search, setSearch] = useState("");
+  const [selectedSubscription, setSelectedSubscription] = useState<SubscriptionRow | null>(null);
+  const [subscriptions, setSubscriptions] = useState<SubscriptionRow[]>(initialSubscriptions);
 
   async function saveTax(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -90,6 +163,20 @@ export function BillingCatalogTabs({ plans, services, addOns, coupons, tax }: Pr
     });
     setSaving(false);
   }
+
+  async function searchSubscriptions(q: string) {
+    setSearch(q);
+    const res = await fetch(`/api/platform/billing/subscriptions?q=${encodeURIComponent(q)}`);
+    const data = await res.json();
+    if (data.subscriptions) setSubscriptions(data.subscriptions);
+  }
+
+  const filteredSubscriptions = subscriptions.filter(
+    (s) =>
+      s.org.name.toLowerCase().includes(search.toLowerCase()) ||
+      s.org.slug.toLowerCase().includes(search.toLowerCase()) ||
+      (s.razorpaySubscriptionId ?? "").toLowerCase().includes(search.toLowerCase())
+  );
 
   return (
     <div className="flex flex-col gap-6">
@@ -115,6 +202,266 @@ export function BillingCatalogTabs({ plans, services, addOns, coupons, tax }: Pr
         </nav>
       </div>
 
+      {tab === "overview" && (
+        <div className="flex flex-col gap-6">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <Card className="p-5">
+              <p className="text-xs text-text-secondary">MRR</p>
+              <p className="mt-1 text-2xl font-extrabold text-text">{formatCurrency(metrics.mrr)}</p>
+            </Card>
+            <Card className="p-5">
+              <p className="text-xs text-text-secondary">ARR</p>
+              <p className="mt-1 text-2xl font-extrabold text-text">{formatCurrency(metrics.arr)}</p>
+            </Card>
+            <Card className="p-5">
+              <p className="text-xs text-text-secondary">Revenue this month</p>
+              <p className="mt-1 text-2xl font-extrabold text-text">{formatCurrency(metrics.revenueThisMonth)}</p>
+            </Card>
+            <Card className="p-5">
+              <p className="text-xs text-text-secondary">Total revenue</p>
+              <p className="mt-1 text-2xl font-extrabold text-text">{formatCurrency(metrics.totalRevenue)}</p>
+            </Card>
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <Card className="p-5">
+              <p className="text-xs text-text-secondary">Active subscriptions</p>
+              <p className="mt-1 text-2xl font-extrabold text-text">{metrics.statusCounts.active}</p>
+            </Card>
+            <Card className="p-5">
+              <p className="text-xs text-text-secondary">Trialing</p>
+              <p className="mt-1 text-2xl font-extrabold text-text">{metrics.statusCounts.trialing}</p>
+            </Card>
+            <Card className="p-5">
+              <p className="text-xs text-text-secondary">Past due</p>
+              <p className="mt-1 text-2xl font-extrabold text-text">{metrics.statusCounts.pastDue}</p>
+            </Card>
+            <Card className="p-5">
+              <p className="text-xs text-text-secondary">Failed payments</p>
+              <p className="mt-1 text-2xl font-extrabold text-text">{metrics.statusCounts.paymentFailed}</p>
+            </Card>
+            <Card className="p-5">
+              <p className="text-xs text-text-secondary">Cancelled</p>
+              <p className="mt-1 text-2xl font-extrabold text-text">{metrics.statusCounts.cancelled}</p>
+            </Card>
+            <Card className="p-5">
+              <p className="text-xs text-text-secondary">Paused</p>
+              <p className="mt-1 text-2xl font-extrabold text-text">{metrics.statusCounts.paused}</p>
+            </Card>
+          </div>
+
+          <Card className="p-5">
+            <h3 className="mb-4 text-sm font-bold text-text">Customers by plan</h3>
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {metrics.customersByPlan.map((p) => (
+                <div key={p.planId} className="rounded-lg bg-surface-secondary p-4">
+                  <p className="text-sm font-semibold text-text">{p.planName}</p>
+                  <div className="mt-2 flex gap-4 text-sm text-text-secondary">
+                    <span>Active: {p.active}</span>
+                    <span>Trialing: {p.trialing}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {tab === "subscriptions" && (
+        <div className="flex flex-col gap-4">
+          <div className="flex items-center gap-3">
+            <Search className="h-4 w-4 text-text-muted" aria-hidden="true" />
+            <Input
+              placeholder="Search by client, slug, or Razorpay subscription ID"
+              value={search}
+              onChange={(e) => searchSubscriptions(e.target.value)}
+              className="max-w-md"
+            />
+          </div>
+
+          <div className="overflow-x-auto rounded-md border border-border">
+            <table className="w-full text-sm">
+              <thead className="bg-surface text-text-secondary">
+                <tr>
+                  <th className="px-3 py-2 text-start text-xs uppercase">Client</th>
+                  <th className="px-3 py-2 text-start text-xs uppercase">Plan</th>
+                  <th className="px-3 py-2 text-start text-xs uppercase">Status</th>
+                  <th className="px-3 py-2 text-start text-xs uppercase">Interval</th>
+                  <th className="px-3 py-2 text-start text-xs uppercase">Amount</th>
+                  <th className="px-3 py-2 text-start text-xs uppercase">Started</th>
+                  <th className="px-3 py-2 text-start text-xs uppercase">Next billing</th>
+                  <th className="px-3 py-2 text-start text-xs uppercase">Razorpay sub</th>
+                  <th className="px-3 py-2 text-start text-xs uppercase">Last payment</th>
+                  <th className="px-3 py-2 text-start text-xs uppercase" />
+                </tr>
+              </thead>
+              <tbody>
+                {filteredSubscriptions.map((s) => {
+                  const lastPayment = s.payments[0];
+                  return (
+                    <tr key={s.id} className="border-t border-border">
+                      <td className="px-3 py-2">
+                        <p className="font-medium text-text">{s.org.name}</p>
+                        <p className="text-xs text-text-muted">{s.org.slug}</p>
+                      </td>
+                      <td className="px-3 py-2">{s.plan.name}</td>
+                      <td className="px-3 py-2">
+                        <Badge variant={statusVariant(s.status)}>{s.status}</Badge>
+                      </td>
+                      <td className="px-3 py-2 capitalize">{s.frequency.toLowerCase()}</td>
+                      <td className="px-3 py-2">{formatCurrency(s.totalAmountInr)}</td>
+                      <td className="px-3 py-2">{new Date(s.createdAt).toLocaleDateString()}</td>
+                      <td className="px-3 py-2">
+                        {s.currentPeriodEnd ? new Date(s.currentPeriodEnd).toLocaleDateString() : "—"}
+                      </td>
+                      <td className="px-3 py-2 font-mono text-xs">{s.razorpaySubscriptionId ?? "—"}</td>
+                      <td className="px-3 py-2">
+                        {lastPayment ? (
+                          <span className="text-success">{formatCurrency(lastPayment.amountInr)}</span>
+                        ) : (
+                          <span className="text-text-muted">—</span>
+                        )}
+                      </td>
+                      <td className="px-3 py-2">
+                        <Button size="sm" variant="secondary" onClick={() => setSelectedSubscription(s)}>
+                          <Eye className="mr-1.5 h-3.5 w-3.5" /> View
+                        </Button>
+                      </td>
+                    </tr>
+                  );
+                })}
+                {filteredSubscriptions.length === 0 && (
+                  <tr>
+                    <td colSpan={10} className="px-3 py-6 text-center text-sm text-text-secondary">
+                      No subscriptions found.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {selectedSubscription && (
+            <Card className="relative p-5">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="absolute top-3 right-3"
+                onClick={() => setSelectedSubscription(null)}
+              >
+                <X className="h-4 w-4" />
+              </Button>
+              <h3 className="mb-4 text-base font-bold text-text">Subscription details</h3>
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                <div>
+                  <p className="text-xs text-text-secondary">Organization</p>
+                  <p className="text-sm font-medium text-text">{selectedSubscription.org.name}</p>
+                  <p className="text-xs text-text-muted">{selectedSubscription.org.slug}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-text-secondary">Owner</p>
+                  <p className="text-sm font-medium text-text">{selectedSubscription.org.users?.[0]?.email ?? "—"}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-text-secondary">Current plan</p>
+                  <p className="text-sm font-medium text-text">{selectedSubscription.plan.name}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-text-secondary">Status</p>
+                  <Badge variant={statusVariant(selectedSubscription.status)}>{selectedSubscription.status}</Badge>
+                </div>
+                <div>
+                  <p className="text-xs text-text-secondary">Billing interval</p>
+                  <p className="text-sm font-medium text-text capitalize">{selectedSubscription.frequency.toLowerCase()}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-text-secondary">Amount</p>
+                  <p className="text-sm font-medium text-text">{formatCurrency(selectedSubscription.totalAmountInr)}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-text-secondary">Start date</p>
+                  <p className="text-sm font-medium text-text">{new Date(selectedSubscription.createdAt).toLocaleDateString()}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-text-secondary">Trial end</p>
+                  <p className="text-sm font-medium text-text">
+                    {selectedSubscription.trialEnd ? new Date(selectedSubscription.trialEnd).toLocaleDateString() : "—"}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-text-secondary">Next billing date</p>
+                  <p className="text-sm font-medium text-text">
+                    {selectedSubscription.currentPeriodEnd ? new Date(selectedSubscription.currentPeriodEnd).toLocaleDateString() : "—"}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-text-secondary">Cancelled date</p>
+                  <p className="text-sm font-medium text-text">
+                    {selectedSubscription.cancelledAt ? new Date(selectedSubscription.cancelledAt).toLocaleDateString() : "—"}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-text-secondary">Razorpay subscription ID</p>
+                  <p className="text-sm font-medium text-text font-mono">{selectedSubscription.razorpaySubscriptionId ?? "—"}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-text-secondary">Razorpay customer ID</p>
+                  <p className="text-sm font-medium text-text font-mono">{selectedSubscription.razorpayCustomerId ?? "—"}</p>
+                </div>
+              </div>
+
+              {selectedSubscription.items.length > 0 && (
+                <div className="mt-5">
+                  <p className="mb-2 text-xs font-semibold uppercase text-text-muted">Add-ons</p>
+                  <ul className="flex flex-col gap-1">
+                    {selectedSubscription.items.map((item, i) => (
+                      <li key={i} className="text-sm text-text-secondary">
+                        {item.addOn?.name ?? "Add-on"} x{item.quantity} — {formatCurrency(item.totalPriceInr)}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              <div className="mt-5 grid gap-4 md:grid-cols-2">
+                <div>
+                  <p className="mb-2 text-xs font-semibold uppercase text-text-muted">Payment history</p>
+                  {selectedSubscription.payments.length === 0 ? (
+                    <p className="text-sm text-text-secondary">No payments recorded.</p>
+                  ) : (
+                    <ul className="flex flex-col gap-2">
+                      {selectedSubscription.payments.map((p) => (
+                        <li key={p.id} className="flex items-center justify-between rounded-lg bg-surface-secondary px-3 py-2 text-sm">
+                          <span>{new Date(p.createdAt).toLocaleDateString()}</span>
+                          <span className="font-medium">{formatCurrency(p.amountInr)}</span>
+                          <Badge variant={statusVariant(p.status)}>{p.status}</Badge>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+                <div>
+                  <p className="mb-2 text-xs font-semibold uppercase text-text-muted">Recent invoices</p>
+                  {selectedSubscription.invoices.length === 0 ? (
+                    <p className="text-sm text-text-secondary">No invoices found.</p>
+                  ) : (
+                    <ul className="flex flex-col gap-2">
+                      {selectedSubscription.invoices.map((inv) => (
+                        <li key={inv.id} className="flex items-center justify-between rounded-lg bg-surface-secondary px-3 py-2 text-sm">
+                          <span>{new Date(inv.createdAt).toLocaleDateString()}</span>
+                          <span className="font-medium">{formatCurrency(inv.amountInr)}</span>
+                          <Badge variant={statusVariant(inv.status)}>{inv.status}</Badge>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              </div>
+            </Card>
+          )}
+        </div>
+      )}
+
       {tab === "plans" && (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {plans.map((plan) => (
@@ -132,6 +479,21 @@ export function BillingCatalogTabs({ plans, services, addOns, coupons, tax }: Pr
                 <span>₹{plan.annualPriceInr.toLocaleString("en-IN")}/yr</span>
               </div>
               <p className="mt-2 text-xs text-text-muted">{plan._count.subscriptions} active subscriptions</p>
+              {plan.features.length > 0 && (
+                <ul className="mt-3 flex flex-col gap-1">
+                  {plan.features.filter((f) => f.included).map((f) => (
+                    <li key={f.key} className="flex items-start gap-2 text-xs text-text-secondary">
+                      <span className="mt-0.5 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-success" />
+                      {f.label}
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {plan.limits.length > 0 && (
+                <div className="mt-3 text-xs text-text-muted">
+                  Limits: {plan.limits.map((l) => `${l.includedQuantity} ${l.service.unit}`).join(", ")}
+                </div>
+              )}
             </Card>
           ))}
         </div>

@@ -4,7 +4,8 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { requireOrgMember, UnauthorizedError, ForbiddenError } from "@/lib/session";
 import { logAudit } from "@/lib/audit";
-import { seatLimit, activeSeatsUsed } from "@/lib/usage-limits";
+import { requireFeature, requireUsageLimit } from "@/lib/billing/entitlements";
+import { recordUsage } from "@/lib/billing/usage";
 import { sendTeamInviteEmail } from "@/lib/auth-email";
 import bcrypt from "bcryptjs";
 import { randomBytes } from "node:crypto";
@@ -62,12 +63,14 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "A user with this email already exists" }, { status: 409 });
     }
 
-    const usedSeats = await activeSeatsUsed(orgId);
-    if (usedSeats >= seatLimit()) {
-      return NextResponse.json(
-        { error: `You've reached the ${seatLimit()} active-user limit. Contact support to add more seats.` },
-        { status: 429 }
-      );
+    try {
+      await requireFeature(orgId, "staff_management");
+      await requireUsageLimit(orgId, "users", 1);
+    } catch (err) {
+      if (err instanceof Error) {
+        return NextResponse.json({ error: err.message }, { status: 403 });
+      }
+      return NextResponse.json({ error: "Failed to verify plan limits" }, { status: 500 });
     }
 
     const tempPassword = generateTempPassword();
@@ -95,6 +98,10 @@ export async function POST(req: Request) {
       targetType: "user",
       targetId: user.id,
       metadata: { role },
+    });
+
+    await recordUsage({ orgId, serviceKey: "users", quantity: 1 }).catch((err) => {
+      console.error("Failed to record user usage:", err);
     });
 
     try {

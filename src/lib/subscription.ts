@@ -24,6 +24,18 @@ export async function requireActiveSubscription(orgId: string): Promise<void> {
       "Account past due — please pay your pending invoice to continue sending messages."
     );
   }
+
+  // If a subscription record exists, it must be in an active-equivalent state
+  // for sends to be allowed. Missing subscriptions are tolerated for legacy
+  // accounts, but new accounts should always have one.
+  const subscription = await prisma.customerSubscription.findFirst({
+    where: { orgId, status: { in: ["TRIALING", "ACTIVE", "PAST_DUE", "PAUSED", "INCOMPLETE"] } },
+  });
+  if (subscription && !["TRIALING", "ACTIVE", "PAST_DUE", "PAUSED", "INCOMPLETE"].includes(subscription.status)) {
+    throw new SubscriptionSuspendedError(
+      "Subscription is not active — please check your billing status to continue sending messages."
+    );
+  }
 }
 
 export async function getSubscriptionStatus(orgId: string) {

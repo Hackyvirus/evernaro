@@ -1,12 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-const { findUniqueOrgMock } = vi.hoisted(() => ({
+const { findUniqueOrgMock, findFirstSubMock } = vi.hoisted(() => ({
   findUniqueOrgMock: vi.fn(),
+  findFirstSubMock: vi.fn(),
 }));
 
 vi.mock("@/lib/prisma", () => ({
   prisma: {
     organization: { findUnique: findUniqueOrgMock },
+    customerSubscription: { findFirst: findFirstSubMock },
   },
 }));
 
@@ -15,6 +17,7 @@ import { OrganizationStatus } from "@prisma/client";
 
 beforeEach(() => {
   findUniqueOrgMock.mockReset();
+  findFirstSubMock.mockReset().mockResolvedValue(null);
 });
 
 describe("requireActiveSubscription", () => {

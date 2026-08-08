@@ -102,6 +102,11 @@ export function FlowMockup() {
             <div className="rounded-lg bg-surface p-3 text-center">
               <p className="text-xs text-text-secondary">Ahead of you</p>
               <p className="text-2xl font-bold text-text">{ahead}</p>
+              {ahead > 0 && (
+                <p className="mt-1 text-[10px] text-text-muted">
+                  {Array.from({ length: ahead }, (_, i) => token(servingNum + 1 + i)).join(" · ")}
+                </p>
+              )}
             </div>
             <div className="rounded-lg bg-surface p-3 text-center">
               <p className="text-xs text-text-secondary">Est. wait</p>

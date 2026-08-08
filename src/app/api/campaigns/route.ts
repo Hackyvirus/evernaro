@@ -5,10 +5,11 @@ import { prisma } from "@/lib/prisma";
 import { requireOrgMember, UnauthorizedError, ForbiddenError } from "@/lib/session";
 import { enqueueCampaignRecipient } from "@/lib/queue";
 import { CHANNEL_IDENTIFIER_FIELD } from "@/lib/channel-reachability";
-import { dailyCampaignRecipientLimit, dailyCampaignRecipientsUsed } from "@/lib/usage-limits";
 import { whatsappSendRequiresTemplate } from "@/lib/whatsapp-template-validation";
 import { requireActiveSubscription, SubscriptionSuspendedError } from "@/lib/subscription";
 import { logAudit } from "@/lib/audit";
+import { requireFeature, requireUsageLimit } from "@/lib/billing/entitlements";
+import { recordUsage } from "@/lib/billing/usage";
 
 export async function GET() {
   try {
@@ -105,15 +106,22 @@ export async function POST(req: Request) {
       );
     }
 
-    const limit = dailyCampaignRecipientLimit();
-    const usedToday = await dailyCampaignRecipientsUsed(orgId);
-    if (usedToday + contacts.length > limit) {
-      return NextResponse.json(
-        {
-          error: `This would send to ${contacts.length} contacts, but only ${Math.max(limit - usedToday, 0)} remain of your ${limit}/day campaign limit. Contact support to raise it.`,
-        },
-        { status: 429 }
-      );
+    try {
+      await requireFeature(orgId, "broadcast_campaigns");
+      const { remaining } = await requireUsageLimit(orgId, "campaigns", contacts.length);
+      if (remaining < contacts.length) {
+        return NextResponse.json(
+          {
+            error: `This would send to ${contacts.length} contacts, but only ${Math.max(remaining, 0)} remain in your plan's campaign limit. Upgrade to send more.`,
+          },
+          { status: 429 }
+        );
+      }
+    } catch (err) {
+      if (err instanceof Error) {
+        return NextResponse.json({ error: err.message }, { status: 403 });
+      }
+      return NextResponse.json({ error: "Failed to verify plan limits" }, { status: 500 });
     }
 
     const now = new Date();
@@ -176,6 +184,10 @@ export async function POST(req: Request) {
       targetType: "Campaign",
       targetId: campaign.id,
       metadata: { name, channelType: channel.type, totalRecipients: campaign.totalRecipients, scheduled: isScheduled },
+    });
+
+    await recordUsage({ orgId, serviceKey: "campaigns", quantity: campaign.totalRecipients }).catch((err) => {
+      console.error("Failed to record campaign usage:", err);
     });
 
     return NextResponse.json({ ok: true, campaign });

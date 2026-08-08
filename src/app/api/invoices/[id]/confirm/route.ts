@@ -6,6 +6,7 @@ import { requireOrgMember, UnauthorizedError, ForbiddenError } from "@/lib/sessi
 import { verifyRazorpayPaymentSignature } from "@/lib/razorpay";
 import { creditWallet } from "@/lib/whatsapp-wallet";
 import { sendPaymentSuccessEmail } from "@/lib/billing-email";
+import { recordSubscriptionPayment } from "@/lib/billing/subscription-service";
 
 const bodySchema = z.object({
   razorpayOrderId: z.string().min(1),
@@ -43,6 +44,17 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         data: { status: "PAID", razorpayPaymentId, paidAt: new Date() },
       });
     }
+
+    await recordSubscriptionPayment({
+      orgId: invoice.orgId,
+      invoiceId: invoice.id,
+      subscriptionId: invoice.subscriptionId ?? undefined,
+      amountInr: invoice.amountInr,
+      razorpayPaymentId,
+      razorpayOrderId,
+      status: "PAID",
+      metadata: { source: "browser_confirmation" },
+    }).catch((err) => console.error("Failed to record payment:", err));
 
     // Subscription payment reactivates the organization.
     if (invoice.type === InvoiceType.SUBSCRIPTION) {

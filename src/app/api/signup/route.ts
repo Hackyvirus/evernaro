@@ -6,6 +6,7 @@ import { checkRateLimit, clientIp } from "@/lib/rate-limit";
 import { generateSecureToken, hoursFromNow } from "@/lib/token";
 import { sendVerificationEmail } from "@/lib/auth-email";
 import { getIndustryTemplate } from "@/lib/industry-templates";
+import { createFreeSubscription } from "@/lib/billing/subscription-service";
 
 const signupSchema = z.object({
   orgName: z.string().min(2),
@@ -49,8 +50,9 @@ export async function POST(req: Request) {
   const passwordHash = await bcrypt.hash(password, 12);
   const verificationToken = generateSecureToken();
 
+  let org: { id: string } | null = null;
   try {
-    await prisma.$transaction(async (tx) => {
+    org = await prisma.$transaction(async (tx) => {
       const existing = await tx.user.findUnique({ where: { email: normalizedEmail } });
       if (existing) {
         throw new Error("EMAIL_EXISTS");
@@ -67,7 +69,7 @@ export async function POST(req: Request) {
         where: { code: industryCode as never },
       });
 
-      const org = await tx.organization.create({
+      const createdOrg = await tx.organization.create({
         data: {
           name: orgName,
           slug,
@@ -108,17 +110,27 @@ export async function POST(req: Request) {
 
       await tx.whatsAppWallet.create({
         data: {
-          orgId: org.id,
+          orgId: createdOrg.id,
           balancePaise: 0,
           lowBalanceThresholdPaise: 10000,
         },
       });
+
+      return createdOrg;
     });
   } catch (err) {
     if (err instanceof Error && err.message === "EMAIL_EXISTS") {
       return NextResponse.json({ error: "An account with that email already exists" }, { status: 409 });
     }
     throw err;
+  }
+
+  if (org) {
+    try {
+      await createFreeSubscription(org.id);
+    } catch (err) {
+      console.error("Failed to create free subscription for new org:", err);
+    }
   }
 
   try {

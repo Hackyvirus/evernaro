@@ -4,6 +4,7 @@ import {
   getActiveSubscription,
   cancelSubscription,
   changeSubscriptionPlan,
+  reactivateSubscription,
 } from "@/lib/billing/subscription-service";
 import { requireOrgMember, UnauthorizedError, ForbiddenError } from "@/lib/session";
 import { UserRole, BillingFrequency } from "@prisma/client";
@@ -48,14 +49,20 @@ export async function DELETE(req: Request) {
   }
 }
 
-const changeSchema = z.object({
-  planId: z.string().cuid(),
-  frequency: z.nativeEnum(BillingFrequency).optional(),
-  addOns: z
-    .array(z.object({ addOnId: z.string().cuid(), quantity: z.number().int().positive() }))
-    .optional(),
-  couponCode: z.string().optional().nullable(),
-});
+const changeSchema = z.discriminatedUnion("action", [
+  z.object({
+    action: z.literal("change"),
+    planId: z.string().cuid(),
+    frequency: z.nativeEnum(BillingFrequency).optional(),
+    addOns: z
+      .array(z.object({ addOnId: z.string().cuid(), quantity: z.number().int().positive() }))
+      .optional(),
+    couponCode: z.string().optional().nullable(),
+  }),
+  z.object({
+    action: z.literal("reactivate"),
+  }),
+]);
 
 export async function PATCH(req: Request) {
   try {
@@ -66,6 +73,11 @@ export async function PATCH(req: Request) {
         { error: parsed.error.issues[0]?.message ?? "Invalid input" },
         { status: 400 }
       );
+    }
+
+    if (parsed.data.action === "reactivate") {
+      const subscription = await reactivateSubscription(member.orgId);
+      return NextResponse.json({ subscription });
     }
 
     const user = await (await import("@/lib/prisma")).prisma.user.findUnique({
@@ -80,7 +92,10 @@ export async function PATCH(req: Request) {
       orgId: member.orgId,
       ownerEmail: user.email,
       ownerName: user.name ?? "Account Owner",
-      ...parsed.data,
+      planId: parsed.data.planId,
+      frequency: parsed.data.frequency,
+      addOns: parsed.data.addOns,
+      couponCode: parsed.data.couponCode,
     });
 
     return NextResponse.json(result, { status: 200 });
