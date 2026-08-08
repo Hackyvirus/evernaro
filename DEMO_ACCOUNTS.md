@@ -2,23 +2,25 @@
 
 These accounts and records were created for end-to-end testing. All credentials are temporary and should be removed before going live with real customers.
 
-## Organization
+> **Common password for all dashboard accounts:** `DemoPass1234`
 
-- **Name:** Demo Salon
-- **Slug:** `demo-evernaro`
-- **Industry:** Salon / Beauty
-- **Status:** Active
-
-## Dashboard Accounts (client/org login)
+## Dashboard Accounts (one per industry/service)
 
 Log in at `/login`.
 
-| Email | Password | Role |
-|-------|----------|------|
-| `demo@evernaro.com` | `DemoPass1234` | Owner |
-| `demo-admin@evernaro.com` | `DemoPass1234` | Admin |
-| `demo-agent@evernaro.com` | `DemoPass1234` | Agent |
-| `demo-viewer@evernaro.com` | `DemoPass1234` | Viewer |
+| # | Industry / Service | Email | Org Slug |
+|---|--------------------|-------|----------|
+| 1 | Real Estate | `demo-real-estate@evernaro.com` | `demo-real-estate` |
+| 2 | Salon / Beauty | `demo-salon@evernaro.com` | `demo-salon` |
+| 3 | Clinic | `demo-clinic@evernaro.com` | `demo-clinic` |
+| 4 | Dental Clinic | `demo-dental@evernaro.com` | `demo-dental` |
+| 5 | Restaurant | `demo-restaurant@evernaro.com` | `demo-restaurant` |
+| 6 | Auto / Bike Service Center | `demo-auto-service@evernaro.com` | `demo-auto-service` |
+| 7 | Home Services | `demo-home-services@evernaro.com` | `demo-home-services` |
+| 8 | Education / Coaching / Training | `demo-education@evernaro.com` | `demo-education` |
+| 9 | Law Firm | `demo-legal@evernaro.com` | `demo-legal` |
+| 10 | Wellness / Spa | `demo-wellness@evernaro.com` | `demo-wellness` |
+| 11 | Other (generic) | `demo-other@evernaro.com` | `demo-other` |
 
 ## Platform Admin Account
 
@@ -28,45 +30,46 @@ Log in at `/platform/login`.
 |-------|----------|
 | `admin-demo@evernaro.com` | `DemoAdmin1234` |
 
-> Creating this platform admin means `/platform/setup` will redirect to `/platform/login`. Delete the platform admin (see below) if you need to re-run first-time setup.
+> Creating this platform admin means `/platform/setup` will redirect to `/platform/login`. Run the cleanup script (below) if you need to reopen first-time setup.
 
-## Sample Data Seeded
+## Sample Data Per Organization
 
-- 5 channels (WhatsApp, Telegram, Email, Instagram, Voice) with dummy credentials
-- 5 services and 3 staff profiles
-- 12 contacts
-- 6 conversations with messages
-- 6 appointments
-- 4 queue entries
+Each demo org contains:
+
+- A WhatsApp, Telegram, and Email channel (dummy credentials)
+- Services from the industry template defaults
+- 3 staff profiles
+- 6 contacts
+- 3 conversations with messages
+- 3 appointments
+- Queue entries (if the industry supports queues)
 - 2 campaigns with recipients
-- 4 reminders
-- 2 job cards
-- 2 memberships
-- 3 reviews
+- 2 reminders
+- Job cards (if the industry supports job cards)
+- Memberships (if the industry supports memberships)
+- Reviews (if the industry supports reviews)
 - 2 invoices (1 paid, 1 pending)
-- Customer events, automations, audit logs, and a wallet balance of ₹1,000
+- Customer events, automations, and audit logs
+- A Growth-plan subscription and ₹1,000 WhatsApp wallet balance
 
 ## Customize Before Seeding
 
 Set environment variables before running the seed script to change defaults:
 
 ```powershell
-$env:DEMO_OWNER_EMAIL="you@example.com"
 $env:DEMO_PASSWORD="YourPassword123"
 $env:DEMO_PLATFORM_ADMIN_EMAIL="admin@example.com"
 $env:DEMO_PLATFORM_ADMIN_PASSWORD="YourAdminPass123"
-$env:DEMO_ORG_SLUG="your-demo-slug"
-$env:DEMO_INDUSTRY="REAL_ESTATE"   # SALON, CLINIC, RESTAURANT, etc.
 npx tsx scripts/seed-demo-account.ts
 ```
 
-## Recreate Demo Data
+## Recreate All Demo Data
 
 ```powershell
 $env:DOTENV_CONFIG_PATH=".env.local"; npx tsx scripts/seed-demo-account.ts
 ```
 
-The script deletes the existing demo org first, so it is safe to re-run.
+The script deletes existing `demo-*` organizations first, so it is safe to re-run.
 
 ## Delete All Demo Data
 
@@ -76,11 +79,11 @@ $env:DOTENV_CONFIG_PATH=".env.local"; node scripts/delete-demo-account.mjs --yes
 
 This removes:
 
-- The demo organization and all related data (contacts, conversations, appointments, invoices, campaigns, etc.)
+- All organizations whose slug starts with `demo-` and all their related data
 - The demo platform admin account
 
 ## Important Notes
 
 - Channel tokens and API keys are placeholders. Do not send real messages/calls with them.
-- The demo subscription is attached to the **Growth** plan for billing-page testing.
-- Wallet balance is fake demo credit.
+- All dashboard accounts share the same password for convenience.
+- Wallet balances and subscriptions are fake demo data.
