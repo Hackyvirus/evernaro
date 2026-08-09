@@ -665,14 +665,19 @@ export default async function Home() {
             <p className="text-xs font-medium tracking-wide text-primary uppercase">Pricing</p>
             <h2 className="mt-2 text-3xl font-extrabold text-text">Simple pricing that grows with you.</h2>
             <p className="mt-2 text-base text-text-secondary">
-              Prices in INR, billed monthly. Start with a 14-day free trial — no credit card required,
-              cancel anytime.
+              Prices in INR. Start with a 14-day free trial — no credit card required, cancel anytime.
             </p>
           </Reveal>
 
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {plans.map((plan, i) => {
               const highlighted = plan.slug === "growth";
+              const annualDiscount =
+                plan.monthlyPriceInr > 0 && plan.annualPriceInr > 0
+                  ? Math.round(
+                      ((plan.monthlyPriceInr * 12 - plan.annualPriceInr) / (plan.monthlyPriceInr * 12)) * 100
+                    )
+                  : 0;
               return (
                 <Reveal key={plan.id} delay={i * 80}>
                   <Card
@@ -699,6 +704,14 @@ export default async function Home() {
                         {formatPrice(plan.monthlyPriceInr, plan.currency)}
                         <span className="text-sm font-medium text-text-muted">/month</span>
                       </p>
+                      {plan.annualPriceInr > 0 && (
+                        <p className="mt-1 text-sm text-text-secondary">
+                          or {formatPrice(plan.annualPriceInr, plan.currency)}/year
+                          {annualDiscount > 0 && (
+                            <span className="ml-2 text-xs font-medium text-success">save {annualDiscount}%</span>
+                          )}
+                        </p>
+                      )}
                     </div>
                     <ul className="flex flex-1 flex-col gap-2">
                       {plan.features.map((feature) => (

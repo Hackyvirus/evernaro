@@ -174,6 +174,11 @@ export default function QueuePage() {
     };
   }, []);
 
+  async function getError(res: Response): Promise<string> {
+    const data = await res.json().catch(() => ({}));
+    return data.error ?? `Request failed (${res.status})`;
+  }
+
   async function createQueue(e: React.FormEvent) {
     e.preventDefault();
     setSubmitting(true);
@@ -185,7 +190,10 @@ export default function QueuePage() {
     setSubmitting(false);
     if (res.ok) {
       setNewQueueName("");
+      setPollError("");
       load();
+    } else {
+      setPollError(await getError(res));
     }
   }
 
@@ -205,25 +213,38 @@ export default function QueuePage() {
     if (res.ok) {
       setContactId("");
       setServiceId("");
+      setPollError("");
       load();
+    } else {
+      setPollError(await getError(res));
     }
   }
 
   async function callNext(queueId: string) {
-    await fetch(`/api/queue/${queueId}/call-next`, {
+    const res = await fetch(`/api/queue/${queueId}/call-next`, {
       method: "POST",
       body: JSON.stringify({}),
     });
-    load();
+    if (res.ok) {
+      setPollError("");
+      load();
+    } else {
+      setPollError(await getError(res));
+    }
   }
 
   async function updateStatus(entryId: string, status: string) {
-    await fetch(`/api/queue/entries/${entryId}/status`, {
+    const res = await fetch(`/api/queue/entries/${entryId}/status`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ status }),
     });
-    load();
+    if (res.ok) {
+      setPollError("");
+      load();
+    } else {
+      setPollError(await getError(res));
+    }
   }
 
   async function verifyAndStart(publicToken: string) {

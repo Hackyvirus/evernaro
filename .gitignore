@@ -43,7 +43,8 @@ next-env.d.ts
 
 /src/generated/prisma
 
-# local worker process log
+# local logs
+*.log
 worker.log
 
 # local agent tooling cache (vendored skill docs, not project source)

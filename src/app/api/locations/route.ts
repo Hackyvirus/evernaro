@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { UserRole } from "@prisma/client";
 import { requireOrgMember } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
@@ -11,7 +12,7 @@ const locationSchema = z.object({
 });
 
 export async function GET() {
-  const member = await requireOrgMember();
+  const member = await requireOrgMember(UserRole.ADMIN);
   if (!member) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const locations = await prisma.location.findMany({
     where: { orgId: member.orgId },
@@ -21,7 +22,7 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
-  const member = await requireOrgMember();
+  const member = await requireOrgMember(UserRole.ADMIN);
   if (!member) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const parsed = locationSchema.safeParse(await req.json());
   if (!parsed.success) {

@@ -6,6 +6,7 @@
 
 import * as Sentry from "@sentry/node";
 import { Queue, Worker, type Job } from "bullmq";
+import { RecipientStatus, ReminderStatus } from "@prisma/client";
 import fs from "node:fs";
 import { redisConnection } from "../lib/redis";
 import { prisma } from "../lib/prisma";
@@ -37,13 +38,21 @@ if (process.env.SENTRY_DSN) {
   Sentry.init({ dsn: process.env.SENTRY_DSN, tracesSampleRate: 0.1, environment: process.env.NODE_ENV });
 }
 
-process.on("uncaughtException", (err) => {
+process.on("uncaughtException", async (err) => {
   Sentry.captureException(err);
   console.error("Uncaught exception in worker:", err);
+  try {
+    await Sentry.flush(2000);
+  } catch {}
+  process.exit(1);
 });
-process.on("unhandledRejection", (err) => {
+process.on("unhandledRejection", async (err) => {
   Sentry.captureException(err);
   console.error("Unhandled rejection in worker:", err);
+  try {
+    await Sentry.flush(2000);
+  } catch {}
+  process.exit(1);
 });
 
 const SHUTDOWN_SIGNALS: NodeJS.Signals[] = ["SIGTERM", "SIGINT"];
@@ -105,6 +114,15 @@ async function processCampaignJob(job: Job<CampaignSendJob>) {
   });
   if (!recipient || recipient.status !== "PENDING") return;
 
+  // Lock the recipient into SENDING before calling the provider. If anything
+  // crashes after this point, retries will see SENDING (not PENDING) and skip
+  // a duplicate send. The final transaction below resolves it to SENT/FAILED.
+  const locked = await prisma.campaignRecipient.updateMany({
+    where: { id: recipient.id, status: "PENDING" },
+    data: { status: "SENDING" },
+  });
+  if (locked.count === 0) return;
+
   // Transition scheduled campaigns to sending when the first recipient job runs.
   if (recipient.campaign.status === "SCHEDULED") {
     await prisma.campaign.update({
@@ -162,7 +180,7 @@ async function processCampaignJob(job: Job<CampaignSendJob>) {
     });
 
     const remaining = await tx.campaignRecipient.count({
-      where: { campaignId: recipient.campaignId, status: "PENDING" },
+      where: { campaignId: recipient.campaignId, status: { notIn: [RecipientStatus.SENT, RecipientStatus.FAILED] } },
     });
     if (remaining === 0) {
       await tx.campaign.update({
@@ -184,7 +202,7 @@ async function placeReminderCall(reminder: {
   contactId: string;
   channelId: string;
   message: string;
-}, contact: { phone: string | null }, channel: { isActive: boolean; twilioAccountSid: string | null; twilioAuthToken: string | null; twilioFromNumber: string | null }) {
+}, contact: { name: string | null; phone: string | null }, channel: { isActive: boolean; twilioAccountSid: string | null; twilioAuthToken: string | null; twilioFromNumber: string | null }) {
   if (!channel.isActive) {
     throw new Error("This channel has been disconnected");
   }
@@ -200,7 +218,7 @@ async function placeReminderCall(reminder: {
       contactId: reminder.contactId,
       channelId: reminder.channelId,
       reminderId: reminder.id,
-      message: reminder.message,
+      message: renderTemplate(reminder.message, contact.name),
     },
   });
 
@@ -228,7 +246,13 @@ async function processReminderJob(job: Job<ReminderSendJob>) {
     where: { id: job.data.reminderId },
     include: { contact: true, channel: true, whatsappTemplate: true },
   });
+  const MAX_REMINDER_RECURRENCE_YEARS = 2;
+  const maxFutureDate = reminder
+    ? new Date(reminder.createdAt.getTime() + MAX_REMINDER_RECURRENCE_YEARS * 365 * 24 * 60 * 60 * 1000)
+    : null;
   if (!reminder || reminder.status !== "PENDING") return; // cancelled or already handled
+
+  const text = renderTemplate(reminder.message, reminder.contact.name);
 
   try {
     if (reminder.channel.type === "VOICE") {
@@ -240,7 +264,7 @@ async function processReminderJob(job: Job<ReminderSendJob>) {
       await sendViaChannel(
         reminder.channel,
         reminder.contact,
-        reminder.message,
+        text,
         undefined,
         {
           gupshupTemplateId: reminder.whatsappTemplate.gupshupTemplateId,
@@ -250,7 +274,7 @@ async function processReminderJob(job: Job<ReminderSendJob>) {
         { type: "REMINDER", id: reminder.id }
       );
     } else {
-      await sendViaChannel(reminder.channel, reminder.contact, reminder.message, undefined, undefined, {
+      await sendViaChannel(reminder.channel, reminder.contact, text, undefined, undefined, {
         type: "REMINDER",
         id: reminder.id,
       });
@@ -276,8 +300,21 @@ async function processReminderJob(job: Job<ReminderSendJob>) {
   await prisma.reminder.update({ where: { id: reminder.id }, data: { status: "SENT", error: null } });
 
   const next = nextOccurrence(reminder.scheduledFor, reminder.recurrence);
-  if (next) {
+  if (next && maxFutureDate && next.getTime() <= maxFutureDate.getTime()) {
     try {
+      // Idempotency: a retried job must not create duplicate future occurrences.
+      const existingNext = await prisma.reminder.findFirst({
+        where: {
+          orgId: reminder.orgId,
+          contactId: reminder.contactId,
+          channelId: reminder.channelId,
+          message: reminder.message,
+          scheduledFor: next,
+          status: ReminderStatus.PENDING,
+        },
+      });
+      if (existingNext) return;
+
       const nextReminder = await prisma.reminder.create({
         data: {
           orgId: reminder.orgId,

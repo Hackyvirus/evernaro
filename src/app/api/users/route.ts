@@ -4,8 +4,12 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { requireOrgMember, UnauthorizedError, ForbiddenError } from "@/lib/session";
 import { logAudit } from "@/lib/audit";
-import { requireFeature, requireUsageLimit } from "@/lib/billing/entitlements";
-import { recordUsage } from "@/lib/billing/usage";
+import {
+  requireFeature,
+  requireUsageLimit,
+  FeatureNotAllowedError,
+  UsageLimitExceededError,
+} from "@/lib/billing/entitlements";
 import { sendTeamInviteEmail } from "@/lib/auth-email";
 import bcrypt from "bcryptjs";
 import { randomBytes } from "node:crypto";
@@ -48,7 +52,7 @@ export async function GET() {
 
 export async function POST(req: Request) {
   try {
-    const { orgId, userId: adminId } = await requireOrgMember(UserRole.ADMIN);
+    const { orgId, userId: adminId, role: adminRole } = await requireOrgMember(UserRole.ADMIN);
     const parsed = inviteSchema.safeParse(await req.json().catch(() => ({})));
     if (!parsed.success) {
       return NextResponse.json(
@@ -57,6 +61,10 @@ export async function POST(req: Request) {
       );
     }
     const { name, email, role } = parsed.data;
+
+    if (role === UserRole.OWNER && adminRole !== UserRole.OWNER) {
+      return NextResponse.json({ error: "Only the owner can invite another owner" }, { status: 403 });
+    }
 
     const existing = await prisma.user.findUnique({ where: { email: email.toLowerCase() } });
     if (existing) {
@@ -67,8 +75,11 @@ export async function POST(req: Request) {
       await requireFeature(orgId, "staff_management");
       await requireUsageLimit(orgId, "users", 1);
     } catch (err) {
-      if (err instanceof Error) {
+      if (err instanceof FeatureNotAllowedError) {
         return NextResponse.json({ error: err.message }, { status: 403 });
+      }
+      if (err instanceof UsageLimitExceededError) {
+        return NextResponse.json({ error: err.message }, { status: 402 });
       }
       return NextResponse.json({ error: "Failed to verify plan limits" }, { status: 500 });
     }
@@ -100,19 +111,17 @@ export async function POST(req: Request) {
       metadata: { role },
     });
 
-    await recordUsage({ orgId, serviceKey: "users", quantity: 1 }).catch((err) => {
-      console.error("Failed to record user usage:", err);
-    });
-
+    let emailSent = false;
     try {
       await sendTeamInviteEmail(user.email, user.name, org?.name ?? "your organization", tempPassword);
+      emailSent = true;
     } catch {
-      // Don't fail the invite if email is misconfigured; the admin can still
-      // share the temporary password manually.
+      // Don't fail the invite if email is misconfigured; the admin can use the
+      // password-reset flow to let the user set their own password.
       console.error("Failed to send team invite email to", user.email);
     }
 
-    return NextResponse.json({ ok: true, user, tempPassword });
+    return NextResponse.json({ ok: true, user, emailSent });
   } catch (err) {
     if (err instanceof UnauthorizedError) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { auth } from "@/lib/auth";
+import { UserRole } from "@prisma/client";
+import { requireOrgMember, UnauthorizedError, ForbiddenError } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
-import { getOrgActiveLocationId } from "@/lib/location-scope";
+import { getOrgActiveLocationId, validateLocationId } from "@/lib/location-scope";
 
 const serviceSchema = z.object({
   name: z.string().min(1),
@@ -14,49 +15,63 @@ const serviceSchema = z.object({
 });
 
 export async function GET() {
-  const session = await auth();
-  if (!session?.user?.orgId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  try {
+    const { orgId } = await requireOrgMember(UserRole.VIEWER);
+
+    const activeLocationId = await getOrgActiveLocationId(orgId);
+    const services = await prisma.service.findMany({
+      where: {
+        orgId,
+        isActive: true,
+        ...(activeLocationId ? { locationId: activeLocationId } : {}),
+      },
+      orderBy: { name: "asc" },
+    });
+
+    return NextResponse.json({ services });
+  } catch (err) {
+    if (err instanceof UnauthorizedError) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    if (err instanceof ForbiddenError) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+    return NextResponse.json({ error: "Failed to load services" }, { status: 500 });
   }
-
-  const activeLocationId = await getOrgActiveLocationId(session.user.orgId);
-  const services = await prisma.service.findMany({
-    where: {
-      orgId: session.user.orgId,
-      isActive: true,
-      ...(activeLocationId ? { locationId: activeLocationId } : {}),
-    },
-    orderBy: { name: "asc" },
-  });
-
-  return NextResponse.json({ services });
 }
 
 export async function POST(req: Request) {
-  const session = await auth();
-  if (!session?.user?.orgId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  try {
+    const { orgId } = await requireOrgMember(UserRole.ADMIN);
+
+    const body = await req.json();
+    const parsed = serviceSchema.safeParse(body);
+    if (!parsed.success) {
+      return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid input" }, { status: 400 });
+    }
+
+    const activeLocationId = (await validateLocationId(parsed.data.locationId, orgId)) ?? (await getOrgActiveLocationId(orgId));
+
+    const service = await prisma.service.create({
+      data: {
+        orgId,
+        locationId: activeLocationId,
+        name: parsed.data.name,
+        description: parsed.data.description,
+        durationMin: parsed.data.durationMin,
+        priceInr: parsed.data.priceInr,
+        color: parsed.data.color,
+      },
+    });
+
+    return NextResponse.json({ service }, { status: 201 });
+  } catch (err) {
+    if (err instanceof UnauthorizedError) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    if (err instanceof ForbiddenError) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+    return NextResponse.json({ error: "Failed to create service" }, { status: 500 });
   }
-
-  const body = await req.json();
-  const parsed = serviceSchema.safeParse(body);
-  if (!parsed.success) {
-    return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid input" }, { status: 400 });
-  }
-
-  const activeLocationId = parsed.data.locationId ?? (await getOrgActiveLocationId(session.user.orgId));
-
-  const service = await prisma.service.create({
-    data: {
-      orgId: session.user.orgId,
-      locationId: activeLocationId,
-      name: parsed.data.name,
-      description: parsed.data.description,
-      durationMin: parsed.data.durationMin,
-      priceInr: parsed.data.priceInr,
-      color: parsed.data.color,
-    },
-  });
-
-  return NextResponse.json({ service }, { status: 201 });
 }

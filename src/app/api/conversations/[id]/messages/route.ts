@@ -7,6 +7,8 @@ import { sendViaChannel } from "@/lib/send";
 import { InsufficientWalletBalanceError } from "@/lib/whatsapp-wallet";
 import { requireActiveSubscription, SubscriptionSuspendedError } from "@/lib/subscription";
 
+
+
 const bodySchema = z.object({ text: z.string().min(1) });
 
 export async function POST(
@@ -31,11 +33,8 @@ export async function POST(
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 
-    await sendViaChannel(conversation.channel, conversation.contact, text, conversation.subject ?? undefined);
-
-    // Clear any pending AI draft now that a reply has gone out.
-    await prisma.message.deleteMany({ where: { conversationId: id, isAiDraft: true } });
-
+    // Create the outbound message first so we have a stable id to use as the
+    // WhatsApp wallet-debit idempotency key. If the send fails we roll it back.
     const sent = await prisma.message.create({
       data: {
         conversationId: id,
@@ -45,8 +44,25 @@ export async function POST(
       },
     });
 
+    try {
+      await sendViaChannel(
+        conversation.channel,
+        conversation.contact,
+        text,
+        conversation.subject ?? undefined,
+        undefined,
+        { type: "INBOX_MESSAGE", id: sent.id }
+      );
+    } catch (err) {
+      await prisma.message.delete({ where: { id: sent.id } }).catch(() => {});
+      throw err;
+    }
+
+    // Clear any pending AI draft now that a reply has gone out.
+    await prisma.message.deleteMany({ where: { conversationId: id, isAiDraft: true } });
+
     await prisma.conversation.update({
-      where: { id },
+      where: { id, orgId },
       data: { lastMessageAt: new Date() },
     });
 

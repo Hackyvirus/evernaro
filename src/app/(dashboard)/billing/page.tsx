@@ -54,7 +54,7 @@ interface Subscription {
     features: { key: string; label: string; value: string | null; included: boolean }[];
     limits: { service: { key: string; name: string; unit: string }; includedQuantity: number }[];
   };
-  items: { addOn: { name: string } | null; quantity: number; totalPriceInr: number }[];
+  items: { id: string; addOnId: string | null; addOn: { name: string } | null; quantity: number; totalPriceInr: number }[];
 }
 
 interface UsageItem {
@@ -101,6 +101,24 @@ function daysUntil(date: string | Date | null | undefined) {
   if (!date) return null;
   const diff = new Date(date).getTime() - Date.now();
   return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)));
+}
+
+function subscriptionStatusVariant(status: string): "default" | "success" | "warning" | "danger" | "info" {
+  const s = status.toUpperCase();
+  if (s === "ACTIVE") return "success";
+  if (s === "TRIALING") return "info";
+  if (s === "PAST_DUE" || s === "INCOMPLETE") return "warning";
+  if (s === "PAYMENT_FAILED" || s === "CANCELLED" || s === "EXPIRED") return "danger";
+  return "default";
+}
+
+function formatDate(date: string | Date | null | undefined) {
+  if (!date) return "—";
+  return new Date(date).toLocaleDateString("en-IN", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
 }
 
 const TX_LABEL: Record<WalletTx["type"], string> = {
@@ -171,7 +189,9 @@ async function payInvoice(
           onSettled("Payment succeeded but confirmation failed — contact support.");
         }
       },
-      modal: { ondismiss: () => onSettled(null) },
+      modal: {
+        ondismiss: () => onSettled("Payment was cancelled. Please try again."),
+      },
     });
     checkout.open();
   } catch {
@@ -214,39 +234,56 @@ function BillingPageContent() {
   const [paymentMethodsLoaded, setPaymentMethodsLoaded] = useState(false);
 
   function refresh() {
+    setError(null);
     fetch("/api/invoices")
-      .then((r) => r.json())
-      .then((d) => setInvoices(d.invoices ?? []))
+      .then(async (r) => {
+        if (!r.ok) throw new Error("Failed to load invoices");
+        const d = await r.json();
+        setInvoices(d.invoices ?? []);
+      })
+      .catch((err) => setError(err instanceof Error ? err.message : "Failed to load billing data"))
       .finally(() => setLoaded(true));
     fetch("/api/organization")
-      .then((r) => r.json())
-      .then((d) => {
+      .then(async (r) => {
+        if (!r.ok) throw new Error("Failed to load organization");
+        const d = await r.json();
         setLatestInvoice(d.latestSubscriptionInvoice ?? null);
-      });
+      })
+      .catch((err) => setError(err instanceof Error ? err.message : "Failed to load billing data"));
     fetch("/api/billing/subscription")
-      .then((r) => r.json())
-      .then((d) => {
+      .then(async (r) => {
+        if (!r.ok) throw new Error("Failed to load subscription");
+        const d = await r.json();
         setSubscription(d.subscription ?? null);
+      })
+      .catch((err) => {
+        setError(err instanceof Error ? err.message : "Failed to load subscription");
         setSubscriptionLoading(false);
       })
-      .catch(() => setSubscriptionLoading(false));
+      .finally(() => setSubscriptionLoading(false));
     fetch("/api/billing/usage")
-      .then((r) => r.json())
-      .then((d) => setUsage(d.usage ?? []));
+      .then(async (r) => {
+        if (!r.ok) throw new Error("Failed to load usage");
+        const d = await r.json();
+        setUsage(d.usage ?? []);
+      })
+      .catch((err) => setError(err instanceof Error ? err.message : "Failed to load usage"));
     fetch("/api/billing/payments")
-      .then((r) => r.json())
-      .then((d) => {
+      .then(async (r) => {
+        if (!r.ok) throw new Error("Failed to load payments");
+        const d = await r.json();
         setPayments(d.payments ?? []);
-        setPaymentsLoaded(true);
       })
-      .catch(() => setPaymentsLoaded(true));
+      .catch((err) => setError(err instanceof Error ? err.message : "Failed to load payments"))
+      .finally(() => setPaymentsLoaded(true));
     fetch("/api/billing/payment-methods")
-      .then((r) => r.json())
-      .then((d) => {
+      .then(async (r) => {
+        if (!r.ok) throw new Error("Failed to load payment methods");
+        const d = await r.json();
         setPaymentMethods(d.methods ?? []);
-        setPaymentMethodsLoaded(true);
       })
-      .catch(() => setPaymentMethodsLoaded(true));
+      .catch((err) => setError(err instanceof Error ? err.message : "Failed to load payment methods"))
+      .finally(() => setPaymentMethodsLoaded(true));
   }
 
   function refreshWallet() {
@@ -259,8 +296,11 @@ function BillingPageContent() {
   }
 
   useEffect(() => {
-    refresh();
-    refreshWallet();
+    async function init() {
+      await refresh();
+      await refreshWallet();
+    }
+    init();
   }, []);
 
   async function pay(invoice: Invoice) {
@@ -414,6 +454,30 @@ function BillingPageContent() {
           </Card>
         )}
 
+        {!subscriptionLoading && subscription?.status === "EXPIRED" && (
+          <Card className="flex flex-col items-center gap-3 border border-danger bg-danger-light p-4 text-center sm:flex-row sm:items-start sm:text-start">
+            <AlertCircle className="mt-0.5 h-5 w-5 flex-shrink-0 text-danger" aria-hidden="true" />
+            <div>
+              <p className="text-sm font-medium text-text">Subscription expired</p>
+              <p className="text-xs text-text-secondary">
+                Your subscription has expired. Choose a plan to reactivate your account.
+              </p>
+            </div>
+          </Card>
+        )}
+
+        {!subscriptionLoading && subscription?.status === "INCOMPLETE" && (
+          <Card className="flex flex-col items-center gap-3 border border-warning bg-warning-light p-4 text-center sm:flex-row sm:items-start sm:text-start">
+            <AlertCircle className="mt-0.5 h-5 w-5 flex-shrink-0 text-warning" aria-hidden="true" />
+            <div>
+              <p className="text-sm font-medium text-text">Subscription setup incomplete</p>
+              <p className="text-xs text-text-secondary">
+                Finish payment to activate your subscription.
+              </p>
+            </div>
+          </Card>
+        )}
+
         {!subscriptionLoading && subscription?.cancelAtPeriodEnd && subscription.status !== "CANCELLED" && (
           <Card className="flex flex-col items-center gap-3 border border-warning bg-warning-light p-4 text-center sm:flex-row sm:items-start sm:text-start">
             <AlertCircle className="mt-0.5 h-5 w-5 flex-shrink-0 text-warning" aria-hidden="true" />
@@ -449,33 +513,47 @@ function BillingPageContent() {
                 <Skeleton className="h-16" />
               ) : subscription ? (
                 <>
-                  <div className="mb-3 flex items-baseline gap-2">
+                  <div className="mb-3 flex flex-wrap items-baseline gap-2">
                     <p className="text-2xl font-extrabold text-text">{subscription.plan.name}</p>
-                    <Badge variant={subscription.status === "ACTIVE" || subscription.status === "TRIALING" ? "success" : "warning"}>
-                      {subscription.status}
+                    <Badge variant={subscriptionStatusVariant(subscription.status)}>
+                      {subscription.status.replace("_", " ")}
                     </Badge>
                   </div>
-                  <p className="text-sm text-text-secondary">
-                    ₹{subscription.totalAmountInr.toLocaleString("en-IN")}/{subscription.frequency.toLowerCase()}
-                  </p>
-                  {subscription.trialEnd && (
-                    <p className="mt-1 text-xs text-text-muted">
-                      Trial ends {new Date(subscription.trialEnd).toLocaleDateString()}
+                  {subscription.plan.description && (
+                    <p className="text-sm text-text-secondary">{subscription.plan.description}</p>
+                  )}
+                  <div className="mt-3 flex flex-col gap-1.5 text-sm text-text-secondary">
+                    <p className="flex items-center justify-between gap-4">
+                      <span>Billing cycle</span>
+                      <span className="font-medium capitalize text-text">{subscription.frequency.toLowerCase()}</span>
                     </p>
-                  )}
-                  {!subscription.trialEnd && subscription.currentPeriodEnd && subscription.totalAmountInr > 0 && (
-                    <p className="mt-1 text-xs text-text-muted">
-                      Next billing {new Date(subscription.currentPeriodEnd).toLocaleDateString()}
+                    <p className="flex items-center justify-between gap-4">
+                      <span>Renewal amount</span>
+                      <span className="font-medium text-text">
+                        ₹{subscription.totalAmountInr.toLocaleString("en-IN")}/{subscription.frequency === "YEARLY" ? "year" : "month"}
+                      </span>
                     </p>
-                  )}
-                  {subscription.cancelAtPeriodEnd && (
-                    <p className="mt-1 text-xs text-danger">Cancels at period end</p>
-                  )}
+                    {subscription.trialEnd && (
+                      <p className="flex items-center justify-between gap-4">
+                        <span>Trial ends</span>
+                        <span className="font-medium text-info">{formatDate(subscription.trialEnd)} ({daysUntil(subscription.trialEnd)} days left)</span>
+                      </p>
+                    )}
+                    {!subscription.trialEnd && subscription.currentPeriodEnd && (
+                      <p className="flex items-center justify-between gap-4">
+                        <span>Next billing</span>
+                        <span className="font-medium text-text">{formatDate(subscription.currentPeriodEnd)}</span>
+                      </p>
+                    )}
+                    {subscription.cancelAtPeriodEnd && (
+                      <p className="text-xs text-danger">Cancels at period end</p>
+                    )}
+                  </div>
                   {subscription.items.length > 0 && (
                     <ul className="mt-3 flex flex-col gap-1">
                       {subscription.items.map((item) => (
-                        <li key={item.addOn?.name} className="text-xs text-text-secondary">
-                          {item.addOn?.name} x{item.quantity} — ₹{item.totalPriceInr.toLocaleString("en-IN")}
+                        <li key={item.addOn?.name ?? item.addOnId} className="text-xs text-text-secondary">
+                          {item.addOn?.name ?? "Add-on"} x{item.quantity} — ₹{item.totalPriceInr.toLocaleString("en-IN")}
                         </li>
                       ))}
                     </ul>
@@ -583,7 +661,20 @@ function BillingPageContent() {
                         <Button
                           size="sm"
                           variant="secondary"
-                          onClick={() => fetch(`/api/billing/payment-methods/${m.id}`, { method: "PATCH", body: JSON.stringify({ isDefault: true }) }).then(refresh)}
+                          onClick={async () => {
+                            const res = await fetch(`/api/billing/payment-methods/${m.id}`, {
+                              method: "PATCH",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({ isDefault: true }),
+                            });
+                            if (res.ok) {
+                              setError(null);
+                              refresh();
+                            } else {
+                              const data = await res.json().catch(() => ({}));
+                              setError(data.error ?? "Failed to set default payment method");
+                            }
+                          }}
                         >
                           Default
                         </Button>
@@ -591,7 +682,16 @@ function BillingPageContent() {
                       <Button
                         size="sm"
                         variant="ghost"
-                        onClick={() => fetch(`/api/billing/payment-methods/${m.id}`, { method: "DELETE" }).then(refresh)}
+                        onClick={async () => {
+                          const res = await fetch(`/api/billing/payment-methods/${m.id}`, { method: "DELETE" });
+                          if (res.ok) {
+                            setError(null);
+                            refresh();
+                          } else {
+                            const data = await res.json().catch(() => ({}));
+                            setError(data.error ?? "Failed to remove payment method");
+                          }
+                        }}
                       >
                         Remove
                       </Button>
@@ -603,9 +703,11 @@ function BillingPageContent() {
           </Card>
         </div>
 
-        {usage.length > 0 && (
-          <Card className="p-5">
-            <h2 className="mb-3 text-sm font-bold text-text">Usage this period</h2>
+        <Card className="p-5">
+          <h2 className="mb-3 text-sm font-bold text-text">Usage this period</h2>
+          {usage.length === 0 ? (
+            <p className="text-sm text-text-secondary">No usage limits are configured for your current plan.</p>
+          ) : (
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {usage.map((u) => (
                 <div key={u.serviceName} className="rounded-lg bg-surface-secondary p-4">
@@ -626,8 +728,8 @@ function BillingPageContent() {
                 </div>
               ))}
             </div>
-          </Card>
-        )}
+          )}
+        </Card>
 
         {transactions.length > 0 && (
           <Card className="p-5">
@@ -650,7 +752,7 @@ function BillingPageContent() {
         )}
 
         <div>
-          <h2 className="mb-3 text-sm font-bold text-text">Subscription invoices</h2>
+          <h2 className="mb-3 text-sm font-bold text-text">Invoices</h2>
           {error && <p className="mb-4 text-sm text-danger">{error}</p>}
           {!loaded ? (
             <div className="flex flex-col gap-2">
@@ -668,8 +770,8 @@ function BillingPageContent() {
                       <p className="text-sm font-medium text-text">₹{inv.amountInr.toLocaleString("en-IN")}</p>
                       <p className="text-xs text-text-secondary">
                         {inv.status === "PAID" && inv.paidAt
-                          ? `Paid ${new Date(inv.paidAt).toLocaleDateString()}`
-                          : `Created ${new Date(inv.createdAt).toLocaleDateString()}`}
+                          ? `Paid ${formatDate(inv.paidAt)}`
+                          : `Created ${formatDate(inv.createdAt)}`}
                       </p>
                     </div>
                     <div className="flex items-center gap-3">
@@ -714,12 +816,21 @@ function BillingPageContent() {
                     <div>
                       <p className="text-sm font-medium text-text">₹{p.amountInr.toLocaleString("en-IN")}</p>
                       <p className="text-xs text-text-secondary">
-                        {p.razorpayPaymentId ? `Payment ${p.razorpayPaymentId}` : "Payment"} ·{" "}
-                        {new Date(p.createdAt).toLocaleDateString()}
+                        {formatDate(p.createdAt)}
+                        {p.razorpayPaymentId && <span className="ml-2 font-mono">{p.razorpayPaymentId}</span>}
                       </p>
                     </div>
-                    <div className="flex items-center gap-3">
+                    <div className="flex flex-wrap items-center gap-3">
                       <Badge variant={statusVariant(p.status)}>{p.status}</Badge>
+                      {p.invoice && (
+                        <a
+                          href={`/api/billing/invoices/${p.invoice.id}/pdf`}
+                          download
+                          className="text-xs font-medium text-primary hover:text-primary-hover"
+                        >
+                          Invoice
+                        </a>
+                      )}
                       {p.status === "PAID" && (
                         <a
                           href={`/api/billing/payments/${p.id}/receipt`}

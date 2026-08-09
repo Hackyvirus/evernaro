@@ -23,6 +23,7 @@ export default function AppointmentsPage() {
   const [services, setServices] = useState<ServiceOption[]>([]);
   const [staff, setStaff] = useState<StaffOption[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string>("");
   const [contactId, setContactId] = useState("");
   const [serviceId, setServiceId] = useState("");
   const [staffId, setStaffId] = useState("");
@@ -31,21 +32,32 @@ export default function AppointmentsPage() {
   const [submitting, setSubmitting] = useState(false);
 
   async function load() {
-    const [apptRes, contactRes, serviceRes, staffRes] = await Promise.all([
-      fetch("/api/appointments?from=" + new Date().toISOString()),
-      fetch("/api/contacts"),
-      fetch("/api/services"),
-      fetch("/api/staff"),
-    ]);
-    const apptData = await apptRes.json();
-    const contactData = await contactRes.json();
-    const serviceData = await serviceRes.json();
-    const staffData = await staffRes.json();
-    setAppointments(apptData.appointments ?? []);
-    setContacts(contactData.contacts ?? []);
-    setServices(serviceData.services ?? []);
-    setStaff(staffData.staff ?? []);
-    setLoading(false);
+    try {
+      const [apptRes, contactRes, serviceRes, staffRes] = await Promise.all([
+        fetch("/api/appointments?from=" + new Date().toISOString()),
+        fetch("/api/contacts"),
+        fetch("/api/services"),
+        fetch("/api/staff"),
+      ]);
+      if (!apptRes.ok || !contactRes.ok || !serviceRes.ok || !staffRes.ok) {
+        setError("Failed to load appointments. Please refresh the page.");
+        setLoading(false);
+        return;
+      }
+      const apptData = await apptRes.json();
+      const contactData = await contactRes.json();
+      const serviceData = await serviceRes.json();
+      const staffData = await staffRes.json();
+      setAppointments(apptData.appointments ?? []);
+      setContacts(contactData.contacts ?? []);
+      setServices(serviceData.services ?? []);
+      setStaff(staffData.staff ?? []);
+      setError("");
+    } catch {
+      setError("Failed to load appointments. Please refresh the page.");
+    } finally {
+      setLoading(false);
+    }
   }
 
   useEffect(() => {
@@ -76,15 +88,41 @@ export default function AppointmentsPage() {
       setServiceId("");
       setStaffId("");
       setStartsAt("");
+      setError("");
       load();
+    } else {
+      const data = await res.json().catch(() => ({}));
+      setError(data.error ?? "Failed to book appointment");
     }
   }
+
+  async function cancelAppointment(id: string) {
+    if (!confirm("Cancel this appointment?")) return;
+    const res = await fetch(`/api/appointments/${id}/status`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: "CANCELLED" }),
+    });
+    if (res.ok) {
+      load();
+    } else {
+      const data = await res.json().catch(() => ({}));
+      alert(data.error ?? "Could not cancel appointment");
+    }
+  }
+
+  const finalStatuses = new Set(["COMPLETED", "CANCELLED", "NO_SHOW"]);
 
   return (
     <div className="flex flex-1 flex-col overflow-auto">
       <PageHeader title="Appointments" description="Book and manage appointments." />
 
       <div className="flex flex-1 flex-col gap-6 p-6">
+        {error && (
+          <div className="rounded-md bg-danger-light px-3 py-2 text-sm text-danger">
+            {error}
+          </div>
+        )}
         <Card className="p-4">
           <form onSubmit={onSubmit} className="grid gap-4 sm:grid-cols-6">
             <div className="sm:col-span-2">
@@ -174,6 +212,16 @@ export default function AppointmentsPage() {
                 <span className="mt-2 inline-flex w-fit rounded-full bg-primary-lighter px-2.5 py-1 text-xs font-medium text-primary sm:mt-0">
                   {a.status}
                 </span>
+                {!finalStatuses.has(a.status) && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => cancelAppointment(a.id)}
+                    className="mt-2 sm:mt-0"
+                  >
+                    Cancel
+                  </Button>
+                )}
               </Card>
             ))}
           </div>

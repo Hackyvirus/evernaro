@@ -8,7 +8,6 @@ const ACTIVE_STATUSES: SubscriptionStatus[] = [
   SubscriptionStatus.ACTIVE,
   SubscriptionStatus.PAST_DUE,
   SubscriptionStatus.PAUSED,
-  SubscriptionStatus.INCOMPLETE,
 ];
 
 export async function getOrgSubscription(orgId: string) {
@@ -21,7 +20,7 @@ export async function getOrgSubscription(orgId: string) {
           limits: { include: { service: true } },
         },
       },
-      items: { include: { addOn: true } },
+      items: { include: { addOn: { include: { service: true } } } },
     },
     orderBy: { createdAt: "desc" },
   });
@@ -34,11 +33,22 @@ export async function hasFeature(orgId: string, featureKey: string): Promise<boo
   return feature?.included ?? false;
 }
 
+function addOnQuantityForService(
+  subscription: Awaited<ReturnType<typeof getOrgSubscription>>,
+  serviceKey: string
+): number {
+  if (!subscription?.items) return 0;
+  return subscription.items
+    .filter((item) => item.type === "ADD_ON" && item.addOn?.service?.key === serviceKey)
+    .reduce((sum, item) => sum + (item.addOn?.includedQuantity ?? 0) * Math.max(1, item.quantity), 0);
+}
+
 export async function getPlanLimit(orgId: string, serviceKey: string): Promise<number> {
   const subscription = await getOrgSubscription(orgId);
   if (!subscription) return 0;
   const limit = subscription.plan.limits.find((l: { service: { key: string }; includedQuantity: number }) => l.service.key === serviceKey);
-  return limit?.includedQuantity ?? 0;
+  const baseLimit = limit?.includedQuantity ?? 0;
+  return baseLimit + addOnQuantityForService(subscription, serviceKey);
 }
 
 export type UsageCheck = {
@@ -56,13 +66,14 @@ export async function checkUsageLimit(
 ): Promise<UsageCheck> {
   const subscription = await getOrgSubscription(orgId);
   const limit = subscription?.plan.limits.find((l: { service: { key: string }; includedQuantity: number; overagePriceInr: number | null }) => l.service.key === serviceKey);
-  const included = limit?.includedQuantity ?? 0;
+  const baseIncluded = limit?.includedQuantity ?? 0;
+  const included = baseIncluded + addOnQuantityForService(subscription, serviceKey);
   const overageAllowed = limit?.overagePriceInr != null;
   const periodStart = subscription?.currentPeriodStart ?? new Date(0);
   const periodEnd = subscription?.currentPeriodEnd ?? new Date(8640000000000000);
   const used = await getActualUsage(orgId, serviceKey, periodStart, periodEnd);
   const remaining = Math.max(0, included - used);
-  const allowed = remaining >= additionalQty || (included === 0 && overageAllowed);
+  const allowed = remaining >= additionalQty || overageAllowed;
   return { allowed, used, included, remaining, overageAllowed };
 }
 
@@ -85,17 +96,12 @@ async function getActualUsage(
       return agg._sum.totalRecipients ?? 0;
     }
     case "conversations": {
-      const service = await prisma.billableService.findUnique({ where: { key: serviceKey } });
-      if (!service) return 0;
-      const agg = await prisma.usageRecord.aggregate({
+      return prisma.conversation.count({
         where: {
           orgId,
-          serviceId: service.id,
           createdAt: { gte: periodStart, lte: periodEnd },
         },
-        _sum: { quantity: true },
       });
-      return agg._sum.quantity ?? 0;
     }
     default:
       return 0;

@@ -20,13 +20,15 @@ enum OrganizationStatus {
 }
 
 model Organization {
-  id            String             @id @default(cuid())
-  name          String
-  slug          String             @unique
-  monthlyFeeInr Int? // set manually by the platform admin — the amount an invoice defaults to
-  status        OrganizationStatus @default(ACTIVE)
-  createdAt     DateTime           @default(now())
-  updatedAt     DateTime           @updatedAt
+  id             String             @id @default(cuid())
+  name           String
+  slug           String             @unique
+  monthlyFeeInr  Int? // set manually by the platform admin — the amount an invoice defaults to
+  status         OrganizationStatus @default(ACTIVE)
+  timezone       String             @default("Asia/Kolkata")
+  businessHours  Json               @default("[{\"day\":1,\"open\":\"10:00\",\"close\":\"20:00\"},{\"day\":2,\"open\":\"10:00\",\"close\":\"20:00\"},{\"day\":3,\"open\":\"10:00\",\"close\":\"20:00\"},{\"day\":4,\"open\":\"10:00\",\"close\":\"20:00\"},{\"day\":5,\"open\":\"10:00\",\"close\":\"20:00\"},{\"day\":6,\"open\":\"10:00\",\"close\":\"20:00\"}]")
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
 
   users           User[]
   channels        Channel[]
@@ -78,6 +80,9 @@ model Organization {
 
   // External API access
   apiKeys            ApiKey[]
+
+  // Razorpay webhook idempotency log
+  razorpayWebhookEvents RazorpayWebhookEvent[]
 }
 
 // ---------- Billing (Razorpay) ----------
@@ -110,6 +115,8 @@ model Invoice {
   id                String        @id @default(cuid())
   orgId             String
   org               Organization  @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  contactId         String?
+  contact           Contact?      @relation(fields: [contactId], references: [id], onDelete: SetNull)
   type              InvoiceType   @default(SUBSCRIPTION)
   amountInr         Int
   status            InvoiceStatus @default(PENDING)
@@ -121,6 +128,8 @@ model Invoice {
   // SaaS subscription billing
   subscriptionId String?
   subscription   CustomerSubscription? @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+  periodStart    DateTime?
+  periodEnd      DateTime?
   invoiceItems   InvoiceItem[]
   payments       Payment[]
 
@@ -128,6 +137,8 @@ model Invoice {
 
   @@index([orgId, status])
   @@index([subscriptionId])
+  @@index([contactId])
+  @@unique([subscriptionId, type, periodEnd])
 }
 
 // ---------- WhatsApp wallet ----------
@@ -228,6 +239,7 @@ model PlatformAdmin {
   email                       String     @unique
   passwordHash                String
   name                        String
+  tokenVersion                Int        @default(0)
   passwordResetToken          String?    @unique
   passwordResetTokenExpiresAt DateTime?
   createdAt                   DateTime   @default(now())
@@ -361,6 +373,9 @@ model User {
   mfaEnabled     Boolean  @default(false)
   mfaBackupCodes String[] // bcrypt-hashed backup codes
   mfaTempSecret  String? // holds secret during MFA setup until verified
+
+  // Session invalidation counter. Increment on password change/reset to revoke existing JWTs.
+  tokenVersion Int @default(0)
 
   assignedConversations Conversation[] @relation("AssignedTo")
   closedConversations   Conversation[] @relation("ClosedBy")
@@ -517,6 +532,7 @@ model Contact {
   company         String?
   tags            String[]     @default([])
   notes           String?      @db.Text
+  marketingOptOut Boolean      @default(false)
   createdAt       DateTime     @default(now())
 
   conversations      Conversation[]
@@ -531,8 +547,13 @@ model Contact {
   customerEvents     CustomerEvent[]
   notificationPrefs  NotificationPreference[]
   flowSessions       CustomerFlowSession[]
+  invoices           Invoice[]
 
   @@index([orgId])
+  @@unique([orgId, phone])
+  @@unique([orgId, email])
+  @@unique([orgId, telegramChatId])
+  @@unique([orgId, instagramUserId])
 }
 
 enum ConversationStatus {
@@ -590,11 +611,14 @@ model Message {
   conversation   Conversation     @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   direction      MessageDirection
   sender         MessageSender
-  body           String
-  isAiDraft      Boolean          @default(false) // true = suggested reply not yet sent
-  createdAt      DateTime         @default(now())
+  body             String
+  isAiDraft        Boolean          @default(false) // true = suggested reply not yet sent
+  providerMessageId String?         // provider-side message id for inbound webhook idempotency
+  createdAt        DateTime         @default(now())
 
   @@index([conversationId])
+  @@index([providerMessageId])
+  @@unique([providerMessageId, conversationId], map: "Message_providerMessageId_conversationId_key")
 }
 
 // ---------- Bulk campaigns ----------
@@ -639,6 +663,7 @@ model Campaign {
 
 enum RecipientStatus {
   PENDING
+  SENDING
   SENT
   FAILED
 }
@@ -965,6 +990,7 @@ model QueueEntry {
   position                  Int              @default(0)
   estimatedWaitMin          Int?
   status                    QueueEntryStatus @default(WAITING)
+  isAfterHours              Boolean          @default(false) // true if joined while business was closed
   calledAt                  DateTime?
   startedAt                 DateTime?
   completedAt               DateTime?
@@ -1383,6 +1409,9 @@ model CustomerSubscription {
   discountAmountInr      Int                @default(0)
   taxAmountInr           Int                @default(0)
   totalAmountInr         Int                @default(0)
+  couponId               String?
+  coupon                 Coupon?            @relation(fields: [couponId], references: [id], onDelete: SetNull)
+  couponDiscountMonthsRemaining Int?
   items                  SubscriptionItem[]
   usageAggregates        UsageAggregate[]
   invoices               Invoice[]
@@ -1402,6 +1431,7 @@ model CustomerSubscription {
 
   @@index([orgId, status])
   @@index([razorpaySubscriptionId])
+  @@index([couponId])
 }
 
 model SubscriptionItem {
@@ -1501,6 +1531,18 @@ model Payment {
   @@index([razorpayPaymentId])
 }
 
+model RazorpayWebhookEvent {
+  id        String   @id @default(cuid())
+  eventId   String   @unique // Razorpay event id for idempotency
+  eventType String
+  orgId     String
+  org       Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  payload   Json
+  createdAt DateTime @default(now())
+
+  @@index([orgId, eventType, createdAt])
+}
+
 model Coupon {
   id                String         @id @default(cuid())
   code              String         @unique
@@ -1519,6 +1561,7 @@ model Coupon {
   createdAt         DateTime       @default(now())
   updatedAt         DateTime       @updatedAt
 
+  subscriptions CustomerSubscription[]
   redemptions CouponRedemption[]
 }
 
@@ -1591,6 +1634,7 @@ model DunningRecord {
   org            Organization         @relation(fields: [orgId], references: [id], onDelete: Cascade)
   subscriptionId String
   subscription   CustomerSubscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  eventId        String?              @unique
   attempt        Int
   status         String               @default("pending") // pending | resolved | failed | cancelled
   dueAt          DateTime
@@ -1635,6 +1679,7 @@ model ApiKey {
   org             Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
   name            String
   keyHash         String       @unique
+  keyPrefix       String       @default("")
   scopes          String[]     @default(["read"])
   lastUsedAt      DateTime?
   expiresAt       DateTime?
@@ -1644,4 +1689,5 @@ model ApiKey {
   updatedAt       DateTime     @updatedAt
 
   @@index([orgId, isActive])
+  @@index([keyPrefix, isActive])
 }

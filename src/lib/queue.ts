@@ -64,7 +64,13 @@ export async function enqueueCampaignRecipient(campaignRecipientId: string, dela
   await getCampaignQueue().add(
     "send",
     { campaignRecipientId } satisfies CampaignSendJob,
-    { jobId: campaignRecipientId, delay: delayMs && delayMs > 0 ? delayMs : undefined }
+    {
+      jobId: campaignRecipientId,
+      delay: delayMs && delayMs > 0 ? delayMs : undefined,
+      attempts: 1,
+      removeOnFail: true,
+      removeOnComplete: true,
+    }
   );
 }
 
@@ -73,7 +79,7 @@ export async function enqueueReminder(reminderId: string, scheduledFor: Date) {
   await getReminderQueue().add(
     "send",
     { reminderId } satisfies ReminderSendJob,
-    { jobId: reminderId, delay }
+    { jobId: reminderId, delay, attempts: 1, removeOnFail: true, removeOnComplete: true }
   );
 }
 
@@ -112,7 +118,14 @@ export async function enqueueNoShow(
   await getNoShowQueue().add(
     "check",
     { queueEntryId, orgId } satisfies NoShowJob,
-    { jobId, delay: Math.max(0, delayMs) }
+    {
+      jobId,
+      delay: Math.max(0, delayMs),
+      attempts: 2,
+      backoff: { type: "fixed", delay: 60_000 },
+      removeOnFail: { count: 100 },
+      removeOnComplete: { count: 100 },
+    }
   );
   return { jobId };
 }
@@ -132,5 +145,9 @@ export async function enqueueBillingRun(job: BillingRunJob, delayMs?: number) {
   await getBillingRunQueue().add(job.type, job, {
     jobId: `${job.type}:${Date.now()}`,
     delay: delayMs && delayMs > 0 ? delayMs : undefined,
+    attempts: 2,
+    backoff: { type: "fixed", delay: 60_000 },
+    removeOnFail: { count: 50 },
+    removeOnComplete: { count: 10 },
   });
 }

@@ -4,6 +4,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { requireOrgMember, UnauthorizedError, ForbiddenError } from "@/lib/session";
 import { logAudit } from "@/lib/audit";
+import { requireUsageLimit, UsageLimitExceededError } from "@/lib/billing/entitlements";
 
 const userPatchSchema = z.object({
   role: z.enum(["OWNER", "ADMIN", "AGENT", "VIEWER"]).optional(),
@@ -48,6 +49,16 @@ export async function PATCH(
       updateData.role = role;
     }
     if (isActive !== undefined) {
+      if (isActive === true && !target.isActive) {
+        try {
+          await requireUsageLimit(orgId, "users", 1);
+        } catch (err) {
+          if (err instanceof UsageLimitExceededError) {
+            return NextResponse.json({ error: err.message }, { status: 402 });
+          }
+          throw err;
+        }
+      }
       updateData.isActive = isActive;
     }
 
@@ -56,7 +67,7 @@ export async function PATCH(
     }
 
     const updated = await prisma.user.update({
-      where: { id },
+      where: { id, orgId },
       data: updateData,
       select: { id: true, name: true, email: true, role: true, isActive: true, createdAt: true },
     });
@@ -101,7 +112,7 @@ export async function DELETE(
       return NextResponse.json({ error: "Only the owner can remove the owner" }, { status: 403 });
     }
 
-    await prisma.user.delete({ where: { id } });
+    await prisma.user.delete({ where: { id, orgId } });
 
     await logAudit({
       orgId,

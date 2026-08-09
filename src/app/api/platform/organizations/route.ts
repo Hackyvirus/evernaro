@@ -3,6 +3,8 @@ import { z } from "zod";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { requirePlatformAdminId, UnauthorizedError } from "@/lib/session";
+import { createFreeSubscription } from "@/lib/billing/subscription-service";
+import { getIndustryTemplateByCode } from "@/lib/industry-templates";
 
 export async function GET(req: Request) {
   try {
@@ -66,6 +68,7 @@ const bodySchema = z.object({
   ownerEmail: z.string().email(),
   ownerPassword: z.string().min(8),
   monthlyFeeInr: z.number().int().nonnegative().optional(),
+  industryCode: z.string().optional(),
 });
 
 function slugify(input: string) {
@@ -88,7 +91,7 @@ export async function POST(req: Request) {
         { status: 400 }
       );
     }
-    const { orgName, ownerName, ownerEmail, ownerPassword, monthlyFeeInr } = parsed.data;
+    const { orgName, ownerName, ownerEmail, ownerPassword, monthlyFeeInr, industryCode } = parsed.data;
 
     const existingUser = await prisma.user.findUnique({ where: { email: ownerEmail.toLowerCase() } });
     if (existingUser) {
@@ -103,18 +106,64 @@ export async function POST(req: Request) {
     }
 
     const passwordHash = await bcrypt.hash(ownerPassword, 12);
+    const template = industryCode ? getIndustryTemplateByCode(industryCode) : null;
+    const dbTemplate = template
+      ? await prisma.industryTemplate.findUnique({ where: { code: template.code } })
+      : null;
 
-    const org = await prisma.organization.create({
-      data: {
-        name: orgName,
-        slug,
-        monthlyFeeInr: monthlyFeeInr ?? null,
-        users: {
-          create: { email: ownerEmail.toLowerCase(), passwordHash, name: ownerName, role: "OWNER" },
+    const org = await prisma.$transaction(async (tx) => {
+      const createdOrg = await tx.organization.create({
+        data: {
+          name: orgName,
+          slug,
+          monthlyFeeInr: monthlyFeeInr ?? null,
+          industryTemplateId: dbTemplate?.id ?? null,
+          users: {
+            create: { email: ownerEmail.toLowerCase(), passwordHash, name: ownerName, role: "OWNER" },
+          },
+          businessProfile: { create: { businessName: orgName, description: "" } },
         },
-        businessProfile: { create: { businessName: orgName, description: "" } },
-      },
+      });
+
+      const defaultServices: Array<{ id: string }> = [];
+      if (template?.config.defaultServices) {
+        for (const svc of template.config.defaultServices) {
+          const created = await tx.service.create({
+            data: {
+              orgId: createdOrg.id,
+              name: svc.name,
+              durationMin: svc.durationMin ?? 30,
+              isActive: true,
+            },
+          });
+          defaultServices.push({ id: created.id });
+        }
+      }
+
+      await tx.queue.create({
+        data: {
+          orgId: createdOrg.id,
+          name: "General Queue",
+          serviceId: defaultServices[0]?.id ?? null,
+        },
+      });
+
+      await tx.whatsAppWallet.create({
+        data: {
+          orgId: createdOrg.id,
+          balancePaise: 0,
+          lowBalanceThresholdPaise: 10000,
+        },
+      });
+
+      return createdOrg;
     });
+
+    try {
+      await createFreeSubscription(org.id);
+    } catch (err) {
+      console.error("Failed to create free subscription for platform org:", err);
+    }
 
     return NextResponse.json({ ok: true, id: org.id });
   } catch (err) {

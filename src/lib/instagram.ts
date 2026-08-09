@@ -46,6 +46,7 @@ export interface InstagramWebhookPayload {
 export interface InstagramInboundMessage {
   from: string;
   text: string;
+  mid?: string;
 }
 
 // Meta batches multiple message events (even across different conversations)
@@ -59,9 +60,10 @@ export function parseInstagramInboundBatch(body: InstagramWebhookPayload): Insta
     for (const event of entry.messaging ?? []) {
       const text = event.message?.text;
       const from = event.sender?.id;
+      const mid = event.message?.mid;
       // is_echo events are messages the business itself sent — ignore to avoid loops.
       if (text && from && !event.message?.is_echo) {
-        messages.push({ from, text });
+        messages.push({ from, text, mid });
       }
     }
   }

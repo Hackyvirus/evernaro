@@ -221,6 +221,68 @@ export const getPlatformInvoices = cache(async (page = 1, limit = 50) => {
   };
 });
 
+export const getPlatformPayments = cache(async (page = 1, limit = 50) => {
+  await requirePlatformAdminId();
+  const skip = (Math.max(1, page) - 1) * limit;
+  const [payments, total] = await Promise.all([
+    prisma.payment.findMany({
+      orderBy: { createdAt: "desc" },
+      skip,
+      take: limit,
+      include: { org: { select: { id: true, name: true } }, invoice: { select: { id: true } } },
+    }),
+    prisma.payment.count(),
+  ]);
+
+  return {
+    payments: payments.map((p) => ({
+      id: p.id,
+      orgId: p.orgId,
+      orgName: p.org.name,
+      amountInr: p.amountInr,
+      status: p.status,
+      razorpayPaymentId: p.razorpayPaymentId,
+      failureReason: p.failureReason,
+      invoiceId: p.invoice?.id ?? null,
+      createdAt: p.createdAt.toISOString(),
+    })),
+    total,
+    page,
+    limit,
+  };
+});
+
+export const getPlatformFailedPayments = cache(async (page = 1, limit = 50) => {
+  await requirePlatformAdminId();
+  const skip = (Math.max(1, page) - 1) * limit;
+  const [payments, total] = await Promise.all([
+    prisma.payment.findMany({
+      where: { status: "FAILED" },
+      orderBy: { createdAt: "desc" },
+      skip,
+      take: limit,
+      include: { org: { select: { id: true, name: true } } },
+    }),
+    prisma.payment.count({ where: { status: "FAILED" } }),
+  ]);
+
+  return {
+    payments: payments.map((p) => ({
+      id: p.id,
+      orgId: p.orgId,
+      orgName: p.org.name,
+      amountInr: p.amountInr,
+      status: p.status,
+      razorpayPaymentId: p.razorpayPaymentId,
+      failureReason: p.failureReason,
+      createdAt: p.createdAt.toISOString(),
+    })),
+    total,
+    page,
+    limit,
+  };
+});
+
 export const getPlatformRateCards = cache(async () => {
   await requirePlatformAdminId();
   const cards = await prisma.whatsAppRateCard.findMany({ orderBy: { category: "asc" } });

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
+import { nanoid } from "nanoid";
 import { prisma } from "@/lib/prisma";
 import { checkRateLimit, clientIp } from "@/lib/rate-limit";
 import { generateSecureToken, hoursFromNow } from "@/lib/token";
@@ -26,9 +27,14 @@ function slugify(input: string) {
 }
 
 export async function POST(req: Request) {
-  const allowed = await checkRateLimit(`signup:${clientIp(req)}`, 5, 60 * 60);
-  if (!allowed) {
+  const ip = clientIp(req);
+  const ipAllowed = await checkRateLimit(`signup:${ip}`, 5, 60 * 60);
+  if (!ipAllowed) {
     return NextResponse.json({ error: "Too many signup attempts — try again later." }, { status: 429 });
+  }
+  const globalAllowed = await checkRateLimit("signup:global", 60, 60 * 60);
+  if (!globalAllowed) {
+    return NextResponse.json({ error: "Signups are temporarily paused due to high volume." }, { status: 429 });
   }
 
   const body = await req.json();
@@ -59,10 +65,10 @@ export async function POST(req: Request) {
       }
 
       const baseSlug = slugify(orgName);
-      let slug = baseSlug;
-      let suffix = 1;
+      let slug = `${baseSlug}-${nanoid(6)}`;
+      // Defensive fallback in the extremely unlikely event of a collision.
       while (await tx.organization.findUnique({ where: { slug } })) {
-        slug = `${baseSlug}-${++suffix}`;
+        slug = `${baseSlug}-${nanoid(6)}`;
       }
 
       const dbTemplate = await tx.industryTemplate.findUniqueOrThrow({
@@ -97,16 +103,35 @@ export async function POST(req: Request) {
               config: {},
             },
           },
-          services: {
-            create: template.config.defaultServices.map((s) => ({
+        },
+      });
+
+      const defaultServices = await Promise.all(
+        template.config.defaultServices.map((s) =>
+          tx.service.create({
+            data: {
+              orgId: createdOrg.id,
               name: s.name,
               durationMin: s.durationMin ?? null,
               priceInr: s.priceInr ?? null,
               metadata: (s.metadata ?? {}) as never,
-            })),
-          },
-        },
+            },
+          })
+        )
+      );
+
+      const existingQueue = await tx.queue.findFirst({
+        where: { orgId: createdOrg.id, name: "General Queue" },
       });
+      if (!existingQueue) {
+        await tx.queue.create({
+          data: {
+            orgId: createdOrg.id,
+            name: "General Queue",
+            serviceId: defaultServices[0]?.id ?? null,
+          },
+        });
+      }
 
       await tx.whatsAppWallet.create({
         data: {
@@ -120,7 +145,8 @@ export async function POST(req: Request) {
     });
   } catch (err) {
     if (err instanceof Error && err.message === "EMAIL_EXISTS") {
-      return NextResponse.json({ error: "An account with that email already exists" }, { status: 409 });
+      // Return a generic success response to prevent email enumeration.
+      return NextResponse.json({ ok: true });
     }
     throw err;
   }

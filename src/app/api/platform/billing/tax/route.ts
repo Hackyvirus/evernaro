@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { requirePlatformAdminId, UnauthorizedError } from "@/lib/session";
+import { logAudit } from "@/lib/audit";
+import { AuditLogAction } from "@prisma/client";
 
 export async function GET() {
   try {
@@ -24,7 +26,7 @@ const bodySchema = z.object({
 
 export async function PATCH(req: Request) {
   try {
-    await requirePlatformAdminId();
+    const adminId = await requirePlatformAdminId();
     const parsed = bodySchema.safeParse(await req.json());
     if (!parsed.success) {
       return NextResponse.json(
@@ -38,6 +40,14 @@ export async function PATCH(req: Request) {
       where: { id: "default_tax" },
       update: { ...parsed.data, enabled: true },
       create: { id: "default_tax", ...parsed.data, enabled: true },
+    });
+
+    await logAudit({
+      platformAdminId: adminId,
+      action: AuditLogAction.SETTINGS_CHANGED,
+      targetType: "TaxConfiguration",
+      targetId: config.id,
+      metadata: { name: config.name, rate: config.rate, inclusive: config.inclusive },
     });
 
     return NextResponse.json({ config });

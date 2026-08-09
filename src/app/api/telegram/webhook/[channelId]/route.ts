@@ -2,8 +2,11 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { secureCompare } from "@/lib/webhook-secret";
 import { generateDraftReply } from "@/lib/ai";
+import { findOrCreateContact, requireContactLimitIfNew, UsageLimitExceededError } from "@/lib/contact-identity";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { keepAlive } from "@/lib/lifecycle";
+import { hasFeature, requireUsageLimit, UsageLimitExceededError as UsageLimitError } from "@/lib/billing/entitlements";
+import { recordInboundMessage } from "@/lib/messaging/inbound";
 import { type TelegramUpdate, telegramWebhookSecret } from "@/lib/telegram";
 
 export async function POST(
@@ -21,7 +24,7 @@ export async function POST(
     // Bounds worst-case AI spend if the secret ever leaks or a provider
     // retries runaway — 200 legitimate customer messages/minute is far more
     // than any real conversation volume.
-    if (!(await checkRateLimit(`webhook:telegram:${channelId}`, 200, 60))) {
+    if (!(await checkRateLimit(`webhook:telegram:${channelId}`, 200, 60, { failClosed: false }))) {
       return NextResponse.json({ ok: true }); // 200, not 429 — same reasoning as below: don't invite retries
     }
 
@@ -40,38 +43,46 @@ export async function POST(
     const contactName =
       [message.from?.first_name, message.from?.username].filter(Boolean).join(" · ") || undefined;
 
-    const contact =
-      (await prisma.contact.findFirst({
-        where: { orgId: channel.orgId, telegramChatId },
-      })) ??
-      (await prisma.contact.create({
-        data: { orgId: channel.orgId, telegramChatId, name: contactName },
-      }));
-
-    let conversation = await prisma.conversation.findFirst({
-      where: { orgId: channel.orgId, contactId: contact.id, channelId: channel.id, status: "OPEN" },
-    });
-    if (!conversation) {
-      conversation = await prisma.conversation.create({
-        data: { orgId: channel.orgId, contactId: contact.id, channelId: channel.id },
-      });
+    try {
+      await requireContactLimitIfNew({ telegramChatId, name: contactName }, channel.orgId);
+    } catch (err) {
+      if (err instanceof UsageLimitExceededError) {
+        return NextResponse.json({ ok: true });
+      }
+      throw err;
     }
 
-    await prisma.message.create({
-      data: {
-        conversationId: conversation.id,
-        direction: "INBOUND",
-        sender: "CONTACT",
-        body: message.text,
-      },
+    const contact = await findOrCreateContact(
+      { telegramChatId, name: contactName },
+      channel.orgId
+    );
+
+    const messageId = message.message_id ? `telegram:${message.chat.id}:${message.message_id}` : null;
+
+    const conversation = await prisma.conversation.findFirst({
+      where: { orgId: channel.orgId, contactId: contact.id, channelId: channel.id, status: "OPEN" },
+      select: { id: true },
+    });
+    if (!conversation) {
+      try {
+        await requireUsageLimit(channel.orgId, "conversations", 1);
+      } catch (err) {
+        if (err instanceof UsageLimitError) return NextResponse.json({ ok: true });
+        throw err;
+      }
+    }
+
+    const result = await recordInboundMessage({
+      orgId: channel.orgId,
+      channelId: channel.id,
+      contactId: contact.id,
+      body: message.text,
+      providerMessageId: messageId,
     });
 
-    await prisma.conversation.update({
-      where: { id: conversation.id },
-      data: { lastMessageAt: new Date() },
-    });
-
-    keepAlive(generateDraftReply(conversation.id), "AI draft generation");
+    if (!result.isDuplicate && (await hasFeature(channel.orgId, "ai_assistant"))) {
+      keepAlive(generateDraftReply(result.conversationId), "AI draft generation");
+    }
 
     return NextResponse.json({ ok: true });
   } catch (err) {

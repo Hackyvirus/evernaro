@@ -8,6 +8,7 @@ import { contactReachableOn } from "@/lib/channel-reachability";
 import { whatsappSendRequiresTemplate } from "@/lib/whatsapp-template-validation";
 import { requireActiveSubscription, SubscriptionSuspendedError } from "@/lib/subscription";
 import { logAudit } from "@/lib/audit";
+import { requireFeature, FeatureNotAllowedError } from "@/lib/billing/entitlements";
 
 export async function GET() {
   try {
@@ -45,6 +46,7 @@ export async function POST(req: Request) {
   try {
     const { orgId, userId } = await requireOrgMember(UserRole.AGENT);
     await requireActiveSubscription(orgId);
+    await requireFeature(orgId, "automated_reminders");
     const parsed = bodySchema.safeParse(await req.json());
     if (!parsed.success) {
       return NextResponse.json({ error: "Contact, channel, message, and time are required" }, { status: 400 });
@@ -68,6 +70,16 @@ export async function POST(req: Request) {
         { error: `This contact has no ${channel.type.toLowerCase()} identifier on file — can't schedule this reminder.` },
         { status: 400 }
       );
+    }
+
+    if (assignedToId) {
+      const assignedUser = await prisma.user.findFirst({
+        where: { id: assignedToId, orgId, isActive: true },
+        select: { id: true },
+      });
+      if (!assignedUser) {
+        return NextResponse.json({ error: "Assigned user not found" }, { status: 400 });
+      }
     }
 
     if (whatsappSendRequiresTemplate(channel.type, whatsappTemplateId)) {
@@ -123,6 +135,9 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
     if (err instanceof SubscriptionSuspendedError) {
+      return NextResponse.json({ error: err.message }, { status: 403 });
+    }
+    if (err instanceof FeatureNotAllowedError) {
       return NextResponse.json({ error: err.message }, { status: 403 });
     }
     return NextResponse.json({ error: "Failed to create reminder" }, { status: 500 });

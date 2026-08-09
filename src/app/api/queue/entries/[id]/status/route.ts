@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { auth } from "@/lib/auth";
-import { updateQueueEntryStatus } from "@/lib/services/queue-service";
+import { UserRole } from "@prisma/client";
+import { requireOrgMember, UnauthorizedError, ForbiddenError } from "@/lib/session";
+import { updateQueueEntryStatus, QueueInvalidTransitionError } from "@/lib/services/queue-service";
 import { QueueEntryStatus } from "@prisma/client";
 
 const statusSchema = z.object({
@@ -10,18 +11,28 @@ const statusSchema = z.object({
 });
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const session = await auth();
-  if (!session?.user?.orgId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  try {
+    const { orgId } = await requireOrgMember(UserRole.AGENT);
 
-  const { id } = await params;
-  const body = await req.json();
-  const parsed = statusSchema.safeParse(body);
-  if (!parsed.success) {
-    return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid input" }, { status: 400 });
-  }
+    const { id } = await params;
+    const body = await req.json();
+    const parsed = statusSchema.safeParse(body);
+    if (!parsed.success) {
+      return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid input" }, { status: 400 });
+    }
 
-  await updateQueueEntryStatus(id, session.user.orgId, parsed.data.status, { staffId: parsed.data.staffId });
-  return NextResponse.json({ ok: true });
+    await updateQueueEntryStatus(id, orgId, parsed.data.status, { staffId: parsed.data.staffId });
+    return NextResponse.json({ ok: true });
+  } catch (err) {
+    if (err instanceof QueueInvalidTransitionError) {
+      return NextResponse.json({ error: err.message }, { status: 409 });
+    }
+    if (err instanceof UnauthorizedError) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    if (err instanceof ForbiddenError) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+    return NextResponse.json({ error: "Failed to update queue entry status" }, { status: 500 });
+  }
 }

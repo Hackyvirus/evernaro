@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { BillingFrequency, InvoiceItemType } from "@prisma/client";
+import { BillingFrequency, InvoiceItemType, type Coupon } from "@prisma/client";
 import type { CalculateQuoteInput, Quote, QuoteAddOn, QuoteItem, AddOnSelection } from "./types";
 
 const MONTHS_PER_YEAR = 12;
@@ -98,6 +98,7 @@ export async function calculateQuote(input: CalculateQuoteInput): Promise<Quote>
   }
 
   let discountAmount = 0;
+  let appliedCoupon: Coupon | null = null;
   if (input.couponCode && input.orgId) {
     const coupon = await prisma.coupon.findUnique({ where: { code: input.couponCode, isActive: true } });
     if (coupon) {
@@ -118,6 +119,7 @@ export async function calculateQuote(input: CalculateQuoteInput): Promise<Quote>
             discountAmount = Math.min(coupon.value, subtotalBeforeDiscount);
           }
           if (discountAmount > 0) {
+            appliedCoupon = coupon;
             lineItems.push({
               type: InvoiceItemType.DISCOUNT,
               description: `Coupon ${coupon.code}`,
@@ -173,6 +175,7 @@ export async function calculateQuote(input: CalculateQuoteInput): Promise<Quote>
     periodStart: start,
     periodEnd: end,
     trialEnd: plan.trialDays > 0 ? new Date(Date.now() + plan.trialDays * 24 * 60 * 60 * 1000) : null,
+    coupon: appliedCoupon,
   };
 }
 
@@ -191,7 +194,9 @@ export async function resolveAddOnSelections(
   const resolved: AddOnSelection[] = [];
   for (const s of selections) {
     const addOn = eligible.get(s.addOnId);
-    if (!addOn || !addOn.isActive) continue;
+    if (!addOn || !addOn.isActive) {
+      throw new Error("Add-on is not eligible for this plan");
+    }
     const quantity = Math.max(addOn.minQuantity, Math.min(s.quantity, addOn.maxQuantity ?? Infinity));
     if (quantity > 0) resolved.push({ addOnId: s.addOnId, quantity });
   }

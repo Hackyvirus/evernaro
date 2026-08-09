@@ -2,8 +2,11 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { channelWebhookSecret, secureCompare } from "@/lib/webhook-secret";
 import { generateDraftReply } from "@/lib/ai";
+import { findOrCreateContact, requireContactLimitIfNew, UsageLimitExceededError } from "@/lib/contact-identity";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { keepAlive } from "@/lib/lifecycle";
+import { hasFeature, requireUsageLimit, UsageLimitExceededError as UsageLimitError } from "@/lib/billing/entitlements";
+import { recordInboundMessage } from "@/lib/messaging/inbound";
 import { type InstagramWebhookPayload, parseInstagramInboundBatch } from "@/lib/instagram";
 
 // Meta's webhook verification handshake — configure this exact URL (with the
@@ -40,7 +43,7 @@ export async function POST(
     // Bounds worst-case AI spend if the secret ever leaks or Meta retries
     // runaway — 200 legitimate customer messages/minute is far more than any
     // real conversation volume.
-    if (!(await checkRateLimit(`webhook:instagram:${channelId}`, 200, 60))) {
+    if (!(await checkRateLimit(`webhook:instagram:${channelId}`, 200, 60, { failClosed: false }))) {
       return NextResponse.json({ ok: true }); // 200, not 429 — Meta retries on non-2xx
     }
 
@@ -53,38 +56,44 @@ export async function POST(
     const inboundMessages = parseInstagramInboundBatch(body);
 
     for (const inbound of inboundMessages) {
-      const contact =
-        (await prisma.contact.findFirst({
-          where: { orgId: channel.orgId, instagramUserId: inbound.from },
-        })) ??
-        (await prisma.contact.create({
-          data: { orgId: channel.orgId, instagramUserId: inbound.from },
-        }));
-
-      let conversation = await prisma.conversation.findFirst({
-        where: { orgId: channel.orgId, contactId: contact.id, channelId: channel.id, status: "OPEN" },
-      });
-      if (!conversation) {
-        conversation = await prisma.conversation.create({
-          data: { orgId: channel.orgId, contactId: contact.id, channelId: channel.id },
-        });
+      try {
+        await requireContactLimitIfNew({ instagramUserId: inbound.from }, channel.orgId);
+      } catch (err) {
+        if (err instanceof UsageLimitExceededError) {
+          continue; // skip this message; provider will get 200 for the batch
+        }
+        throw err;
       }
 
-      await prisma.message.create({
-        data: {
-          conversationId: conversation.id,
-          direction: "INBOUND",
-          sender: "CONTACT",
-          body: inbound.text,
-        },
+      const contact = await findOrCreateContact(
+        { instagramUserId: inbound.from },
+        channel.orgId
+      );
+
+      const conversation = await prisma.conversation.findFirst({
+        where: { orgId: channel.orgId, contactId: contact.id, channelId: channel.id, status: "OPEN" },
+        select: { id: true },
+      });
+      if (!conversation) {
+        try {
+          await requireUsageLimit(channel.orgId, "conversations", 1);
+        } catch (err) {
+          if (err instanceof UsageLimitError) continue;
+          throw err;
+        }
+      }
+
+      const result = await recordInboundMessage({
+        orgId: channel.orgId,
+        channelId: channel.id,
+        contactId: contact.id,
+        body: inbound.text,
+        providerMessageId: inbound.mid ?? null,
       });
 
-      await prisma.conversation.update({
-        where: { id: conversation.id },
-        data: { lastMessageAt: new Date() },
-      });
-
-      keepAlive(generateDraftReply(conversation.id), "AI draft generation");
+      if (!result.isDuplicate && (await hasFeature(channel.orgId, "ai_assistant"))) {
+        keepAlive(generateDraftReply(result.conversationId), "AI draft generation");
+      }
     }
 
     return NextResponse.json({ ok: true });

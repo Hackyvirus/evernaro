@@ -7,7 +7,7 @@ import type { NextAuthConfig } from "next-auth";
 // for use everywhere else (API routes, server components — all Node.js
 // runtime, no size limit like this).
 export const authConfig = {
-  session: { strategy: "jwt" },
+  session: { strategy: "jwt", maxAge: 24 * 60 * 60, updateAge: 60 * 60 },
   pages: { signIn: "/login" },
   providers: [],
   // Trust the host header when AUTH_TRUST_HOST=true (needed for Render and
@@ -18,12 +18,14 @@ export const authConfig = {
       if (user) {
         if (user.isPlatformAdmin) {
           token.isPlatformAdmin = true;
+          (token as unknown as Record<string, unknown>).tv = ((user as unknown as { tokenVersion?: number }).tokenVersion ?? 0);
         } else {
           token.orgId = user.orgId;
           token.orgSlug = user.orgSlug;
           token.orgName = user.orgName;
           token.role = user.role;
           token.ev = (user as unknown as { emailVerified?: boolean }).emailVerified;
+          (token as unknown as Record<string, unknown>).tv = ((user as unknown as { tokenVersion?: number }).tokenVersion ?? 0);
         }
       }
       return token;
@@ -33,12 +35,14 @@ export const authConfig = {
         session.user.id = token.sub as string;
         if (token.isPlatformAdmin) {
           session.user.isPlatformAdmin = true;
+          (session.user as unknown as Record<string, unknown>).tv = ((token as unknown as Record<string, unknown>).tv as number) ?? 0;
         } else {
           session.user.orgId = token.orgId as string;
           session.user.orgSlug = token.orgSlug as string;
           session.user.orgName = token.orgName as string;
           session.user.role = token.role as string;
           session.user.ev = token.ev as boolean;
+          (session.user as unknown as Record<string, unknown>).tv = ((token as unknown as Record<string, unknown>).tv as number) ?? 0;
         }
       }
       return session;

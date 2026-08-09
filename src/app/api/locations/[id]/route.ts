@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { UserRole } from "@prisma/client";
 import { requireOrgMember } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
@@ -12,7 +13,7 @@ const locationSchema = z.object({
 });
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const member = await requireOrgMember();
+  const member = await requireOrgMember(UserRole.ADMIN);
   if (!member) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { id } = await params;
   const parsed = locationSchema.safeParse(await request.json());
@@ -33,7 +34,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 }
 
 export async function DELETE(_request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const member = await requireOrgMember();
+  const member = await requireOrgMember(UserRole.ADMIN);
   if (!member) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { id } = await params;
   await prisma.location.updateMany({ where: { id, orgId: member.orgId }, data: { isActive: false } });

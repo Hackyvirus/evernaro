@@ -3,7 +3,7 @@ import { z } from "zod";
 import { ResourceType, UserRole } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireOrgMember, UnauthorizedError, ForbiddenError } from "@/lib/session";
-import { getOrgActiveLocationId } from "@/lib/location-scope";
+import { getOrgActiveLocationId, validateLocationId } from "@/lib/location-scope";
 
 const createSchema = z.object({
   name: z.string().min(1),
@@ -46,7 +46,7 @@ export async function POST(req: Request) {
       );
     }
 
-    const activeLocationId = parsed.data.locationId ?? (await getOrgActiveLocationId(orgId));
+    const activeLocationId = (await validateLocationId(parsed.data.locationId, orgId)) ?? (await getOrgActiveLocationId(orgId));
     const resource = await prisma.resource.create({
       data: {
         orgId,

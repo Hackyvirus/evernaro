@@ -45,7 +45,7 @@ export async function DELETE(req: Request) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 
-    await prisma.review.delete({ where: { id } });
+    await prisma.review.delete({ where: { id, orgId } });
     return NextResponse.json({ ok: true });
   } catch (err) {
     if (err instanceof UnauthorizedError) {

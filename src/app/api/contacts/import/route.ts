@@ -3,8 +3,13 @@ import { UserRole } from "@prisma/client";
 import { parse } from "papaparse";
 import { prisma } from "@/lib/prisma";
 import { requireOrgMember, UnauthorizedError, ForbiddenError } from "@/lib/session";
-import { normalizePhone } from "@/lib/phone";
+import { findOrCreateContact, requireContactLimitIfNew } from "@/lib/contact-identity";
 import { logAudit } from "@/lib/audit";
+import { requireActiveSubscription, SubscriptionSuspendedError } from "@/lib/subscription";
+import { checkRateLimit, clientIp } from "@/lib/rate-limit";
+
+const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024;
+const MAX_IMPORT_ROWS = 10_000;
 
 interface ImportRow {
   name?: string;
@@ -59,16 +64,36 @@ function parseCsv(text: string): { rows: ImportRow[]; errors: { row: number; err
 export async function POST(req: Request) {
   try {
     const { orgId, userId } = await requireOrgMember(UserRole.ADMIN);
+    await requireActiveSubscription(orgId);
+
+    const ip = clientIp(req);
+    const allowed = await checkRateLimit(`contacts:import:${orgId}:${ip}`, 10, 60, { failClosed: true });
+    if (!allowed) {
+      return NextResponse.json({ error: "Too many import requests. Please try again later." }, { status: 429 });
+    }
+
     const form = await req.formData();
     const file = form.get("file");
     if (!(file instanceof File)) {
       return NextResponse.json({ error: "No file provided" }, { status: 400 });
+    }
+    if (file.size > MAX_FILE_SIZE_BYTES) {
+      return NextResponse.json({ error: "File must be smaller than 5 MB" }, { status: 400 });
+    }
+    if (file.type !== "text/csv" && !file.name.toLowerCase().endsWith(".csv")) {
+      return NextResponse.json({ error: "Only CSV files are supported" }, { status: 400 });
     }
 
     const text = await file.text();
     const { rows, errors: parseErrors } = parseCsv(text);
     if (rows.length === 0 && parseErrors.length === 0) {
       return NextResponse.json({ error: "CSV is empty or has no valid rows" }, { status: 400 });
+    }
+    if (rows.length > MAX_IMPORT_ROWS) {
+      return NextResponse.json(
+        { error: `Imports are limited to ${MAX_IMPORT_ROWS.toLocaleString()} rows` },
+        { status: 400 }
+      );
     }
 
     const created: string[] = [];
@@ -77,19 +102,37 @@ export async function POST(req: Request) {
     for (let i = 0; i < rows.length; i++) {
       const row = rows[i];
       try {
-        const contact = await prisma.contact.create({
-          data: {
-            orgId,
+        await requireContactLimitIfNew(
+          {
             name: row.name,
-            email: row.email?.toLowerCase(),
-            phone: row.phone ? normalizePhone(row.phone) : undefined,
+            email: row.email,
+            phone: row.phone,
             telegramChatId: row.telegramChatId,
             instagramUserId: row.instagramUserId,
-            company: row.company,
-            tags: row.tags ? row.tags.split(";").map((t) => t.trim()).filter(Boolean) : [],
-            notes: row.notes,
           },
-        });
+          orgId
+        );
+
+        const contact = await findOrCreateContact(
+          {
+            name: row.name,
+            email: row.email,
+            phone: row.phone,
+            telegramChatId: row.telegramChatId,
+            instagramUserId: row.instagramUserId,
+          },
+          orgId
+        );
+
+        const updateData: { company?: string; tags?: string[]; notes?: string } = {};
+        if (row.company) updateData.company = row.company;
+        if (row.tags) updateData.tags = row.tags.split(";").map((t) => t.trim()).filter(Boolean);
+        if (row.notes) updateData.notes = row.notes;
+
+        if (Object.keys(updateData).length > 0) {
+          await prisma.contact.update({ where: { id: contact.id }, data: updateData });
+        }
+
         created.push(contact.id);
       } catch (err) {
         errors.push({ row: i + 2, error: err instanceof Error ? err.message : "Failed" });
@@ -111,6 +154,9 @@ export async function POST(req: Request) {
     }
     if (err instanceof ForbiddenError) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+    if (err instanceof SubscriptionSuspendedError) {
+      return NextResponse.json({ error: err.message }, { status: 403 });
     }
     return NextResponse.json({ error: "Failed to import contacts" }, { status: 500 });
   }

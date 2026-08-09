@@ -31,6 +31,8 @@ interface BusinessProfileForm {
   tone: string;
   knowledgeBase: string;
   signOff: string;
+  timezone: string;
+  businessHours: string; // JSON string for editing
 }
 
 interface ChannelSummary {
@@ -199,6 +201,19 @@ function BusinessProfileTab() {
     tone: "friendly and professional",
     knowledgeBase: "",
     signOff: "",
+    timezone: "Asia/Kolkata",
+    businessHours: JSON.stringify(
+      [
+        { day: 1, open: "10:00", close: "20:00" },
+        { day: 2, open: "10:00", close: "20:00" },
+        { day: 3, open: "10:00", close: "20:00" },
+        { day: 4, open: "10:00", close: "20:00" },
+        { day: 5, open: "10:00", close: "20:00" },
+        { day: 6, open: "10:00", close: "20:00" },
+      ],
+      null,
+      2
+    ),
   });
   const [status, setStatus] = useState<"idle" | "loading" | "saving" | "saved" | "error">("loading");
 
@@ -214,6 +229,8 @@ function BusinessProfileTab() {
             tone: d.profile.tone ?? "friendly and professional",
             knowledgeBase: d.profile.knowledgeBase ?? "",
             signOff: d.profile.signOff ?? "",
+            timezone: d.org?.timezone ?? "Asia/Kolkata",
+            businessHours: JSON.stringify(d.org?.businessHours ?? [], null, 2),
           });
         }
         setStatus("idle");
@@ -223,10 +240,17 @@ function BusinessProfileTab() {
   async function save() {
     setStatus("saving");
     try {
+      let businessHours: unknown;
+      try {
+        businessHours = JSON.parse(form.businessHours);
+      } catch {
+        setStatus("error");
+        return;
+      }
       const res = await fetch("/api/business-profile", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
+        body: JSON.stringify({ ...form, businessHours }),
       });
       setStatus(res.ok ? "saved" : "error");
     } catch {
@@ -306,6 +330,25 @@ function BusinessProfileTab() {
         onChange={(e) => setForm({ ...form, signOff: e.target.value })}
         placeholder="e.g. — Team Evernaro"
       />
+
+      <Input
+        label="Timezone"
+        value={form.timezone}
+        onChange={(e) => setForm({ ...form, timezone: e.target.value })}
+        placeholder="e.g. Asia/Kolkata"
+      />
+      <div>
+        <label className="mb-1.5 block text-sm font-medium text-text">Business hours (JSON)</label>
+        <textarea
+          value={form.businessHours}
+          onChange={(e) => setForm({ ...form, businessHours: e.target.value })}
+          rows={6}
+          className="w-full rounded-md border border-border bg-card px-3 py-2 text-sm font-mono text-text outline-none focus:border-primary"
+        />
+        <p className="mt-1 text-xs text-text-secondary">
+          {"JSON array like [{\"day\": 1, \"open\": \"10:00\", \"close\": \"20:00\"}]. Day 0 = Sunday, 6 = Saturday."}
+        </p>
+      </div>
 
       <Button onClick={save} loading={status === "saving"} className="mt-2 w-fit">
         {status === "saving" ? "Saving..." : status === "saved" ? "Saved" : "Save"}
@@ -1081,6 +1124,7 @@ function SecurityTab() {
   const [passwordError, setPasswordError] = useState<string | null>(null);
   const [qrUri, setQrUri] = useState<string | null>(null);
   const [mfaCode, setMfaCode] = useState('');
+  const [setupPassword, setSetupPassword] = useState('');
   const [mfaStatus, setMfaStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [mfaError, setMfaError] = useState<string | null>(null);
   const [backupCodes, setBackupCodes] = useState<string[] | null>(null);
@@ -1114,7 +1158,11 @@ function SecurityTab() {
 
   async function startMfaSetup() {
     setMfaStatus('idle'); setMfaError(null); setBackupCodes(null);
-    const res = await fetch('/api/auth/mfa', { method: 'POST' });
+    const res = await fetch('/api/auth/mfa', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password: setupPassword }),
+    });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) { setMfaError(data.error ?? 'Failed'); return; }
     setQrUri(data.uri);
@@ -1126,7 +1174,7 @@ function SecurityTab() {
     const res = await fetch('/api/auth/mfa', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ code: mfaCode }),
+      body: JSON.stringify({ code: mfaCode, password: setupPassword }),
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) { setMfaStatus('error'); setMfaError(data.error ?? 'Invalid code'); return; }
@@ -1134,6 +1182,7 @@ function SecurityTab() {
     setMfaEnabled(true);
     setBackupCodes(data.backupCodes ?? []);
     setQrUri(null);
+    setSetupPassword('');
   }
 
   async function disableMfa(e: React.FormEvent) {
@@ -1175,7 +1224,12 @@ function SecurityTab() {
           </form>
         ) : (
           <>
-            {!qrUri && <Button onClick={startMfaSetup} className='w-fit'>Set up MFA</Button>}
+            {!qrUri && (
+              <div className='flex flex-col gap-4'>
+                <Input label='Current password' type='password' required value={setupPassword} onChange={e => setSetupPassword(e.target.value)} />
+                <Button onClick={startMfaSetup} className='w-fit' disabled={!setupPassword}>Set up MFA</Button>
+              </div>
+            )}
             {qrUri && (
               <form onSubmit={verifyMfaSetup} className='flex flex-col gap-4'>
                 <p className='text-sm text-text-secondary'>Scan this QR code with your authenticator app, then enter the 6-digit code.</p>

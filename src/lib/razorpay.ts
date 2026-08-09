@@ -30,6 +30,11 @@ export async function createRazorpayOrder(opts: { amountInr: number; receipt: st
   });
 }
 
+export async function fetchRazorpayPayment(paymentId: string): Promise<{ id: string; amount: number; status: string; order_id?: string }> {
+  const client = getClient();
+  return client.payments.fetch(paymentId) as Promise<{ id: string; amount: number; status: string; order_id?: string }>;
+}
+
 // Verifies the signature Razorpay Checkout returns to the browser on a
 // successful payment — HMAC-SHA256 of "order_id|payment_id" using the key
 // secret. This is the client-side confirmation path; the webhook below is

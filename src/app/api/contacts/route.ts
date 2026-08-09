@@ -3,8 +3,9 @@ import { z } from "zod";
 import { UserRole } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireOrgMember, UnauthorizedError, ForbiddenError } from "@/lib/session";
-import { normalizePhone } from "@/lib/phone";
+import { findOrCreateContact, requireContactLimitIfNew, UsageLimitExceededError } from "@/lib/contact-identity";
 import { logAudit } from "@/lib/audit";
+import { requireActiveSubscription, SubscriptionSuspendedError } from "@/lib/subscription";
 
 export async function GET(request: NextRequest) {
   try {
@@ -74,25 +75,40 @@ const bodySchema = z
 export async function POST(req: Request) {
   try {
     const { orgId, userId } = await requireOrgMember(UserRole.AGENT);
+    await requireActiveSubscription(orgId);
     const parsed = bodySchema.safeParse(await req.json());
     if (!parsed.success) {
       return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid input" }, { status: 400 });
     }
     const { name, email, phone, telegramChatId, instagramUserId, company, tags, notes } = parsed.data;
 
-    const contact = await prisma.contact.create({
-      data: {
-        orgId,
-        name: name || undefined,
-        email: email ? email.toLowerCase() : undefined,
-        phone: phone ? normalizePhone(phone) : undefined,
-        telegramChatId: telegramChatId || undefined,
-        instagramUserId: instagramUserId || undefined,
-        company: company || undefined,
-        tags: tags?.filter(Boolean) ?? [],
-        notes: notes || undefined,
-      },
-    });
+    try {
+      await requireContactLimitIfNew({ name, email, phone, telegramChatId, instagramUserId }, orgId);
+    } catch (err) {
+      if (err instanceof UsageLimitExceededError) {
+        return NextResponse.json({ error: err.message }, { status: 402 });
+      }
+      throw err;
+    }
+
+    const contact = await findOrCreateContact(
+      { name, email, phone, telegramChatId, instagramUserId },
+      orgId
+    );
+
+    const updateData: {
+      company?: string;
+      tags?: string[];
+      notes?: string;
+    } = {};
+    if (company) updateData.company = company;
+    if (tags?.filter(Boolean).length) updateData.tags = tags.filter(Boolean);
+    if (notes) updateData.notes = notes;
+
+    let returnedContact = contact;
+    if (Object.keys(updateData).length > 0) {
+      returnedContact = await prisma.contact.update({ where: { id: contact.id }, data: updateData });
+    }
 
     await logAudit({
       orgId,
@@ -103,13 +119,16 @@ export async function POST(req: Request) {
       metadata: { action: "contact_created" },
     });
 
-    return NextResponse.json({ ok: true, contact });
+    return NextResponse.json({ ok: true, contact: returnedContact });
   } catch (err) {
     if (err instanceof UnauthorizedError) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
     if (err instanceof ForbiddenError) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+    if (err instanceof SubscriptionSuspendedError) {
+      return NextResponse.json({ error: err.message }, { status: 403 });
     }
     return NextResponse.json({ error: "Failed to create contact" }, { status: 500 });
   }

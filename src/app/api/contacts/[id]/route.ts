@@ -85,7 +85,7 @@ export async function PATCH(
     }
 
     const updated = await prisma.contact.update({
-      where: { id },
+      where: { id, orgId },
       data: updateData,
     });
 

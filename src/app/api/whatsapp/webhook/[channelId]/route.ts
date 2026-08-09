@@ -3,9 +3,11 @@ import { prisma } from "@/lib/prisma";
 import { channelWebhookSecret, secureCompare } from "@/lib/webhook-secret";
 import { parseGupshupInbound, type GupshupInboundPayload } from "@/lib/whatsapp";
 import { generateDraftReply } from "@/lib/ai";
-import { normalizePhone } from "@/lib/phone";
+import { findOrCreateContact, requireContactLimitIfNew, UsageLimitExceededError } from "@/lib/contact-identity";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { keepAlive } from "@/lib/lifecycle";
+import { hasFeature, requireUsageLimit, UsageLimitExceededError as UsageLimitError } from "@/lib/billing/entitlements";
+import { recordInboundMessage } from "@/lib/messaging/inbound";
 
 export async function POST(
   req: Request,
@@ -22,7 +24,7 @@ export async function POST(
     // Bounds worst-case AI spend if the secret ever leaks or Gupshup retries
     // runaway — 200 legitimate customer messages/minute is far more than any
     // real conversation volume.
-    if (!(await checkRateLimit(`webhook:whatsapp:${channelId}`, 200, 60))) {
+    if (!(await checkRateLimit(`webhook:whatsapp:${channelId}`, 200, 60, { failClosed: false }))) {
       return NextResponse.json({ ok: true }); // 200, not 429 — Gupshup retries on non-2xx
     }
 
@@ -37,40 +39,47 @@ export async function POST(
       return NextResponse.json({ ok: true }); // ignore non-text/status updates
     }
 
-    const phone = normalizePhone(inbound.from); // Gupshup sends numbers without a leading '+'
-
-    const contact =
-      (await prisma.contact.findFirst({
-        where: { orgId: channel.orgId, phone },
-      })) ??
-      (await prisma.contact.create({
-        data: { orgId: channel.orgId, phone, name: inbound.name },
-      }));
-
-    let conversation = await prisma.conversation.findFirst({
-      where: { orgId: channel.orgId, contactId: contact.id, channelId: channel.id, status: "OPEN" },
-    });
-    if (!conversation) {
-      conversation = await prisma.conversation.create({
-        data: { orgId: channel.orgId, contactId: contact.id, channelId: channel.id },
-      });
+    try {
+      await requireContactLimitIfNew({ phone: inbound.from, name: inbound.name }, channel.orgId);
+    } catch (err) {
+      if (err instanceof UsageLimitExceededError) {
+        // Return 200 so the provider does not retry; the contact limit is enforced.
+        return NextResponse.json({ ok: true });
+      }
+      throw err;
     }
 
-    await prisma.message.create({
-      data: {
-        conversationId: conversation.id,
-        direction: "INBOUND",
-        sender: "CONTACT",
-        body: inbound.text,
-      },
+    const contact = await findOrCreateContact(
+      { phone: inbound.from, name: inbound.name },
+      channel.orgId
+    );
+
+    const conversation = await prisma.conversation.findFirst({
+      where: { orgId: channel.orgId, contactId: contact.id, channelId: channel.id, status: "OPEN" },
+      select: { id: true },
+    });
+    if (!conversation) {
+      try {
+        await requireUsageLimit(channel.orgId, "conversations", 1);
+      } catch (err) {
+        if (err instanceof UsageLimitError) {
+          return NextResponse.json({ ok: true });
+        }
+        throw err;
+      }
+    }
+
+    const result = await recordInboundMessage({
+      orgId: channel.orgId,
+      channelId: channel.id,
+      contactId: contact.id,
+      body: inbound.text,
+      providerMessageId: inbound.messageId ?? null,
     });
 
-    await prisma.conversation.update({
-      where: { id: conversation.id },
-      data: { lastMessageAt: new Date() },
-    });
-
-    keepAlive(generateDraftReply(conversation.id), "AI draft generation");
+    if (!result.isDuplicate && (await hasFeature(channel.orgId, "ai_assistant"))) {
+      keepAlive(generateDraftReply(result.conversationId), "AI draft generation");
+    }
 
     return NextResponse.json({ ok: true });
   } catch (err) {

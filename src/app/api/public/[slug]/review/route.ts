@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { CustomerEventType } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { checkRateLimit } from "@/lib/rate-limit";
 import { recordCustomerEvent } from "@/lib/customer-events";
 import { verifyReviewToken } from "@/lib/services/review-requests";
 
@@ -33,11 +34,41 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
     return NextResponse.json({ error: "Business not found" }, { status: 404 });
   }
 
+  const tokenAllowed = await checkRateLimit(`public:review:token:${token}`, 5, 60 * 60);
+  if (!tokenAllowed) {
+    return NextResponse.json(
+      { error: "Too many requests. Please try again later." },
+      { status: 429 }
+    );
+  }
+
+  const slugAllowed = await checkRateLimit(`public:review:slug:${slug}`, 20, 60 * 60);
+  if (!slugAllowed) {
+    return NextResponse.json(
+      { error: "Too many requests. Please try again later." },
+      { status: 429 }
+    );
+  }
+
   const appointment = await prisma.appointment.findFirst({
-    where: { id: payload.appointmentId, contactId: payload.contactId, orgId: org.id },
+    where: { id: payload.appointmentId, contactId: payload.contactId, orgId: org.id, status: "COMPLETED" },
   });
   if (!appointment) {
-    return NextResponse.json({ error: "Appointment not found" }, { status: 404 });
+    return NextResponse.json({ error: "Appointment not found or not completed" }, { status: 404 });
+  }
+
+  const existingReview = await prisma.review.findFirst({
+    where: {
+      orgId: org.id,
+      contactId: payload.contactId,
+      metadata: { path: ["appointmentId"], equals: appointment.id },
+    },
+  });
+  if (existingReview) {
+    return NextResponse.json(
+      { error: "Review already submitted" },
+      { status: 409 }
+    );
   }
 
   const review = await prisma.review.create({
@@ -63,5 +94,14 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
     }
   );
 
-  return NextResponse.json({ review }, { status: 201 });
+  return NextResponse.json(
+    {
+      review: {
+        rating: review.rating,
+        comment: review.comment,
+        createdAt: review.createdAt,
+      },
+    },
+    { status: 201 }
+  );
 }

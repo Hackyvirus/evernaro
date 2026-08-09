@@ -1,6 +1,6 @@
 "server-only";
 import { prisma } from "@/lib/prisma";
-import { BillingFrequency, SubscriptionStatus } from "@prisma/client";
+import { BillingFrequency, SubscriptionStatus, type Prisma } from "@prisma/client";
 import { calculateQuote, resolveAddOnSelections, getPeriodDates } from "./pricing-engine";
 import { createInvoiceFromQuote } from "./invoice";
 import {
@@ -13,6 +13,11 @@ import { createRazorpayOrder } from "@/lib/razorpay";
 import { creditWallet } from "@/lib/whatsapp-wallet";
 import { logBillingEvent } from "./events";
 import { calculateProration } from "./proration";
+import {
+  SUBSCRIPTION_ACTIVE_STATUSES,
+  syncOrganizationStatusFromSubscription,
+  mapSubscriptionStatusToOrganizationStatus,
+} from "./subscription-status";
 import type { AddOnSelection } from "./types";
 
 export type CreateSubscriptionInput = {
@@ -28,32 +33,87 @@ export type CreateSubscriptionInput = {
 export async function createFreeSubscription(orgId: string) {
   const plan = await prisma.subscriptionPlan.findUnique({ where: { slug: "free" } });
   if (!plan) return null;
-  const existing = await prisma.customerSubscription.findFirst({
-    where: { orgId, status: { in: ["TRIALING", "ACTIVE", "PAST_DUE", "PAUSED", "INCOMPLETE"] } },
-  });
-  if (existing) return existing;
 
   const { start, end } = getPeriodDates(BillingFrequency.MONTHLY);
-  return prisma.customerSubscription.create({
-    data: {
-      orgId,
-      planId: plan.id,
-      status: SubscriptionStatus.ACTIVE,
-      frequency: BillingFrequency.MONTHLY,
-      currentPeriodStart: start,
-      currentPeriodEnd: end,
-      baseAmountInr: 0,
-      discountAmountInr: 0,
-      taxAmountInr: 0,
-      totalAmountInr: 0,
-    },
-    include: { plan: true, items: { include: { addOn: true } } },
-  });
+  try {
+    const subscription = await prisma.customerSubscription.create({
+      data: {
+        orgId,
+        planId: plan.id,
+        status: SubscriptionStatus.ACTIVE,
+        frequency: BillingFrequency.MONTHLY,
+        currentPeriodStart: start,
+        currentPeriodEnd: end,
+        baseAmountInr: 0,
+        discountAmountInr: 0,
+        taxAmountInr: 0,
+        totalAmountInr: 0,
+      },
+      include: { plan: true, items: { include: { addOn: true } } },
+    });
+    await syncOrganizationStatusFromSubscription(orgId);
+    return subscription;
+  } catch (err) {
+    // Partial unique index enforces one active/trialing subscription per org.
+    // If a concurrent call created it, return the existing one.
+    if (isUniqueConstraintError(err)) {
+      return prisma.customerSubscription.findFirst({
+        where: { orgId, status: { notIn: [SubscriptionStatus.CANCELLED, SubscriptionStatus.EXPIRED] } },
+      });
+    }
+    throw err;
+  }
+}
+
+function isUniqueConstraintError(err: unknown): boolean {
+  return (
+    typeof err === "object" &&
+    err !== null &&
+    "code" in err &&
+    (err as { code: unknown }).code === "P2002"
+  );
+}
+
+async function atomicIncrementCouponRedemption(couponId: string, tx?: Prisma.TransactionClient) {
+  const client = tx ?? prisma;
+  const result = await client.$executeRawUnsafe(
+    `UPDATE "Coupon" SET "redemptionCount" = "redemptionCount" + 1 WHERE id = $1 AND ("maxRedemptions" IS NULL OR "redemptionCount" < "maxRedemptions")`,
+    couponId
+  );
+  return Number(result) > 0;
+}
+
+async function redeemCouponForSubscription(
+  couponCode: string,
+  orgId: string,
+  subscriptionId: string,
+  discountAmountInr: number
+): Promise<boolean> {
+  const coupon = await prisma.coupon.findUnique({ where: { code: couponCode } });
+  if (!coupon) return false;
+  try {
+    await prisma.$transaction(async (tx) => {
+      await tx.couponRedemption.create({
+        data: {
+          couponId: coupon.id,
+          orgId,
+          subscriptionId,
+          discountAmountInr,
+        },
+      });
+      const ok = await atomicIncrementCouponRedemption(coupon.id, tx);
+      if (!ok) throw new Error("Coupon redemption limit reached");
+    });
+    return true;
+  } catch (err) {
+    console.error(`Failed to redeem coupon ${couponCode} for subscription ${subscriptionId}:`, err);
+    return false;
+  }
 }
 
 export async function createSubscription(input: CreateSubscriptionInput) {
   const existing = await prisma.customerSubscription.findFirst({
-    where: { orgId: input.orgId, status: { in: ["TRIALING", "ACTIVE", "PAST_DUE", "INCOMPLETE"] } },
+    where: { orgId: input.orgId, status: { in: [...SUBSCRIPTION_ACTIVE_STATUSES, SubscriptionStatus.PAST_DUE, SubscriptionStatus.INCOMPLETE] } },
   });
   if (existing) {
     throw new Error("Organization already has an active subscription");
@@ -114,39 +174,70 @@ export async function createSubscription(input: CreateSubscriptionInput) {
     }
   }
 
-  const subscription = await prisma.customerSubscription.create({
-    data: {
-      orgId: input.orgId,
-      planId: input.planId,
-      status: isFreePlan
-        ? SubscriptionStatus.ACTIVE
-        : trialEnd
-          ? SubscriptionStatus.TRIALING
-          : SubscriptionStatus.INCOMPLETE,
-      frequency: quote.frequency,
-      currentPeriodStart: start,
-      currentPeriodEnd: end,
-      trialEnd,
-      razorpayCustomerId,
-      razorpayPlanId,
-      razorpaySubscriptionId,
-      baseAmountInr: quote.baseAmountInr,
-      discountAmountInr: quote.discountAmountInr,
-      taxAmountInr: quote.taxAmountInr,
-      totalAmountInr: quote.totalInr,
-      items: {
-        create: quote.addOns.map((a) => ({
-          orgId: input.orgId,
-          type: "ADD_ON",
-          addOnId: a.addOnId,
-          quantity: a.quantity,
-          unitPriceInr: a.unitPriceInr,
-          totalPriceInr: a.amountInr,
-        })),
+  // Persist coupon details only for multi-period discounts. ONCE coupons are
+  // already reflected in the initial quote and should not affect renewals.
+  let couponId: string | null = null;
+  let couponDiscountMonthsRemaining: number | null = null;
+  if (input.couponCode && quote.coupon) {
+    if (quote.coupon.duration === "REPEATING") {
+      couponId = quote.coupon.id;
+      couponDiscountMonthsRemaining = quote.coupon.durationInMonths ?? 1;
+    } else if (quote.coupon.duration === "FOREVER") {
+      couponId = quote.coupon.id;
+      couponDiscountMonthsRemaining = null;
+    }
+  }
+
+  let subscription: Awaited<ReturnType<typeof prisma.customerSubscription.create>>;
+  try {
+    subscription = await prisma.customerSubscription.create({
+      data: {
+        orgId: input.orgId,
+        planId: input.planId,
+        status: isFreePlan
+          ? SubscriptionStatus.ACTIVE
+          : trialEnd
+            ? SubscriptionStatus.TRIALING
+            : SubscriptionStatus.INCOMPLETE,
+        frequency: quote.frequency,
+        currentPeriodStart: start,
+        currentPeriodEnd: end,
+        trialEnd,
+        razorpayCustomerId,
+        razorpayPlanId,
+        razorpaySubscriptionId,
+        baseAmountInr: quote.baseAmountInr,
+        discountAmountInr: quote.discountAmountInr,
+        taxAmountInr: quote.taxAmountInr,
+        totalAmountInr: quote.totalInr,
+        couponId,
+        couponDiscountMonthsRemaining,
+        items: {
+          create: quote.addOns.map((a) => ({
+            orgId: input.orgId,
+            type: "ADD_ON",
+            addOnId: a.addOnId,
+            quantity: a.quantity,
+            unitPriceInr: a.unitPriceInr,
+            totalPriceInr: a.amountInr,
+          })),
+        },
       },
-    },
-    include: { plan: true, items: { include: { addOn: true } } },
-  });
+      include: { plan: true, items: { include: { addOn: true } } },
+    });
+  } catch (err) {
+    if (isUniqueConstraintError(err)) {
+      const existing = await prisma.customerSubscription.findFirst({
+        where: {
+          orgId: input.orgId,
+          status: { in: [...SUBSCRIPTION_ACTIVE_STATUSES, SubscriptionStatus.PAST_DUE, SubscriptionStatus.INCOMPLETE] },
+        },
+        include: { plan: true, items: { include: { addOn: true } } },
+      });
+      if (existing) return { subscription: existing, quote };
+    }
+    throw err;
+  }
 
   await prisma.organization.update({
     where: { id: input.orgId },
@@ -154,19 +245,18 @@ export async function createSubscription(input: CreateSubscriptionInput) {
   });
 
   if (input.couponCode && quote.discountAmountInr > 0) {
-    const coupon = await prisma.coupon.findUnique({ where: { code: input.couponCode } });
-    if (coupon) {
-      await prisma.couponRedemption.create({
-        data: {
-          couponId: coupon.id,
-          orgId: input.orgId,
-          subscriptionId: subscription.id,
-          discountAmountInr: quote.discountAmountInr,
-        },
-      });
-      await prisma.coupon.update({
-        where: { id: coupon.id },
-        data: { redemptionCount: { increment: 1 } },
+    const redeemed = await redeemCouponForSubscription(
+      input.couponCode,
+      input.orgId,
+      subscription.id,
+      quote.discountAmountInr
+    );
+    if (!redeemed) {
+      // Coupon could not be redeemed atomically (likely max redemptions hit).
+      // Strip it from the subscription so renewal invoices don't try to reuse it.
+      await prisma.customerSubscription.update({
+        where: { id: subscription.id },
+        data: { couponId: null, couponDiscountMonthsRemaining: null },
       });
     }
   }
@@ -204,12 +294,13 @@ export async function createSubscription(input: CreateSubscriptionInput) {
     totalInr: quote.totalInr,
   });
 
+  await syncOrganizationStatusFromSubscription(input.orgId);
   return { subscription, quote };
 }
 
 export async function getActiveSubscription(orgId: string) {
   return prisma.customerSubscription.findFirst({
-    where: { orgId, status: { in: ["TRIALING", "ACTIVE", "PAST_DUE", "PAUSED", "INCOMPLETE"] } },
+    where: { orgId, status: { in: SUBSCRIPTION_ACTIVE_STATUSES } },
     include: {
       plan: { include: { features: true, limits: { include: { service: true } } } },
       items: { include: { addOn: true } },
@@ -218,11 +309,95 @@ export async function getActiveSubscription(orgId: string) {
   });
 }
 
-export async function changeSubscriptionPlan(input: CreateSubscriptionInput & { prorate?: boolean; currentSubscriptionId?: string }) {
-  const existing = await prisma.customerSubscription.findFirst({
-    where: { orgId: input.orgId, status: { in: ["TRIALING", "ACTIVE", "PAST_DUE", "PAUSED"] } },
+/**
+ * Finalize a plan change by activating the new subscription and cancelling the
+ * previous active subscription. Idempotent: safe to call from both the browser
+ * confirmation route and the Razorpay webhook.
+ */
+export async function finalizePlanChange(
+  orgId: string,
+  newSubscriptionId: string,
+  tx?: Prisma.TransactionClient
+) {
+  const client = tx ?? prisma;
+  const newSub = await client.customerSubscription.findUnique({
+    where: { id: newSubscriptionId },
+    include: { plan: true },
   });
-  if (!existing) {
+  if (!newSub || newSub.orgId !== orgId) return;
+
+  // Already finalized.
+  if (
+    newSub.status !== SubscriptionStatus.INCOMPLETE &&
+    newSub.status !== SubscriptionStatus.TRIALING
+  ) {
+    return;
+  }
+
+  const now = new Date();
+  const isFreePlan = newSub.totalAmountInr === 0;
+  let targetStatus: SubscriptionStatus = SubscriptionStatus.ACTIVE;
+  if (!isFreePlan && newSub.trialEnd && newSub.trialEnd > now) {
+    targetStatus = SubscriptionStatus.TRIALING;
+  }
+
+  const doFinalize = async (txClient: Prisma.TransactionClient) => {
+    // Cancel any other active/trialing/past-due subscription for this org.
+    const currentActive = await txClient.customerSubscription.findMany({
+      where: {
+        orgId,
+        id: { not: newSub.id },
+        status: { in: SUBSCRIPTION_ACTIVE_STATUSES },
+      },
+    });
+
+    for (const current of currentActive) {
+      if (current.razorpaySubscriptionId) {
+        try {
+          await cancelRazorpaySubscription(current.razorpaySubscriptionId, false);
+        } catch (err) {
+          console.error("Failed to cancel previous Razorpay subscription during plan change:", err);
+        }
+      }
+      await txClient.customerSubscription.update({
+        where: { id: current.id },
+        data: {
+          status: SubscriptionStatus.CANCELLED,
+          cancelAtPeriodEnd: false,
+          cancelledAt: new Date(),
+        },
+      });
+    }
+
+    await txClient.customerSubscription.update({
+      where: { id: newSub.id },
+      data: {
+        status: targetStatus,
+        cancelAtPeriodEnd: false,
+        cancelledAt: null,
+      },
+    });
+
+    await txClient.organization.update({
+      where: { id: orgId },
+      data: { status: mapSubscriptionStatusToOrganizationStatus(targetStatus) },
+    });
+  };
+
+  if (tx) {
+    await doFinalize(tx);
+  } else {
+    await prisma.$transaction(doFinalize);
+  }
+
+  await logBillingEvent(orgId, newSub.id, "SUBSCRIPTION_CHANGE_FINALIZED", {
+    status: targetStatus,
+  }, tx);
+}
+
+export async function changeSubscriptionPlan(input: CreateSubscriptionInput & { prorate?: boolean; currentSubscriptionId?: string }) {
+  const current = await getActiveSubscription(input.orgId);
+  if (!current) {
     throw new Error("No active subscription to change. Please subscribe first.");
   }
 
@@ -244,18 +419,9 @@ export async function changeSubscriptionPlan(input: CreateSubscriptionInput & { 
     select: { razorpayCustomerId: true },
   });
 
-  let razorpayCustomerId = org?.razorpayCustomerId ?? existing.razorpayCustomerId ?? null;
+  let razorpayCustomerId = org?.razorpayCustomerId ?? current.razorpayCustomerId ?? null;
   let razorpayPlanId: string | null = null;
   let razorpaySubscriptionId: string | null = null;
-
-  // Cancel the old Razorpay subscription immediately so the new plan starts now.
-  if (existing.razorpaySubscriptionId) {
-    try {
-      await cancelRazorpaySubscription(existing.razorpaySubscriptionId, false);
-    } catch (err) {
-      console.error("Failed to cancel old Razorpay subscription:", err);
-    }
-  }
 
   if (!isFreePlan) {
     try {
@@ -286,51 +452,47 @@ export async function changeSubscriptionPlan(input: CreateSubscriptionInput & { 
       });
       razorpaySubscriptionId = subscription.id;
     } catch (err) {
-      console.error("Razorpay subscription change failed:", err);
+      // Do NOT cancel the existing subscription if Razorpay setup fails.
+      console.error("Razorpay subscription setup failed for plan change:", err);
+      throw new Error("Could not initialize payment for the new plan. Your current plan is unchanged.");
     }
   }
 
-  // Delete old add-on items and create new ones inside a transaction with the subscription update.
-  await prisma.$transaction([
-    prisma.subscriptionItem.deleteMany({ where: { subscriptionId: existing.id } }),
-    prisma.customerSubscription.update({
-      where: { id: existing.id },
-      data: {
-        planId: input.planId,
-        status: isFreePlan
-          ? SubscriptionStatus.ACTIVE
-          : trialEnd
-            ? SubscriptionStatus.TRIALING
-            : SubscriptionStatus.INCOMPLETE,
-        frequency: quote.frequency,
-        currentPeriodStart: start,
-        currentPeriodEnd: end,
-        trialEnd,
-        razorpayCustomerId,
-        razorpayPlanId,
-        razorpaySubscriptionId,
-        baseAmountInr: quote.baseAmountInr,
-        discountAmountInr: quote.discountAmountInr,
-        taxAmountInr: quote.taxAmountInr,
-        totalAmountInr: quote.totalInr,
-        cancelAtPeriodEnd: false,
-        cancelledAt: null,
-      },
-    }),
-    ...quote.addOns.map((a) =>
-      prisma.subscriptionItem.create({
-        data: {
+  const initialStatus = isFreePlan
+    ? SubscriptionStatus.ACTIVE
+    : trialEnd
+      ? SubscriptionStatus.TRIALING
+      : SubscriptionStatus.INCOMPLETE;
+
+  const newSubscription = await prisma.customerSubscription.create({
+    data: {
+      orgId: input.orgId,
+      planId: input.planId,
+      status: initialStatus,
+      frequency: quote.frequency,
+      currentPeriodStart: start,
+      currentPeriodEnd: end,
+      trialEnd,
+      razorpayCustomerId,
+      razorpayPlanId,
+      razorpaySubscriptionId,
+      baseAmountInr: quote.baseAmountInr,
+      discountAmountInr: quote.discountAmountInr,
+      taxAmountInr: quote.taxAmountInr,
+      totalAmountInr: quote.totalInr,
+      items: {
+        create: quote.addOns.map((a) => ({
           orgId: input.orgId,
-          subscriptionId: existing.id,
           type: "ADD_ON",
           addOnId: a.addOnId,
           quantity: a.quantity,
           unitPriceInr: a.unitPriceInr,
           totalPriceInr: a.amountInr,
-        },
-      })
-    ),
-  ]);
+        })),
+      },
+    },
+    include: { plan: true, items: { include: { addOn: true } } },
+  });
 
   await prisma.organization.update({
     where: { id: input.orgId },
@@ -340,108 +502,106 @@ export async function changeSubscriptionPlan(input: CreateSubscriptionInput & { 
   if (input.couponCode && quote.discountAmountInr > 0) {
     const coupon = await prisma.coupon.findUnique({ where: { code: input.couponCode } });
     if (coupon) {
-      // Remove any previous redemption for this org on the same coupon before re-redeeming.
-      await prisma.couponRedemption.deleteMany({
-        where: { couponId: coupon.id, orgId: input.orgId },
-      });
-      await prisma.couponRedemption.create({
-        data: {
-          couponId: coupon.id,
-          orgId: input.orgId,
-          subscriptionId: existing.id,
-          discountAmountInr: quote.discountAmountInr,
-        },
-      });
-      await prisma.coupon.update({
-        where: { id: coupon.id },
-        data: { redemptionCount: { increment: 1 } },
-      });
+      try {
+        await prisma.$transaction(async (tx) => {
+          // Remove any previous redemption for this org on the same coupon and
+          // decrement the count so re-redemption doesn't inflate it.
+          const deleted = await tx.couponRedemption.deleteMany({
+            where: { couponId: coupon.id, orgId: input.orgId },
+          });
+          if (deleted.count > 0) {
+            await tx.coupon.update({
+              where: { id: coupon.id },
+              data: { redemptionCount: { decrement: deleted.count } },
+            });
+          }
+          await tx.couponRedemption.create({
+            data: {
+              couponId: coupon.id,
+              orgId: input.orgId,
+              subscriptionId: newSubscription.id,
+              discountAmountInr: quote.discountAmountInr,
+            },
+          });
+          const ok = await atomicIncrementCouponRedemption(coupon.id, tx);
+          if (!ok) throw new Error("Coupon redemption limit reached");
+        });
+      } catch (err) {
+        console.error(`Failed to redeem coupon ${coupon.code} during plan change:`, err);
+        await prisma.customerSubscription.update({
+          where: { id: newSubscription.id },
+          data: { couponId: null, couponDiscountMonthsRemaining: null },
+        });
+      }
     }
   }
 
   let invoice = null;
   let razorpayOrderId: string | undefined;
-  let proration = null;
-  if (!trialEnd && !isFreePlan) {
-    if (input.prorate) {
-      proration = calculateProration(existing, quote.totalInr);
-    }
-    const invoiceAmount = proration ? Math.abs(proration.netInr) : quote.totalInr;
 
-    if (!proration || proration.netInr > 0) {
-      try {
-        const order = await createRazorpayOrder({
-          amountInr: invoiceAmount,
-          receipt: `sub-change-${existing.id}`,
-        });
-        razorpayOrderId = order.id;
-      } catch (err) {
-        console.error("Failed to create Razorpay order for changed subscription:", err);
+  if (isFreePlan || trialEnd) {
+    // No payment required: swap immediately.
+    await finalizePlanChange(input.orgId, newSubscription.id);
+  } else {
+    let invoiceAmount = quote.totalInr;
+    let prorationCredit = 0;
+
+    if (input.prorate) {
+      const proration = calculateProration(current, quote.totalInr);
+      invoiceAmount = Math.max(0, proration.netInr);
+      if (proration.netInr < 0) {
+        prorationCredit = Math.abs(proration.netInr);
       }
     }
 
-    if (proration && proration.netInr < 0) {
-      // Downgrade credit applied to WhatsApp wallet.
-      await creditWallet(input.orgId, Math.abs(proration.netInr) * 100, "MANUAL_CREDIT", {
-        note: `Proration credit for plan downgrade (${existing.id})`,
-      });
-    }
+    if (invoiceAmount === 0) {
+      // Downgrade credit scenario: no payment needed, activate new plan now.
+      await finalizePlanChange(input.orgId, newSubscription.id);
+      if (prorationCredit > 0) {
+        await creditWallet(input.orgId, prorationCredit * 100, "MANUAL_CREDIT", {
+          note: `Proration credit for plan downgrade (${current.id})`,
+        });
+      }
+    } else {
+      try {
+        const order = await createRazorpayOrder({
+          amountInr: invoiceAmount,
+          receipt: `sub-change-${newSubscription.id}`,
+        });
+        razorpayOrderId = order.id;
+      } catch (err) {
+        // Roll back the pending subscription so the org is not left in a broken state.
+        await prisma.customerSubscription.delete({ where: { id: newSubscription.id } }).catch(() => {});
+        console.error("Failed to create Razorpay order for changed subscription:", err);
+        throw new Error("Could not create payment order. Your current plan is unchanged.");
+      }
 
-    invoice = await createInvoiceFromQuote(input.orgId, existing.id, quote, {
-      status: "PENDING",
-      overrideAmount: invoiceAmount,
-    });
-
-    if (invoice && proration) {
-      await prisma.invoiceItem.createMany({
-        data: [
-          {
-            invoiceId: invoice.id,
-            orgId: input.orgId,
-            type: "DISCOUNT",
-            description: `Proration credit for unused time on previous plan`,
-            quantity: 1,
-            unitPriceInr: -proration.creditInr,
-            amountInr: -proration.creditInr,
-          },
-          {
-            invoiceId: invoice.id,
-            orgId: input.orgId,
-            type: "PLAN",
-            description: `Prorated charge for new plan until ${existing.currentPeriodEnd?.toLocaleDateString() ?? "period end"}`,
-            quantity: 1,
-            unitPriceInr: proration.debitInr,
-            amountInr: proration.debitInr,
-          },
-        ],
+      invoice = await createInvoiceFromQuote(input.orgId, newSubscription.id, quote, {
+        status: "PENDING",
+        overrideAmount: invoiceAmount,
       });
-    }
 
-    if (razorpayOrderId && invoice) {
-      invoice = await prisma.invoice.update({
-        where: { id: invoice.id },
-        data: { razorpayOrderId, amountInr: invoiceAmount },
-      });
+      if (razorpayOrderId && invoice) {
+        invoice = await prisma.invoice.update({
+          where: { id: invoice.id },
+          data: { razorpayOrderId, amountInr: invoiceAmount },
+        });
+      }
     }
   }
 
-  await logBillingEvent(input.orgId, existing.id, "SUBSCRIPTION_CHANGED", {
+  await logBillingEvent(input.orgId, newSubscription.id, "SUBSCRIPTION_CHANGE_STARTED", {
     planId: input.planId,
     frequency: quote.frequency,
     totalInr: quote.totalInr,
   });
 
-  const updatedSubscription = await prisma.customerSubscription.findUnique({
-    where: { id: existing.id },
-    include: { plan: true, items: { include: { addOn: true } } },
-  });
-
-  return { subscription: updatedSubscription, quote, invoice, razorpayOrderId };
+  return { subscription: newSubscription, quote, invoice, razorpayOrderId };
 }
 
 export async function cancelSubscription(orgId: string, cancelAtPeriodEnd = true) {
   const subscription = await prisma.customerSubscription.findFirst({
-    where: { orgId, status: { in: ["TRIALING", "ACTIVE", "PAST_DUE"] } },
+    where: { orgId, status: { in: SUBSCRIPTION_ACTIVE_STATUSES } },
   });
   if (!subscription) throw new Error("No active subscription");
 
@@ -462,12 +622,13 @@ export async function cancelSubscription(orgId: string, cancelAtPeriodEnd = true
   });
 
   await logBillingEvent(orgId, subscription.id, cancelAtPeriodEnd ? "SUBSCRIPTION_CANCEL_SCHEDULED" : "SUBSCRIPTION_CANCELLED", {});
+  await syncOrganizationStatusFromSubscription(orgId);
   return updated;
 }
 
 export async function reactivateSubscription(orgId: string) {
   const subscription = await prisma.customerSubscription.findFirst({
-    where: { orgId, status: { in: ["TRIALING", "ACTIVE", "PAST_DUE", "PAUSED", "INCOMPLETE"] } },
+    where: { orgId, status: { in: [...SUBSCRIPTION_ACTIVE_STATUSES, SubscriptionStatus.PAUSED] } },
   });
   if (!subscription) throw new Error("No subscription to reactivate");
   if (!subscription.cancelAtPeriodEnd && subscription.status !== SubscriptionStatus.PAUSED) {
@@ -494,20 +655,25 @@ export async function reactivateSubscription(orgId: string) {
   });
 
   await logBillingEvent(orgId, subscription.id, "SUBSCRIPTION_REACTIVATED", {});
+  await syncOrganizationStatusFromSubscription(orgId);
   return updated;
 }
 
-export async function recordSubscriptionPayment(opts: {
-  orgId: string;
-  invoiceId?: string;
-  subscriptionId?: string;
-  amountInr: number;
-  razorpayPaymentId?: string;
-  razorpayOrderId?: string;
-  status: "PAID" | "FAILED" | "PENDING" | "REFUNDED";
-  failureReason?: string;
-  metadata?: Record<string, unknown>;
-}) {
+export async function recordSubscriptionPayment(
+  opts: {
+    orgId: string;
+    invoiceId?: string;
+    subscriptionId?: string;
+    amountInr: number;
+    razorpayPaymentId?: string;
+    razorpayOrderId?: string;
+    status: "PAID" | "FAILED" | "PENDING" | "REFUNDED";
+    failureReason?: string;
+    metadata?: Record<string, unknown>;
+  },
+  tx?: Prisma.TransactionClient
+) {
+  const client = tx ?? prisma;
   const data = {
     orgId: opts.orgId,
     invoiceId: opts.invoiceId ?? null,
@@ -520,11 +686,11 @@ export async function recordSubscriptionPayment(opts: {
     metadata: (opts.metadata ?? {}) as never,
   };
   if (opts.razorpayPaymentId) {
-    return prisma.payment.upsert({
+    return client.payment.upsert({
       where: { razorpayPaymentId: opts.razorpayPaymentId },
       update: data,
       create: data,
     });
   }
-  return prisma.payment.create({ data });
+  return client.payment.create({ data });
 }

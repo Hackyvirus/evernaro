@@ -129,7 +129,7 @@ export async function PATCH(
     }
 
     const updated = await prisma.conversation.update({
-      where: { id },
+      where: { id, orgId },
       data: updateData,
       include: {
         contact: true,

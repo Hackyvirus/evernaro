@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { authConfig } from "@/lib/auth.config";
 import { verifyTotpCode } from "@/lib/totp";
 import { decryptSecret } from "@/lib/crypto";
+import { checkRateLimit, clientIp } from "@/lib/rate-limit";
 
 // A valid-format bcrypt hash of a value nobody will ever type, used to keep
 // authorize()'s timing constant whether or not the email is registered —
@@ -28,11 +29,23 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         password: { label: "Password", type: "password" },
         totpCode: { label: "Authentication code", type: "text" },
       },
-      authorize: async (credentials) => {
+      authorize: async (credentials, request) => {
+        const ip = clientIp(request);
+        const allowed = await checkRateLimit(`login-failed:${ip}`, 10, 15 * 60);
+        if (!allowed) return null;
+
         const email = credentials?.email as string | undefined;
         const password = credentials?.password as string | undefined;
         const totpCode = credentials?.totpCode as string | undefined;
         if (!email || !password) return null;
+
+        const accountAllowed = await checkRateLimit(
+          `login-failed:account:${email.toLowerCase()}`,
+          5,
+          15 * 60,
+          { failClosed: true }
+        );
+        if (!accountAllowed) return null;
 
         const user = await prisma.user.findUnique({
           where: { email: email.toLowerCase() },
@@ -42,7 +55,11 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         const valid = await bcrypt.compare(password, user?.passwordHash ?? DUMMY_HASH);
         if (!user || !valid || !user.isActive) return null;
 
-        if (user.mfaEnabled && user.mfaSecret) {
+        if (user.mfaEnabled) {
+          if (!user.mfaSecret) {
+            // MFA is enabled but secret is missing — fail closed.
+            return null;
+          }
           if (!totpCode) {
             throw new MfaRequiredError();
           }
@@ -80,6 +97,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           orgName: user.org.name,
           role: user.role,
           emailVerified: user.emailVerified as boolean,
+          tokenVersion: user.tokenVersion,
         };
       },
     }),
@@ -93,7 +111,11 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         email: { label: "Email", type: "email" },
         password: { label: "Password", type: "password" },
       },
-      authorize: async (credentials) => {
+      authorize: async (credentials, request) => {
+        const ip = clientIp(request);
+        const allowed = await checkRateLimit(`login-failed:${ip}`, 10, 15 * 60);
+        if (!allowed) return null;
+
         const email = credentials?.email as string | undefined;
         const password = credentials?.password as string | undefined;
         if (!email || !password) return null;
@@ -110,6 +132,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           email: admin.email,
           name: admin.name,
           isPlatformAdmin: true,
+          tokenVersion: admin.tokenVersion,
         };
       },
     }),

@@ -228,7 +228,9 @@ function BillingPlansPageContent() {
             reject(new Error("Payment confirmation failed"));
           }
         },
-        modal: { ondismiss: () => resolve() },
+        modal: {
+          ondismiss: () => reject(new Error("Checkout closed without completing payment.")),
+        },
       });
       checkout.open();
     });

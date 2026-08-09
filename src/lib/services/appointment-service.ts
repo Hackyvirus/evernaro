@@ -2,6 +2,8 @@ import { prisma } from "@/lib/prisma";
 import { AppointmentStatus, CustomerEventType, type Prisma } from "@prisma/client";
 import { recordCustomerEvent } from "@/lib/customer-events";
 import { scheduleAppointmentReminders } from "./appointment-reminders";
+import { sendAppointmentConfirmation, sendBusinessAppointmentNotification } from "@/lib/customer-notifications";
+import crypto from "node:crypto";
 
 export type CreateAppointmentInput = {
   orgId: string;
@@ -14,10 +16,56 @@ export type CreateAppointmentInput = {
   endsAt: Date;
   notes?: string;
   depositInr?: number;
+  skipAvailabilityCheck?: boolean;
 };
 
+export class AppointmentSlotUnavailableError extends Error {
+  constructor() {
+    super("Selected time slot is no longer available");
+  }
+}
+
+function bookingAdvisoryLockId(orgId: string, staffId: string | undefined, resourceId: string | undefined, startsAt: Date): bigint {
+  const day = startsAt.toISOString().slice(0, 10);
+  const key = `booking:${orgId}:${staffId ?? "_"}:${resourceId ?? "_"}:${day}`;
+  const buf = crypto.createHash("sha256").update(key).digest();
+  const n = buf.readBigUInt64BE(0);
+  // pg_advisory_xact_lock accepts a signed bigint; keep the value in the positive range.
+  return n % (BigInt(2) ** BigInt(63));
+}
+
+async function acquireBookingLock(
+  tx: Prisma.TransactionClient,
+  orgId: string,
+  staffId: string | undefined,
+  resourceId: string | undefined,
+  startsAt: Date
+) {
+  const lockId = bookingAdvisoryLockId(orgId, staffId, resourceId, startsAt);
+  await tx.$queryRawUnsafe(`SELECT pg_advisory_xact_lock($1::bigint)`, lockId);
+}
+
 export async function createAppointment(input: CreateAppointmentInput) {
-  const appointment = await prisma.appointment.create({
+  const appointment = await prisma.$transaction(async (tx) => {
+    if (!input.skipAvailabilityCheck) {
+      // Serialize concurrent bookings for the same org/staff/resource/day.
+      await acquireBookingLock(tx, input.orgId, input.staffId, input.resourceId, input.startsAt);
+      const where: Prisma.AppointmentWhereInput = {
+        orgId: input.orgId,
+        status: { notIn: [AppointmentStatus.CANCELLED, AppointmentStatus.NO_SHOW] },
+        OR: [{ startsAt: { lt: input.endsAt }, endsAt: { gt: input.startsAt } }],
+      };
+      if (input.staffId) where.staffId = input.staffId;
+      if (input.resourceId) where.resourceId = input.resourceId;
+      if (input.locationId) where.locationId = input.locationId;
+
+      const conflicts = await tx.appointment.findMany({ where, select: { id: true } });
+      if (conflicts.length > 0) {
+        throw new AppointmentSlotUnavailableError();
+      }
+    }
+
+    return tx.appointment.create({
     data: {
       orgId: input.orgId,
       locationId: input.locationId,
@@ -37,6 +85,7 @@ export async function createAppointment(input: CreateAppointmentInput) {
       staff: true,
       resource: true,
     },
+    });
   });
 
   // Schedule automatic reminders in the background; do not fail appointment
@@ -58,6 +107,28 @@ export async function createAppointment(input: CreateAppointmentInput) {
       resourceName: appointment.resource?.name ?? null,
       startsAt: appointment.startsAt.toISOString(),
     }
+  );
+
+  // Send a best-effort booking confirmation to the customer.
+  const org = await prisma.organization.findUnique({
+    where: { id: appointment.orgId },
+    select: { name: true },
+  });
+  void sendAppointmentConfirmation(
+    appointment.orgId,
+    appointment.contact,
+    { startsAt: appointment.startsAt, service: appointment.service, staff: appointment.staff },
+    org?.name ?? ""
+  );
+
+  void sendBusinessAppointmentNotification(
+    appointment.orgId,
+    {
+      startsAt: appointment.startsAt,
+      service: appointment.service,
+      contact: appointment.contact,
+    },
+    org?.name ?? ""
   );
 
   return appointment;

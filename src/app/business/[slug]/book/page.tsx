@@ -3,15 +3,18 @@
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { Button, Card, Input, PageHeader } from "@/components/ui";
+import { toZonedISO } from "@/lib/timezone";
 
 type Service = { id: string; name: string; durationMin: number | null; priceInr: number | null; description: string | null };
 type Staff = { id: string; name: string; role: string | null };
+
+type OrgInfo = { name: string; open: boolean; closedMessage: string; timezone?: string };
 
 export default function PublicBookingPage() {
   const params = useParams();
   const slug = params.slug as string;
 
-  const [orgName, setOrgName] = useState("");
+  const [org, setOrg] = useState<OrgInfo | null>(null);
   const [services, setServices] = useState<Service[]>([]);
   const [staffList, setStaffList] = useState<Staff[]>([]);
   const [loading, setLoading] = useState(true);
@@ -27,6 +30,7 @@ export default function PublicBookingPage() {
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
   const [notes, setNotes] = useState("");
+  const [honeypot, setHoneypot] = useState("");
 
   useEffect(() => {
     if (!slug) return;
@@ -34,7 +38,7 @@ export default function PublicBookingPage() {
       .then(async (res) => {
         if (!res.ok) throw new Error("Business not found");
         const data = await res.json();
-        setOrgName(data.org.name);
+        setOrg(data.org ?? null);
         setServices(data.services ?? []);
         setStaffList(data.staff ?? []);
       })
@@ -47,7 +51,14 @@ export default function PublicBookingPage() {
     setSubmitting(true);
     setError(null);
 
-    const startsAt = new Date(`${date}T${time}`).toISOString();
+    if (honeypot) {
+      setSubmitting(false);
+      return;
+    }
+
+    const startsAt = org?.timezone
+      ? toZonedISO(date, time, org.timezone)
+      : new Date(`${date}T${time}`).toISOString();
     const res = await fetch(`/api/public/${slug}/book`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -72,14 +83,14 @@ export default function PublicBookingPage() {
   }
 
   if (loading) return <div className="p-8 text-center">Loading...</div>;
-  if (error && !orgName) return <div className="p-8 text-center text-danger">{error}</div>;
+  if (error && !org) return <div className="p-8 text-center text-danger">{error}</div>;
 
   if (success) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-surface px-4">
         <Card className="w-full max-w-md p-8 text-center">
           <h1 className="mb-2 text-xl font-semibold text-text">Booking Confirmed</h1>
-          <p className="text-text-secondary">Thank you, {name}. Your appointment at {orgName} has been requested.</p>
+          <p className="text-text-secondary">Thank you, {name}. Your appointment at {org?.name} has been requested.</p>
         </Card>
       </div>
     );
@@ -88,10 +99,16 @@ export default function PublicBookingPage() {
   return (
     <div className="min-h-screen bg-surface px-4 py-8">
       <div className="mx-auto max-w-md">
-        <PageHeader title={`Book at ${orgName}`} description="Select a service and time that works for you." />
+        <PageHeader title={`Book at ${org?.name}`} description="Select a service and time that works for you." />
 
         <Card className="mt-6 p-6">
-          <form onSubmit={onSubmit} className="flex flex-col gap-4">
+          {org && !org.open && (
+            <div className="mb-4 rounded-lg bg-warning/10 p-4 text-center">
+              <p className="font-medium text-warning">{org.closedMessage}</p>
+              <p className="text-sm text-text-secondary">You can still book an appointment for a future time.</p>
+            </div>
+          )}
+          <form onSubmit={onSubmit} className="relative flex flex-col gap-4">
             <div>
               <label className="mb-1.5 block text-sm font-medium text-text">Service</label>
               <select
@@ -132,7 +149,11 @@ export default function PublicBookingPage() {
                   type="date"
                   required
                   value={date}
-                  min={new Date().toISOString().split("T")[0]}
+                  min={
+                    org?.timezone
+                      ? new Date().toLocaleDateString("en-CA", { timeZone: org.timezone })
+                      : new Date().toISOString().split("T")[0]
+                  }
                   onChange={(e) => setDate(e.target.value)}
                   className="w-full rounded-md border border-border bg-card px-3 py-2 text-sm text-text outline-none focus:border-primary"
                 />
@@ -161,6 +182,22 @@ export default function PublicBookingPage() {
                 className="w-full rounded-md border border-border bg-card px-3 py-2 text-sm text-text outline-none focus:border-primary"
               />
             </div>
+
+            <div className="absolute -left-[9999px] top-0">
+              <input
+                type="text"
+                name="website"
+                value={honeypot}
+                onChange={(e) => setHoneypot(e.target.value)}
+                tabIndex={-1}
+                autoComplete="off"
+                aria-hidden="true"
+              />
+            </div>
+
+            {org?.timezone && (
+              <p className="text-xs text-text-secondary">Times are shown in {org.timezone}.</p>
+            )}
 
             {error && <p className="text-sm text-danger">{error}</p>}
 

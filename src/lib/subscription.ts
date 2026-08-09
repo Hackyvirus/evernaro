@@ -1,5 +1,9 @@
 import { OrganizationStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import {
+  SUBSCRIPTION_ACTIVE_STATUSES,
+  syncOrganizationStatusFromSubscription,
+} from "@/lib/billing/subscription-status";
 
 export class SubscriptionSuspendedError extends Error {}
 
@@ -25,13 +29,15 @@ export async function requireActiveSubscription(orgId: string): Promise<void> {
     );
   }
 
-  // If a subscription record exists, it must be in an active-equivalent state
-  // for sends to be allowed. Missing subscriptions are tolerated for legacy
-  // accounts, but new accounts should always have one.
+  // A paid feature may only be used when the organization is ACTIVE and the
+  // latest subscription is TRIALING or ACTIVE. INCOMPLETE / PAST_DUE /
+  // CANCELLED / EXPIRED / SUSPENDED / PAYMENT_FAILED are all blocking states.
   const subscription = await prisma.customerSubscription.findFirst({
-    where: { orgId, status: { in: ["TRIALING", "ACTIVE", "PAST_DUE", "PAUSED", "INCOMPLETE"] } },
+    where: { orgId },
+    orderBy: { createdAt: "desc" },
   });
-  if (subscription && !["TRIALING", "ACTIVE", "PAST_DUE", "PAUSED", "INCOMPLETE"].includes(subscription.status)) {
+
+  if (!subscription || !SUBSCRIPTION_ACTIVE_STATUSES.includes(subscription.status)) {
     throw new SubscriptionSuspendedError(
       "Subscription is not active — please check your billing status to continue sending messages."
     );
@@ -45,3 +51,5 @@ export async function getSubscriptionStatus(orgId: string) {
   });
   return org?.status ?? OrganizationStatus.ACTIVE;
 }
+
+export { syncOrganizationStatusFromSubscription };

@@ -8,7 +8,7 @@ import { SubscriptionStatus } from "@prisma/client";
 async function BillingCatalogData() {
   await requirePlatformAdminId();
 
-  const [plans, services, addOns, coupons, tax, subscriptions, payments] = await Promise.all([
+  const [plans, services, addOns, coupons, tax, subscriptions, paidPayments, allPayments, allInvoices] = await Promise.all([
     prisma.subscriptionPlan.findMany({
       orderBy: { displayOrder: "asc" },
       include: {
@@ -35,10 +35,20 @@ async function BillingCatalogData() {
         plan: { select: { id: true, name: true, slug: true, monthlyPriceInr: true, annualPriceInr: true } },
         items: { include: { addOn: { select: { name: true } } } },
         invoices: { orderBy: { createdAt: "desc" }, take: 5 },
-        payments: { where: { status: "PAID" }, select: { id: true, amountInr: true, createdAt: true, razorpayPaymentId: true, status: true } },
+        payments: { orderBy: { createdAt: "desc" }, take: 5 },
       },
     }),
     prisma.payment.findMany({ where: { status: "PAID" }, select: { amountInr: true, createdAt: true, subscriptionId: true } }),
+    prisma.payment.findMany({
+      orderBy: { createdAt: "desc" },
+      take: 1000,
+      include: { org: { select: { id: true, name: true } }, invoice: { select: { id: true } } },
+    }),
+    prisma.invoice.findMany({
+      orderBy: { createdAt: "desc" },
+      take: 1000,
+      include: { org: { select: { id: true, name: true } } },
+    }),
   ]);
 
   const now = new Date();
@@ -50,8 +60,8 @@ async function BillingCatalogData() {
     return sum + (s.frequency === "YEARLY" ? Math.round(s.totalAmountInr / 12) : s.totalAmountInr);
   }, 0);
   const arr = mrr * 12;
-  const revenueThisMonth = payments.filter((p) => p.createdAt >= startOfMonth).reduce((sum, p) => sum + p.amountInr, 0);
-  const totalRevenue = payments.reduce((sum, p) => sum + p.amountInr, 0);
+  const revenueThisMonth = paidPayments.filter((p) => p.createdAt >= startOfMonth).reduce((sum, p) => sum + p.amountInr, 0);
+  const totalRevenue = paidPayments.reduce((sum, p) => sum + p.amountInr, 0);
 
   const statusCounts = {
     active: subscriptions.filter((s) => s.status === SubscriptionStatus.ACTIVE).length,
@@ -60,6 +70,8 @@ async function BillingCatalogData() {
     paymentFailed: subscriptions.filter((s) => s.status === SubscriptionStatus.PAYMENT_FAILED).length,
     cancelled: subscriptions.filter((s) => s.status === SubscriptionStatus.CANCELLED).length,
     paused: subscriptions.filter((s) => s.status === SubscriptionStatus.PAUSED).length,
+    expired: subscriptions.filter((s) => s.status === SubscriptionStatus.EXPIRED).length,
+    incomplete: subscriptions.filter((s) => s.status === SubscriptionStatus.INCOMPLETE).length,
   };
 
   const customersByPlan = plans.map((p) => ({
@@ -67,6 +79,12 @@ async function BillingCatalogData() {
     planName: p.name,
     active: subscriptions.filter((s) => s.planId === p.id && s.status === SubscriptionStatus.ACTIVE).length,
     trialing: subscriptions.filter((s) => s.planId === p.id && s.status === SubscriptionStatus.TRIALING).length,
+  }));
+
+  const planSubscriptionCounts = plans.map((p) => ({
+    planId: p.id,
+    active: customersByPlan.find((c) => c.planId === p.id)?.active ?? 0,
+    trialing: customersByPlan.find((c) => c.planId === p.id)?.trialing ?? 0,
   }));
 
   const metrics = {
@@ -79,6 +97,8 @@ async function BillingCatalogData() {
     customersByPlan,
   };
 
+  const failedPayments = allPayments.filter((p) => p.status === "FAILED");
+
   return (
     <BillingCatalogTabs
       plans={plans}
@@ -88,6 +108,10 @@ async function BillingCatalogData() {
       tax={tax ?? { name: "GST", rate: 18, inclusive: false }}
       metrics={metrics}
       initialSubscriptions={subscriptions}
+      planSubscriptionCounts={planSubscriptionCounts}
+      allPayments={allPayments}
+      allInvoices={allInvoices}
+      failedPayments={failedPayments}
     />
   );
 }
@@ -95,7 +119,7 @@ async function BillingCatalogData() {
 export default function PlatformBillingAdminPage() {
   return (
     <div className="flex flex-1 flex-col overflow-y-auto">
-      <PageHeader title="Billing" description="Platform billing catalog, subscriptions, and revenue." />
+      <PageHeader title="Billing" description="Platform billing catalog, subscriptions, payments, and revenue." />
 
       <div className="flex flex-col gap-6 p-6">
         <Suspense fallback={<Skeleton className="h-96" />}>

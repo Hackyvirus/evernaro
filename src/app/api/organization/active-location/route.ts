@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { UserRole } from "@prisma/client";
 import { requireOrgMember } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
@@ -6,7 +7,7 @@ import { z } from "zod";
 const schema = z.object({ locationId: z.string().cuid() });
 
 export async function PUT(req: Request) {
-  const member = await requireOrgMember();
+  const member = await requireOrgMember(UserRole.ADMIN);
   if (!member) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const parsed = schema.safeParse(await req.json());
   if (!parsed.success) {

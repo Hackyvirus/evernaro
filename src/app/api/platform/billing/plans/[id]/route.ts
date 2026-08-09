@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { requirePlatformAdminId, UnauthorizedError } from "@/lib/session";
+import { logAudit } from "@/lib/audit";
+import { AuditLogAction } from "@prisma/client";
 
 const limitSchema = z.object({
   id: z.string().cuid().optional(),
@@ -36,7 +38,7 @@ const bodySchema = z.object({
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
-    await requirePlatformAdminId();
+    const adminId = await requirePlatformAdminId();
     const { id } = await params;
     const parsed = bodySchema.safeParse(await req.json());
     if (!parsed.success) {
@@ -74,6 +76,14 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       include: { limits: { include: { service: true } }, features: true, planAddOns: { include: { addOn: true } } },
     });
 
+    await logAudit({
+      platformAdminId: adminId,
+      action: AuditLogAction.ORG_PLAN_CHANGED,
+      targetType: "SubscriptionPlan",
+      targetId: id,
+      metadata: { action: "UPDATE", fields: Object.keys(parsed.data ?? {}) },
+    });
+
     return NextResponse.json({ plan });
   } catch (err) {
     if (err instanceof UnauthorizedError) {
@@ -86,7 +96,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
 export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
-    await requirePlatformAdminId();
+    const adminId = await requirePlatformAdminId();
     const { id } = await params;
     const activeSubscriptions = await prisma.customerSubscription.count({
       where: { planId: id, status: { in: ["TRIALING", "ACTIVE", "PAST_DUE", "PAUSED"] } },
@@ -98,6 +108,15 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
       );
     }
     await prisma.subscriptionPlan.delete({ where: { id } });
+
+    await logAudit({
+      platformAdminId: adminId,
+      action: AuditLogAction.ORG_PLAN_CHANGED,
+      targetType: "SubscriptionPlan",
+      targetId: id,
+      metadata: { action: "DELETE" },
+    });
+
     return NextResponse.json({ ok: true });
   } catch (err) {
     if (err instanceof UnauthorizedError) {

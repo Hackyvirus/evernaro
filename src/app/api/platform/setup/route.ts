@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import bcrypt from "bcryptjs";
+import crypto from "node:crypto";
 import { prisma } from "@/lib/prisma";
 
 // First-run bootstrap only: creates the one platform admin account. Refuses
@@ -39,7 +40,9 @@ export async function POST(req: Request) {
   }
   const { name, email, password, setupToken } = parsed.data;
 
-  if (setupToken !== expectedToken) {
+  const providedHash = crypto.createHash("sha256").update(setupToken).digest();
+  const expectedHash = crypto.createHash("sha256").update(expectedToken).digest();
+  if (providedHash.length !== expectedHash.length || !crypto.timingSafeEqual(providedHash, expectedHash)) {
     return NextResponse.json({ error: "Invalid setup token" }, { status: 403 });
   }
 

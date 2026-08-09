@@ -20,7 +20,7 @@ export async function GET(
     }
 
     const invoices = await prisma.invoice.findMany({
-      where: { orgId },
+      where: { orgId, contactId: id },
       orderBy: { createdAt: "desc" },
     });
 

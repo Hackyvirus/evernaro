@@ -31,13 +31,26 @@ describe("requireActiveSubscription", () => {
     await expect(requireActiveSubscription("org_1")).rejects.toBeInstanceOf(SubscriptionSuspendedError);
   });
 
-  it("passes for an active organization", async () => {
+  it("passes for an active organization with an active subscription", async () => {
     findUniqueOrgMock.mockResolvedValue({ status: OrganizationStatus.ACTIVE, name: "Active" });
+    findFirstSubMock.mockResolvedValue({ status: "ACTIVE" });
     await expect(requireActiveSubscription("org_1")).resolves.toBeUndefined();
   });
 
   it("throws when organization is not found", async () => {
     findUniqueOrgMock.mockResolvedValue(null);
+    await expect(requireActiveSubscription("org_1")).rejects.toBeInstanceOf(SubscriptionSuspendedError);
+  });
+
+  it("throws when there is no subscription", async () => {
+    findUniqueOrgMock.mockResolvedValue({ status: OrganizationStatus.ACTIVE, name: "Active" });
+    findFirstSubMock.mockResolvedValue(null);
+    await expect(requireActiveSubscription("org_1")).rejects.toBeInstanceOf(SubscriptionSuspendedError);
+  });
+
+  it("throws for an incomplete subscription", async () => {
+    findUniqueOrgMock.mockResolvedValue({ status: OrganizationStatus.ACTIVE, name: "Active" });
+    findFirstSubMock.mockResolvedValue({ status: "INCOMPLETE" });
     await expect(requireActiveSubscription("org_1")).rejects.toBeInstanceOf(SubscriptionSuspendedError);
   });
 });

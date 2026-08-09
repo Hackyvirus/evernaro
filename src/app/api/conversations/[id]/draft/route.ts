@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { requireOrgMember, UnauthorizedError, ForbiddenError } from "@/lib/session";
 import { generateDraftReply } from "@/lib/ai";
 import { logAudit } from "@/lib/audit";
+import { requireFeature, FeatureNotAllowedError } from "@/lib/billing/entitlements";
 
 export async function POST(
   _req: Request,
@@ -11,6 +12,16 @@ export async function POST(
 ) {
   try {
     const { orgId } = await requireOrgMember(UserRole.AGENT);
+
+    try {
+      await requireFeature(orgId, "ai_assistant");
+    } catch (err) {
+      if (err instanceof FeatureNotAllowedError) {
+        return NextResponse.json({ error: err.message }, { status: 403 });
+      }
+      return NextResponse.json({ error: "Failed to verify plan limits" }, { status: 500 });
+    }
+
     const { id } = await params;
 
     const conversation = await prisma.conversation.findFirst({ where: { id, orgId } });

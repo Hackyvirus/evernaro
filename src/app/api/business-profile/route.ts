@@ -8,8 +8,14 @@ import { logAudit } from "@/lib/audit";
 export async function GET() {
   try {
     const { orgId } = await requireOrgMember(UserRole.VIEWER);
-    const profile = await prisma.businessProfile.findUnique({ where: { orgId } });
-    return NextResponse.json({ profile });
+    const [profile, org] = await Promise.all([
+      prisma.businessProfile.findUnique({ where: { orgId } }),
+      prisma.organization.findUnique({
+        where: { id: orgId },
+        select: { name: true, timezone: true, businessHours: true },
+      }),
+    ]);
+    return NextResponse.json({ profile, org });
   } catch (err) {
     if (err instanceof UnauthorizedError) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -20,6 +26,14 @@ export async function GET() {
     return NextResponse.json({ error: "Failed to load profile" }, { status: 500 });
   }
 }
+
+const businessHoursSchema = z.array(
+  z.object({
+    day: z.number().int().min(0).max(6),
+    open: z.string().regex(/^\d{2}:\d{2}$/),
+    close: z.string().regex(/^\d{2}:\d{2}$/),
+  })
+);
 
 const bodySchema = z.object({
   businessName: z.string().min(1),
@@ -38,6 +52,8 @@ const bodySchema = z.object({
   policies: z.array(z.object({ title: z.string(), body: z.string() })).optional(),
   aiInstructions: z.object({ neverSay: z.string().optional(), escalate: z.string().optional() }).optional(),
   signOff: z.string().optional(),
+  timezone: z.string().optional(),
+  businessHours: businessHoursSchema.optional(),
 });
 
 export async function PUT(req: Request) {
@@ -48,12 +64,28 @@ export async function PUT(req: Request) {
       return NextResponse.json({ error: "Invalid input" }, { status: 400 });
     }
     const data = parsed.data;
+    const { timezone, businessHours, ...profileData } = data;
 
-    const profile = await prisma.businessProfile.upsert({
-      where: { orgId },
-      update: data,
-      create: { orgId, ...data },
+    await prisma.$transaction(async (tx) => {
+      await tx.organization.update({
+        where: { id: orgId },
+        data: {
+          name: data.businessName,
+          ...(timezone !== undefined ? { timezone } : {}),
+          ...(businessHours !== undefined ? { businessHours } : {}),
+        },
+      });
+      await tx.businessProfile.upsert({
+        where: { orgId },
+        update: profileData,
+        create: { orgId, ...profileData },
+      });
     });
+
+    const profile = await prisma.businessProfile.findUnique({ where: { orgId } });
+    if (!profile) {
+      return NextResponse.json({ error: "Failed to save profile" }, { status: 500 });
+    }
 
     await logAudit({
       orgId,

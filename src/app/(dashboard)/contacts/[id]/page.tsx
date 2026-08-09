@@ -744,12 +744,7 @@ function EventsTab({ contactId }: { contactId: string }) {
                 <p className="text-xs text-text-muted">{new Date(ev.createdAt).toLocaleString()}</p>
               </div>
               {ev.entityType === "appointment" && ev.entityId && (
-                <Link
-                  href={`/appointments/${ev.entityId}`}
-                  className="flex-shrink-0 text-xs text-primary hover:text-primary-hover"
-                >
-                  View
-                </Link>
+                <span className="flex-shrink-0 text-xs text-text-muted">Appointment</span>
               )}
             </div>
           </li>

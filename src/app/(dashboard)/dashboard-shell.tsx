@@ -78,12 +78,17 @@ function SidebarContent({
 }) {
   async function switchLocation(locationId: string) {
     if (locationId === activeLocation?.id) return;
-    await fetch("/api/organization/active-location", {
+    const res = await fetch("/api/organization/active-location", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ locationId }),
     });
-    window.location.reload();
+    if (res.ok) {
+      window.location.reload();
+    } else {
+      const data = await res.json().catch(() => ({}));
+      window.alert(data.error ?? "Failed to switch location. Please try again.");
+    }
   }
   return (
     <>

@@ -8,8 +8,12 @@ import { CHANNEL_IDENTIFIER_FIELD } from "@/lib/channel-reachability";
 import { whatsappSendRequiresTemplate } from "@/lib/whatsapp-template-validation";
 import { requireActiveSubscription, SubscriptionSuspendedError } from "@/lib/subscription";
 import { logAudit } from "@/lib/audit";
-import { requireFeature, requireUsageLimit } from "@/lib/billing/entitlements";
-import { recordUsage } from "@/lib/billing/usage";
+import {
+  requireFeature,
+  requireUsageLimit,
+  FeatureNotAllowedError,
+  UsageLimitExceededError,
+} from "@/lib/billing/entitlements";
 
 export async function GET() {
   try {
@@ -35,7 +39,7 @@ const bodySchema = z.object({
   name: z.string().min(1),
   description: z.string().optional(),
   channelId: z.string().min(1),
-  messageTemplate: z.string().min(1),
+  messageTemplate: z.string().min(1).max(4096),
   whatsappTemplateId: z.string().optional(),
   timezone: z.string().optional(),
   scheduledAt: z.string().datetime().optional(),
@@ -87,7 +91,11 @@ export async function POST(req: Request) {
 
     const identifierField = CHANNEL_IDENTIFIER_FIELD[channel.type];
     const audienceInput = audience ?? "all";
-    const where: { orgId: string; [key: string]: unknown } = { orgId, [identifierField]: { not: null } };
+    const where: { orgId: string; [key: string]: unknown } = {
+      orgId,
+      [identifierField]: { not: null },
+      marketingOptOut: false,
+    };
     if (typeof audienceInput === "object" && "tag" in audienceInput) {
       where.tags = { has: audienceInput.tag };
     } else if (typeof audienceInput === "object" && "contactIds" in audienceInput) {
@@ -108,18 +116,13 @@ export async function POST(req: Request) {
 
     try {
       await requireFeature(orgId, "broadcast_campaigns");
-      const { remaining } = await requireUsageLimit(orgId, "campaigns", contacts.length);
-      if (remaining < contacts.length) {
-        return NextResponse.json(
-          {
-            error: `This would send to ${contacts.length} contacts, but only ${Math.max(remaining, 0)} remain in your plan's campaign limit. Upgrade to send more.`,
-          },
-          { status: 429 }
-        );
-      }
+      await requireUsageLimit(orgId, "campaigns", contacts.length);
     } catch (err) {
-      if (err instanceof Error) {
+      if (err instanceof FeatureNotAllowedError) {
         return NextResponse.json({ error: err.message }, { status: 403 });
+      }
+      if (err instanceof UsageLimitExceededError) {
+        return NextResponse.json({ error: err.message }, { status: 402 });
       }
       return NextResponse.json({ error: "Failed to verify plan limits" }, { status: 500 });
     }
@@ -184,10 +187,6 @@ export async function POST(req: Request) {
       targetType: "Campaign",
       targetId: campaign.id,
       metadata: { name, channelType: channel.type, totalRecipients: campaign.totalRecipients, scheduled: isScheduled },
-    });
-
-    await recordUsage({ orgId, serviceKey: "campaigns", quantity: campaign.totalRecipients }).catch((err) => {
-      console.error("Failed to record campaign usage:", err);
     });
 
     return NextResponse.json({ ok: true, campaign });

@@ -13,7 +13,7 @@ const schema = z.object({
 export async function POST(req: Request) {
   const allowed = await checkRateLimit(`platform-reset-password:${clientIp(req)}`, 5, 60 * 60);
   if (!allowed) {
-    return NextResponse.json({ error: "Too many attempts — try again later." }, { status: 429 });
+    return NextResponse.json({ error: "Too many attempts. Please try again later." }, { status: 429 });
   }
 
   const parsed = schema.safeParse(await req.json());
@@ -40,6 +40,7 @@ export async function POST(req: Request) {
       passwordHash,
       passwordResetToken: null,
       passwordResetTokenExpiresAt: null,
+      tokenVersion: { increment: 1 },
     },
   });
 

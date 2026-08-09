@@ -70,7 +70,7 @@ export async function PATCH(
       // Remove pending jobs from the queue.
       const pending = await prisma.campaignRecipient.findMany({ where: { campaignId: id, status: "PENDING" } });
       await Promise.allSettled(pending.map((r) => cancelCampaignRecipientJob(r.id)));
-      const updated = await prisma.campaign.update({ where: { id }, data: { status: "PAUSED" } });
+      const updated = await prisma.campaign.update({ where: { id, orgId }, data: { status: "PAUSED" } });
       await logAudit({ orgId, userId, action: "CAMPAIGN_CANCELLED", targetType: "Campaign", targetId: id, metadata: { action: "pause" } });
       return NextResponse.json({ campaign: updated });
     }
@@ -81,12 +81,12 @@ export async function PATCH(
       }
       const pending = await prisma.campaignRecipient.findMany({ where: { campaignId: id, status: "PENDING" } });
       if (pending.length === 0) {
-        const updated = await prisma.campaign.update({ where: { id }, data: { status: "COMPLETED" } });
+        const updated = await prisma.campaign.update({ where: { id, orgId }, data: { status: "COMPLETED" } });
         return NextResponse.json({ campaign: updated });
       }
       const { enqueueCampaignRecipient } = await import("@/lib/queue");
       await Promise.allSettled(pending.map((r) => enqueueCampaignRecipient(r.id)));
-      const updated = await prisma.campaign.update({ where: { id }, data: { status: "SENDING" } });
+      const updated = await prisma.campaign.update({ where: { id, orgId }, data: { status: "SENDING" } });
       await logAudit({ orgId, userId, action: "CAMPAIGN_CREATED", targetType: "Campaign", targetId: id, metadata: { action: "resume" } });
       return NextResponse.json({ campaign: updated });
     }
@@ -98,7 +98,7 @@ export async function PATCH(
       const pending = await prisma.campaignRecipient.findMany({ where: { campaignId: id, status: "PENDING" } });
       await Promise.allSettled(pending.map((r) => cancelCampaignRecipientJob(r.id)));
       await prisma.campaignRecipient.updateMany({ where: { campaignId: id, status: "PENDING" }, data: { status: "FAILED", error: "Cancelled by user" } });
-      const updated = await prisma.campaign.update({ where: { id }, data: { status: "CANCELLED", failedCount: { increment: pending.length } } });
+      const updated = await prisma.campaign.update({ where: { id, orgId }, data: { status: "CANCELLED", failedCount: { increment: pending.length } } });
       await logAudit({ orgId, userId, action: "CAMPAIGN_CANCELLED", targetType: "Campaign", targetId: id, metadata: { recipientsCancelled: pending.length } });
       return NextResponse.json({ campaign: updated });
     }

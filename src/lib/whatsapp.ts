@@ -147,6 +147,7 @@ export function parseGupshupInbound(body: GupshupInboundPayload) {
   const p = body.payload;
   const text = p?.payload?.text;
   const from = p?.source || p?.sender?.phone;
+  const messageId = p?.id;
   if (!text || !from) return null;
-  return { from, text, name: p?.sender?.name };
+  return { from, text, name: p?.sender?.name, messageId };
 }

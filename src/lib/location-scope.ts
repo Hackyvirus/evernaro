@@ -8,3 +8,12 @@ export async function getOrgActiveLocationId(orgId: string): Promise<string | nu
   });
   return org?.activeLocationId ?? null;
 }
+
+export async function validateLocationId(locationId: string | undefined | null, orgId: string): Promise<string | null> {
+  if (!locationId) return null;
+  const location = await prisma.location.findFirst({
+    where: { id: locationId, orgId, isActive: true },
+    select: { id: true },
+  });
+  return location?.id ?? null;
+}

@@ -2,6 +2,8 @@ import { NextResponse, type NextRequest } from "next/server";
 import { UserRole } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireOrgMember, UnauthorizedError, ForbiddenError } from "@/lib/session";
+import { requireFeature, FeatureNotAllowedError } from "@/lib/billing/entitlements";
+import { requireActiveSubscription, SubscriptionSuspendedError } from "@/lib/subscription";
 
 function dayKey(d: Date) {
   return d.toISOString().slice(0, 10);
@@ -12,6 +14,20 @@ const RANGES: Record<string, number> = { "7d": 7, "14d": 14, "30d": 30, "90d": 9
 export async function GET(request: NextRequest) {
   try {
     const { orgId } = await requireOrgMember(UserRole.VIEWER);
+
+    try {
+      await requireFeature(orgId, "analytics");
+      await requireActiveSubscription(orgId);
+    } catch (err) {
+      if (err instanceof FeatureNotAllowedError) {
+        return NextResponse.json({ error: err.message }, { status: 403 });
+      }
+      if (err instanceof SubscriptionSuspendedError) {
+        return NextResponse.json({ error: err.message }, { status: 403 });
+      }
+      return NextResponse.json({ error: "Failed to verify plan limits" }, { status: 500 });
+    }
+
     const { searchParams } = new URL(request.url);
     const rangeKey = searchParams.get("range") ?? "30d";
     const days = RANGES[rangeKey] ?? 30;

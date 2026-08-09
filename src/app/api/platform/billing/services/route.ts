@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { requirePlatformAdminId, UnauthorizedError } from "@/lib/session";
+import { logAudit } from "@/lib/audit";
+import { AuditLogAction } from "@prisma/client";
 
 export async function GET() {
   try {
@@ -31,7 +33,7 @@ const bodySchema = z.object({
 
 export async function POST(req: Request) {
   try {
-    await requirePlatformAdminId();
+    const adminId = await requirePlatformAdminId();
     const parsed = bodySchema.safeParse(await req.json());
     if (!parsed.success) {
       return NextResponse.json(
@@ -44,6 +46,15 @@ export async function POST(req: Request) {
       update: parsed.data,
       create: parsed.data,
     });
+
+    await logAudit({
+      platformAdminId: adminId,
+      action: AuditLogAction.SETTINGS_CHANGED,
+      targetType: "BillableService",
+      targetId: service.id,
+      metadata: { key: service.key, name: service.name, action: "UPSERT" },
+    });
+
     return NextResponse.json({ service }, { status: 201 });
   } catch (err) {
     if (err instanceof UnauthorizedError) {

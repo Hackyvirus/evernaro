@@ -85,6 +85,11 @@ export async function PATCH(
       return NextResponse.json({ error: "Invalid input" }, { status: 400 });
     }
 
+    const existing = await prisma.organization.findUnique({ where: { id }, select: { id: true } });
+    if (!existing) {
+      return NextResponse.json({ error: "Organization not found" }, { status: 404 });
+    }
+
     const org = await prisma.organization.update({
       where: { id },
       data: { monthlyFeeInr: parsed.data.monthlyFeeInr },

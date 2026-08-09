@@ -69,7 +69,7 @@ export async function PATCH(
     }
 
     const updated = await prisma.membership.update({
-      where: { id },
+      where: { id, orgId },
       data: updateData,
       include: { contact: { select: { id: true, name: true, email: true, phone: true, telegramChatId: true, instagramUserId: true } } },
     });
@@ -99,7 +99,7 @@ export async function DELETE(
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 
-    await prisma.membership.delete({ where: { id } });
+    await prisma.membership.delete({ where: { id, orgId } });
     return NextResponse.json({ ok: true });
   } catch (err) {
     if (err instanceof UnauthorizedError) {

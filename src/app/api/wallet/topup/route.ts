@@ -32,21 +32,19 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Payments aren't configured yet — contact support." }, { status: 503 });
     }
 
-    const invoice = await prisma.invoice.create({
-      data: { orgId, type: "WALLET_TOPUP", amountInr, status: "PENDING" },
-    });
-
+    let order: { id: string };
     try {
-      const order = await createRazorpayOrder({ amountInr, receipt: invoice.id });
-      const updated = await prisma.invoice.update({
-        where: { id: invoice.id },
-        data: { razorpayOrderId: order.id },
-      });
-      return NextResponse.json({ ok: true, invoice: updated });
+      order = await createRazorpayOrder({ amountInr, receipt: `topup-${Date.now()}` });
     } catch (err) {
       const message = err instanceof Error ? err.message : "Razorpay order creation failed";
       return NextResponse.json({ error: message }, { status: 502 });
     }
+
+    const invoice = await prisma.invoice.create({
+      data: { orgId, type: "WALLET_TOPUP", amountInr, status: "PENDING", razorpayOrderId: order.id },
+    });
+
+    return NextResponse.json({ ok: true, invoice });
   } catch (err) {
     if (err instanceof UnauthorizedError) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

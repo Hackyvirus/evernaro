@@ -1,5 +1,6 @@
 "server-only";
 import { prisma } from "@/lib/prisma";
+import { SUBSCRIPTION_ACTIVE_STATUSES } from "./subscription-status";
 import type { UsageSummary } from "./types";
 
 export async function recordUsage(opts: {
@@ -60,6 +61,11 @@ async function getActualUsageForSummary(
       });
       return agg._sum.totalRecipients ?? 0;
     }
+    case "conversations":
+      return prisma.conversation.count({ where: { orgId } });
+    case "storage":
+      // No dedicated file-storage model yet; surface usage records if configured.
+      return getUsageForPeriod(orgId, serviceKey, periodStart, periodEnd).then((r) => r.used);
     default:
       return getUsageForPeriod(orgId, serviceKey, periodStart, periodEnd).then((r) => r.used);
   }
@@ -67,7 +73,7 @@ async function getActualUsageForSummary(
 
 export async function getOrgUsageSummary(orgId: string): Promise<UsageSummary[]> {
   const subscription = await prisma.customerSubscription.findFirst({
-    where: { orgId, status: { in: ["TRIALING", "ACTIVE", "PAST_DUE", "PAUSED", "INCOMPLETE"] } },
+    where: { orgId, status: { in: [...SUBSCRIPTION_ACTIVE_STATUSES, "PAST_DUE", "PAUSED"] } },
     include: { plan: { include: { limits: { include: { service: true } } } } },
   });
 

@@ -1,4 +1,4 @@
-import type { BillingFrequency, BillingType, InvoiceItemType } from "@prisma/client";
+import type { BillingFrequency, BillingType, Coupon, InvoiceItemType } from "@prisma/client";
 
 export type QuoteItem = {
   type: InvoiceItemType;
@@ -33,6 +33,7 @@ export type Quote = {
   periodStart: Date;
   periodEnd: Date;
   trialEnd?: Date | null;
+  coupon?: Coupon | null;
 };
 
 export type AddOnSelection = {

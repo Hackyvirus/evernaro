@@ -44,11 +44,12 @@ export async function scheduleAppointmentReminders(appointmentId: string) {
   let whatsappTemplateId: string | undefined;
   if (channel.type === ChannelType.WHATSAPP) {
     const template = await chooseWhatsAppTemplate(channel.id);
-    if (!template) {
-      // No approved template — skip WhatsApp automated reminders.
-      return;
+    if (template) {
+      whatsappTemplateId = template.id;
     }
-    whatsappTemplateId = template.id;
+    // If no approved template exists, we fall back to free text. This works
+    // within Meta's 24-hour customer-service window; outside the window the
+    // send will fail gracefully and the failure is logged.
   }
 
   for (const { at, label } of reminderTimes) {

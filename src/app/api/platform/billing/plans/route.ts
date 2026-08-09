@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { requirePlatformAdminId, UnauthorizedError } from "@/lib/session";
+import { logAudit } from "@/lib/audit";
+import { AuditLogAction } from "@prisma/client";
 
 export async function GET() {
   try {
@@ -53,9 +55,9 @@ const bodySchema = z.object({
   addOnIds: z.array(z.string().cuid()).default([]),
 });
 
-export async function POST(req: Request) {
+  export async function POST(req: Request) {
   try {
-    await requirePlatformAdminId();
+    const adminId = await requirePlatformAdminId();
     const parsed = bodySchema.safeParse(await req.json());
     if (!parsed.success) {
       return NextResponse.json(
@@ -74,6 +76,14 @@ export async function POST(req: Request) {
         planAddOns: { create: addOnIds.map((id) => ({ addOnId: id })) },
       },
       include: { limits: { include: { service: true } }, features: true, planAddOns: true },
+    });
+
+    await logAudit({
+      platformAdminId: adminId,
+      action: AuditLogAction.ORG_PLAN_CHANGED,
+      targetType: "SubscriptionPlan",
+      targetId: plan.id,
+      metadata: { slug: plan.slug, name: plan.name, action: "CREATE" },
     });
 
     return NextResponse.json({ plan }, { status: 201 });

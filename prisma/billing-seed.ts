@@ -6,13 +6,6 @@ const prisma = new PrismaClient({
   },
 });
 
-function slugify(input: string) {
-  return input
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/(^-|-$)/g, "");
-}
-
 export async function seedBillingCatalog() {
   const services = [
     { key: "conversations", name: "WhatsApp Conversations", unit: "conversation", description: "Inbound/outbound WhatsApp 24h conversation windows", category: "Messaging" },
@@ -34,18 +27,27 @@ export async function seedBillingCatalog() {
   const serviceMap = Object.fromEntries((await prisma.billableService.findMany()).map((s) => [s.key, s]));
 
   const addOns = [
-    { name: "Extra WhatsApp Pack", description: "1,000 additional conversation windows", priceInr: 999, frequency: BillingFrequency.MONTHLY, minQuantity: 1, maxQuantity: 10 },
-    { name: "Extra Team Seats", description: "5 additional staff users", priceInr: 499, frequency: BillingFrequency.MONTHLY, minQuantity: 1, maxQuantity: 20 },
-    { name: "Priority Support", description: "24x7 priority support and onboarding", priceInr: 1999, frequency: BillingFrequency.MONTHLY, minQuantity: 1, maxQuantity: 1 },
+    { name: "Extra WhatsApp Pack", slug: "extra-whatsapp-pack", description: "1,000 additional conversation windows", priceInr: 999, frequency: BillingFrequency.MONTHLY, minQuantity: 1, maxQuantity: 10, serviceKey: "conversations" as const, includedQuantity: 1000 },
+    { name: "Extra Team Seats", slug: "extra-team-seats", description: "5 additional staff users", priceInr: 499, frequency: BillingFrequency.MONTHLY, minQuantity: 1, maxQuantity: 20, serviceKey: "users" as const, includedQuantity: 5 },
+    { name: "Priority Support", slug: "priority-support", description: "24x7 priority support and onboarding", priceInr: 1999, frequency: BillingFrequency.MONTHLY, minQuantity: 1, maxQuantity: 1 },
   ];
 
-  const addOnRecords: Record<string, { id: string; name: string; priceInr: number; frequency: BillingFrequency; minQuantity: number; maxQuantity: number | null }> = {};
+  type AddOnRecord = { id: string; name: string; priceInr: number; frequency: BillingFrequency; minQuantity: number; maxQuantity: number | null };
+  const addOnRecords: Record<string, AddOnRecord> = {};
   for (const a of addOns) {
-    const slug = slugify(a.name);
+    const { serviceKey, includedQuantity, ...rest } = a;
     const record = await prisma.addOn.upsert({
-      where: { slug },
-      update: { ...a, slug },
-      create: { ...a, slug },
+      where: { slug: a.slug },
+      update: {
+        ...rest,
+        serviceId: serviceKey ? serviceMap[serviceKey]?.id ?? null : null,
+        includedQuantity: includedQuantity ?? 0,
+      },
+      create: {
+        ...rest,
+        serviceId: serviceKey ? serviceMap[serviceKey]?.id ?? null : null,
+        includedQuantity: includedQuantity ?? 0,
+      },
     });
     addOnRecords[record.id] = record;
   }

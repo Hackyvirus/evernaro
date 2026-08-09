@@ -2,12 +2,13 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import { Button, Card } from "@/components/ui";
+import { Button, Card, Input } from "@/components/ui";
 
 type QueueStatus = {
   token: string;
   publicToken: string;
   status: string;
+  isAfterHours?: boolean;
   position: number;
   ahead: number;
   estimatedWaitMin: number | null;
@@ -27,6 +28,8 @@ export default function PublicQueueTrackerPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [cancelling, setCancelling] = useState(false);
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false);
+  const [cancelPhone, setCancelPhone] = useState("");
 
   const refresh = useCallback(() => {
     return fetch(`/api/public/queue/${token}/status`)
@@ -47,11 +50,16 @@ export default function PublicQueueTrackerPage() {
   }, [token, refresh]);
 
   async function cancel() {
-    if (!confirm("Leave the queue? This cannot be undone.")) return;
     setCancelling(true);
-    const res = await fetch(`/api/public/queue/${token}/status`, { method: "DELETE" });
+    setError(null);
+    const res = await fetch(`/api/public/queue/${token}/status`, {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ phone: cancelPhone }),
+    });
     setCancelling(false);
     if (res.ok) {
+      setShowCancelConfirm(false);
       await refresh();
     } else {
       const data = await res.json().catch(() => ({}));
@@ -106,14 +114,43 @@ export default function PublicQueueTrackerPage() {
           </p>
         )}
 
+        {status.isAfterHours && status.status === "WAITING" && (
+          <div className="mb-6 rounded-lg bg-warning/10 p-3 text-sm text-warning">
+            This is an after-hours request. The business will be notified when they open.
+          </div>
+        )}
+
         {isInProgress && <p className="mb-6 text-sm font-medium text-success">You are being served.</p>}
 
         {isDone && <p className="mb-6 text-sm text-text-secondary">This queue session has ended.</p>}
 
-        {!isDone && (
-          <Button variant="ghost" loading={cancelling} onClick={cancel} className="w-full">
+        {!isDone && !showCancelConfirm && (
+          <Button variant="ghost" onClick={() => setShowCancelConfirm(true)} className="w-full">
             Leave queue
           </Button>
+        )}
+
+        {!isDone && showCancelConfirm && (
+          <div className="flex flex-col gap-3 rounded-lg border border-border p-4">
+            <p className="text-sm text-text-secondary">
+              Enter the phone number you joined with to leave the queue.
+            </p>
+            <Input
+              label="Phone number"
+              type="tel"
+              value={cancelPhone}
+              onChange={(e) => setCancelPhone(e.target.value)}
+              placeholder="Your phone number"
+            />
+            <div className="flex gap-2">
+              <Button variant="secondary" onClick={() => setShowCancelConfirm(false)} className="flex-1">
+                Back
+              </Button>
+              <Button variant="danger" loading={cancelling} onClick={cancel} className="flex-1">
+                Leave queue
+              </Button>
+            </div>
+          </div>
         )}
       </Card>
     </div>

@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
-import { joinQueue } from "@/lib/services/queue-service";
+import { findOrCreateContact, requireContactLimitIfNew, UsageLimitExceededError } from "@/lib/contact-identity";
+import { checkRateLimit, clientIp } from "@/lib/rate-limit";
+import { joinQueue, QueueDuplicateJoinError } from "@/lib/services/queue-service";
+import { isBusinessOpen, formatBusinessStatus } from "@/lib/business-hours";
 
 const joinSchema = z.object({
   queueId: z.string().min(1),
@@ -9,6 +12,7 @@ const joinSchema = z.object({
   staffId: z.string().optional(),
   name: z.string().min(1),
   phone: z.string().min(5),
+  website: z.string().max(0).optional(),
 });
 
 export async function POST(req: Request, { params }: { params: Promise<{ slug: string }> }) {
@@ -16,11 +20,22 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
 
   const org = await prisma.organization.findUnique({
     where: { slug },
-    select: { id: true, name: true, status: true },
+    select: { id: true, name: true, status: true, timezone: true, businessHours: true },
   });
 
   if (!org || org.status !== "ACTIVE") {
     return NextResponse.json({ error: "Business not found" }, { status: 404 });
+  }
+
+  const businessOpen = isBusinessOpen(org.timezone, org.businessHours);
+
+  const ip = clientIp(req);
+  const allowed = await checkRateLimit(`public:queue:join:${slug}:${ip}`, 10, 15 * 60);
+  if (!allowed) {
+    return NextResponse.json(
+      { error: "Too many requests. Please try again later." },
+      { status: 429 }
+    );
   }
 
   const body = await req.json();
@@ -42,40 +57,69 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
     return NextResponse.json({ error: "Queue not found" }, { status: 404 });
   }
 
-  let contact = await prisma.contact.findFirst({
-    where: { orgId: org.id, phone },
-  });
-  if (!contact) {
-    contact = await prisma.contact.create({
-      data: { orgId: org.id, name, phone },
+  if (serviceId) {
+    const service = await prisma.service.findFirst({
+      where: { id: serviceId, orgId: org.id, isActive: true },
+      select: { id: true },
     });
-  } else if (name && !contact.name) {
-    contact = await prisma.contact.update({
-      where: { id: contact.id },
-      data: { name },
-    });
+    if (!service) {
+      return NextResponse.json({ error: "Service not found" }, { status: 404 });
+    }
   }
 
-  const entry = await joinQueue({
-    orgId: org.id,
-    queueId,
-    contactId: contact.id,
-    serviceId,
-    staffId,
-  });
+  if (staffId) {
+    const staff = await prisma.staffProfile.findFirst({
+      where: { id: staffId, orgId: org.id, isActive: true },
+      select: { id: true },
+    });
+    if (!staff) {
+      return NextResponse.json({ error: "Staff member not found" }, { status: 404 });
+    }
+  }
 
-  return NextResponse.json(
-    {
-      entry: {
-        id: entry.id,
-        token: entry.token,
-        publicToken: entry.publicToken,
-        verificationCode: entry.verificationCode,
-        position: entry.position,
-        estimatedWaitMin: entry.estimatedWaitMin,
-        queue: entry.queue,
+  try {
+    await requireContactLimitIfNew({ name, phone }, org.id);
+  } catch (err) {
+    if (err instanceof UsageLimitExceededError) {
+      return NextResponse.json({ error: err.message }, { status: 402 });
+    }
+    throw err;
+  }
+
+  const contact = await findOrCreateContact({ name, phone }, org.id);
+
+  try {
+    const entry = await joinQueue({
+      orgId: org.id,
+      queueId,
+      contactId: contact.id,
+      serviceId,
+      staffId,
+      isAfterHours: !businessOpen,
+    });
+
+    const closedMessage = businessOpen ? undefined : formatBusinessStatus(org.timezone, org.businessHours).message;
+    return NextResponse.json(
+      {
+        entry: {
+          token: entry.token,
+          publicToken: entry.publicToken,
+          position: entry.position,
+          estimatedWaitMin: entry.estimatedWaitMin,
+          isAfterHours: entry.isAfterHours,
+          queue: entry.queue ? { name: entry.queue.name } : null,
+        },
+        closedMessage,
       },
-    },
-    { status: 201 }
-  );
+      { status: 201 }
+    );
+  } catch (err) {
+    if (err instanceof QueueDuplicateJoinError) {
+      return NextResponse.json(
+        { error: "You are already in this queue" },
+        { status: 409 }
+      );
+    }
+    throw err;
+  }
 }

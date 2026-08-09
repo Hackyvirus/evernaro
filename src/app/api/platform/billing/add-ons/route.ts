@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { requirePlatformAdminId, UnauthorizedError } from "@/lib/session";
-import { BillingFrequency } from "@prisma/client";
+import { logAudit } from "@/lib/audit";
+import { BillingFrequency, AuditLogAction } from "@prisma/client";
 
 export async function GET() {
   try {
@@ -33,7 +34,7 @@ const bodySchema = z.object({
 
 export async function POST(req: Request) {
   try {
-    await requirePlatformAdminId();
+    const adminId = await requirePlatformAdminId();
     const parsed = bodySchema.safeParse(await req.json());
     if (!parsed.success) {
       return NextResponse.json(
@@ -42,6 +43,15 @@ export async function POST(req: Request) {
       );
     }
     const addOn = await prisma.addOn.create({ data: parsed.data });
+
+    await logAudit({
+      platformAdminId: adminId,
+      action: AuditLogAction.SETTINGS_CHANGED,
+      targetType: "AddOn",
+      targetId: addOn.id,
+      metadata: { slug: addOn.slug, name: addOn.name, action: "CREATE" },
+    });
+
     return NextResponse.json({ addOn }, { status: 201 });
   } catch (err) {
     if (err instanceof UnauthorizedError) {

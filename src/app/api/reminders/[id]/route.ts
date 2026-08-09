@@ -49,7 +49,18 @@ export async function PATCH(
     if (type !== undefined) updateData.type = type;
     if (message !== undefined) updateData.message = message;
     if (scheduledFor !== undefined) updateData.scheduledFor = new Date(scheduledFor);
-    if (assignedToId !== undefined) updateData.assignedToId = assignedToId || null;
+    if (assignedToId !== undefined) {
+      if (assignedToId) {
+        const user = await prisma.user.findFirst({
+          where: { id: assignedToId, orgId, isActive: true },
+          select: { id: true },
+        });
+        if (!user) {
+          return NextResponse.json({ error: "Assigned user not found" }, { status: 400 });
+        }
+      }
+      updateData.assignedToId = assignedToId || null;
+    }
     if (recurrence !== undefined) updateData.recurrence = recurrence;
 
     if (Object.keys(updateData).length === 0) {
@@ -63,7 +74,7 @@ export async function PATCH(
     }
 
     const updated = await prisma.reminder.update({
-      where: { id },
+      where: { id, orgId },
       data: updateData,
       include: { contact: true, channel: { select: { type: true } }, assignedTo: { select: { id: true, name: true } } },
     });
@@ -113,7 +124,7 @@ export async function DELETE(
     }
 
     const { removed } = await cancelReminderJob(id);
-    await prisma.reminder.update({ where: { id }, data: { status: "CANCELLED" } });
+    await prisma.reminder.update({ where: { id, orgId }, data: { status: "CANCELLED" } });
 
     await logAudit({
       orgId,

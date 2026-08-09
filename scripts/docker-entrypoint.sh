@@ -6,4 +6,7 @@ if [ "$RUN_MIGRATIONS" = "true" ]; then
   npx prisma migrate deploy
 fi
 
+# Bail early if required secrets/env vars are missing or invalid.
+npm run verify-env
+
 exec node server.js

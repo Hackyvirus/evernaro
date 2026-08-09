@@ -1,8 +1,9 @@
 import { prisma } from "@/lib/prisma";
 
-// Nothing else stops one org from running unbounded WhatsApp/Twilio/OpenAI
-// spend through Campaigns — this is the guard for that. Override via env if
-// a client's legitimate volume outgrows the default.
+// Hard platform-wide safety cap for daily campaign volume. Per-plan campaign
+// limits are enforced server-side via requireUsageLimit(orgId, "campaigns", qty)
+// in src/lib/billing/entitlements.ts; this env override remains for platform
+// analytics / observability only.
 const DEFAULT_DAILY_CAMPAIGN_RECIPIENT_LIMIT = 2000;
 
 export function dailyCampaignRecipientLimit(): number {
@@ -18,16 +19,4 @@ export async function dailyCampaignRecipientsUsed(orgId: string): Promise<number
     _sum: { totalRecipients: true },
   });
   return result._sum.totalRecipients ?? 0;
-}
-
-const DEFAULT_SEAT_LIMIT = 5;
-
-export function seatLimit(): number {
-  const raw = process.env.SEAT_LIMIT;
-  const parsed = raw ? Number(raw) : NaN;
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_SEAT_LIMIT;
-}
-
-export async function activeSeatsUsed(orgId: string): Promise<number> {
-  return prisma.user.count({ where: { orgId, isActive: true } });
 }

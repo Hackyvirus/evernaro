@@ -174,17 +174,22 @@ export async function creditWallet(
   orgId: string,
   amountPaise: number,
   type: Extract<WalletTransactionType, "TOPUP" | "MANUAL_CREDIT">,
-  opts: { invoiceId?: string; note?: string } = {}
+  opts: { invoiceId?: string; note?: string } = {},
+  tx?: Prisma.TransactionClient
 ): Promise<WalletTransaction> {
-  const wallet = await getOrCreateWallet(orgId);
+  const doCredit = async (client: Prisma.TransactionClient) => {
+    const wallet = await client.whatsAppWallet.upsert({
+      where: { orgId },
+      create: { orgId },
+      update: {},
+    });
 
-  const result = await prisma.$transaction(async (tx) => {
     if (opts.invoiceId) {
-      const existing = await tx.walletTransaction.findUnique({ where: { invoiceId: opts.invoiceId } });
+      const existing = await client.walletTransaction.findUnique({ where: { invoiceId: opts.invoiceId } });
       if (existing) return existing;
     }
 
-    const updated = await tx.$queryRaw<{ balancePaise: number }[]>`
+    const updated = await client.$queryRaw<{ balancePaise: number }[]>`
       UPDATE "WhatsAppWallet" SET "balancePaise" = "balancePaise" + ${amountPaise}, "updatedAt" = now()
       WHERE id = ${wallet.id}
       RETURNING "balancePaise"
@@ -192,7 +197,7 @@ export async function creditWallet(
     const newBalance = updated[0].balancePaise;
 
     try {
-      return await tx.walletTransaction.create({
+      return await client.walletTransaction.create({
         data: {
           walletId: wallet.id,
           type,
@@ -204,15 +209,22 @@ export async function creditWallet(
       });
     } catch (err) {
       if (isUniqueConstraintError(err) && opts.invoiceId) {
-        await tx.$executeRaw`
+        await client.$executeRaw`
           UPDATE "WhatsAppWallet" SET "balancePaise" = "balancePaise" - ${amountPaise}, "updatedAt" = now() WHERE id = ${wallet.id}
         `;
-        const winner = await tx.walletTransaction.findUnique({ where: { invoiceId: opts.invoiceId } });
+        const winner = await client.walletTransaction.findUnique({ where: { invoiceId: opts.invoiceId } });
         if (winner) return winner;
       }
       throw err;
     }
-  });
+  };
+
+  if (tx) {
+    return doCredit(tx);
+  }
+
+  const wallet = await getOrCreateWallet(orgId);
+  const result = await prisma.$transaction(doCredit);
 
   const fresh = await prisma.whatsAppWallet.findUniqueOrThrow({ where: { id: wallet.id } });
   if (fresh.lowBalanceAlertSentAt && fresh.balancePaise > fresh.lowBalanceThresholdPaise) {

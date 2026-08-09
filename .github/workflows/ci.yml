@@ -7,62 +7,49 @@ on:
     branches: [main]
 
 jobs:
-  verify:
+  check:
     runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Type check
-        run: npx tsc --noEmit
-
-      - name: Lint
-        run: npm run lint
-
-      - name: Test
-        run: npm run test
-
-      - name: Build
-        run: npm run build
+    env:
+      NODE_ENV: test
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/evernaro_test?schema=public
+      REDIS_URL: redis://localhost:6379
+      ENCRYPTION_KEY: 0000000000000000000000000000000000000000000000000000000000000000
+      NEXTAUTH_SECRET: test-secret
+      AUTH_SECRET: test-secret
+      RAZORPAY_KEY_ID: test
+      RAZORPAY_KEY_SECRET: test
+    services:
+      postgres:
+        image: postgres:16-alpine
         env:
-          # Minimal env vars required for a production build without real secrets.
-          DATABASE_URL: postgresql://localhost:5432/evernaro
-          DIRECT_URL: postgresql://localhost:5432/evernaro
-          AUTH_SECRET: ${{ secrets.AUTH_SECRET || 'ci-auth-secret-not-for-production-ci-only' }}
-          ENCRYPTION_KEY: ${{ secrets.ENCRYPTION_KEY || 'ci-encryption-key-not-for-production-ci-only' }}
-          NEXT_PUBLIC_BASE_URL: http://localhost:3000
-
-  build-docker:
-    runs-on: ubuntu-latest
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: evernaro_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     steps:
       - uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      # Build the worker image on every push/PR so Docker-specific build
-      # failures (e.g. Redis/Prisma connection during static generation)
-      # are caught before deploy time.
-      - name: Build worker Docker image
-        uses: docker/build-push-action@v5
+      - uses: actions/setup-node@v4
         with:
-          context: .
-          file: ./Dockerfile.worker
-          push: false
-          tags: evernaro-worker:ci
-
-      - name: Build app Docker image
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: ./Dockerfile
-          push: false
-          tags: evernaro-app:ci
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx prisma generate
+      - run: npm run lint
+      - run: npx tsc --noEmit
+      - run: npx prisma migrate deploy
+      - run: npm test

@@ -1,10 +1,22 @@
 import { prisma } from "@/lib/prisma";
 import { QueueEntryStatus, type Prisma } from "@prisma/client";
 import crypto from "node:crypto";
+
+export function generateVerificationCode(): string {
+  return String(crypto.randomInt(100000, 1000000));
+}
 import { enqueueNoShow, cancelNoShowJob } from "@/lib/queue";
+import { sendQueueNotification, sendBusinessQueueNotification } from "@/lib/customer-notifications";
 
 const OTP_TTL_MS = 5 * 60 * 1000;
 const DEFAULT_SERVICE_MINUTES = 5;
+
+export class QueueDuplicateJoinError extends Error {
+  constructor() {
+    super("Contact already has an active entry in this queue");
+    this.name = "QueueDuplicateJoinError";
+  }
+}
 
 export async function getQueuesByOrg(orgId: string, locationId?: string | null) {
   return prisma.queue.findMany({
@@ -53,10 +65,6 @@ export async function getNextPosition(queueId: string) {
   return (last?.position ?? 0) + 1;
 }
 
-export function generateVerificationCode(): string {
-  return String(Math.floor(100000 + Math.random() * 900000));
-}
-
 export function generatePublicToken(): string {
   return crypto.randomUUID().replace(/-/g, "");
 }
@@ -82,7 +90,19 @@ export async function joinQueue(data: {
   serviceId?: string;
   staffId?: string;
   token?: string;
+  isAfterHours?: boolean;
 }) {
+  const existing = await prisma.queueEntry.findFirst({
+    where: {
+      queueId: data.queueId,
+      contactId: data.contactId,
+      status: { in: [QueueEntryStatus.WAITING, QueueEntryStatus.CALLED] },
+    },
+  });
+  if (existing) {
+    throw new QueueDuplicateJoinError();
+  }
+
   const position = await getNextPosition(data.queueId);
   const token = data.token ?? (await generateDisplayToken(data.queueId, position));
   const publicToken = generatePublicToken();
@@ -90,7 +110,7 @@ export async function joinQueue(data: {
   const verificationCodeExpiresAt = new Date(Date.now() + OTP_TTL_MS);
   const estimatedWaitMin = await computeEstimatedWaitMin(data.queueId, position);
 
-  return prisma.queueEntry.create({
+  const entry = await prisma.queueEntry.create({
     data: {
       orgId: data.orgId,
       queueId: data.queueId,
@@ -104,9 +124,34 @@ export async function joinQueue(data: {
       position,
       estimatedWaitMin,
       status: QueueEntryStatus.WAITING,
+      isAfterHours: data.isAfterHours ?? false,
     },
     include: { contact: true, service: true, staff: true, queue: true },
   });
+
+  const org = await prisma.organization.findUnique({
+    where: { id: data.orgId },
+    select: { name: true },
+  });
+
+  void sendQueueNotification(data.orgId, entry.contact, "joined", {
+    token: entry.token,
+    position: entry.position,
+    estimatedWaitMin: entry.estimatedWaitMin ?? 0,
+    queueName: entry.queue.name,
+    businessName: org?.name ?? "",
+    serviceName: entry.service?.name,
+    staffName: entry.staff?.name,
+  });
+
+  void sendBusinessQueueNotification(
+    data.orgId,
+    { token: entry.token, contact: entry.contact, queue: entry.queue },
+    org?.name ?? "",
+    entry.isAfterHours
+  );
+
+  return entry;
 }
 
 async function generateDisplayToken(queueId: string, position: number) {
@@ -115,12 +160,37 @@ async function generateDisplayToken(queueId: string, position: number) {
   return `${prefix}-${position}`;
 }
 
+export class QueueInvalidTransitionError extends Error {
+  constructor() {
+    super("Invalid queue entry status transition");
+    this.name = "QueueInvalidTransitionError";
+  }
+}
+
+const VALID_QUEUE_TRANSITIONS: Record<QueueEntryStatus, QueueEntryStatus[]> = {
+  [QueueEntryStatus.WAITING]: [QueueEntryStatus.CALLED, QueueEntryStatus.CANCELLED],
+  [QueueEntryStatus.CALLED]: [QueueEntryStatus.IN_PROGRESS, QueueEntryStatus.NO_SHOW, QueueEntryStatus.CANCELLED],
+  [QueueEntryStatus.IN_PROGRESS]: [QueueEntryStatus.COMPLETED, QueueEntryStatus.CANCELLED],
+  [QueueEntryStatus.COMPLETED]: [],
+  [QueueEntryStatus.CANCELLED]: [],
+  [QueueEntryStatus.NO_SHOW]: [],
+};
+
 export async function updateQueueEntryStatus(
   id: string,
   orgId: string,
   status: QueueEntryStatus,
   extra?: { staffId?: string }
 ) {
+  const entry = await prisma.queueEntry.findFirst({
+    where: { id, orgId },
+    select: { status: true },
+  });
+  if (!entry) return { count: 0 };
+  if (!VALID_QUEUE_TRANSITIONS[entry.status].includes(status)) {
+    throw new QueueInvalidTransitionError();
+  }
+
   const data: Prisma.QueueEntryUncheckedUpdateManyInput = { status };
   if (status === QueueEntryStatus.CALLED) data.calledAt = new Date();
   if (status === QueueEntryStatus.IN_PROGRESS) data.startedAt = new Date();
@@ -129,33 +199,89 @@ export async function updateQueueEntryStatus(
   if (status === QueueEntryStatus.NO_SHOW) data.noShowAt = new Date();
   if (extra?.staffId) data.staffId = extra.staffId;
 
-  return prisma.queueEntry.updateMany({
+  const result = await prisma.queueEntry.updateMany({
     where: { id, orgId },
     data,
   });
+
+  if (result.count > 0 && (status === QueueEntryStatus.COMPLETED || status === QueueEntryStatus.CANCELLED)) {
+    const entry = await prisma.queueEntry.findFirst({
+      where: { id, orgId },
+      include: { contact: true, service: true, staff: true, queue: true },
+    });
+    if (entry?.contact) {
+      const org = await prisma.organization.findUnique({
+        where: { id: orgId },
+        select: { name: true },
+      });
+      void sendQueueNotification(orgId, entry.contact, status === QueueEntryStatus.COMPLETED ? "completed" : "cancelled", {
+        token: entry.token,
+        position: entry.position,
+        estimatedWaitMin: entry.estimatedWaitMin ?? 0,
+        queueName: entry.queue.name,
+        businessName: org?.name ?? "",
+        serviceName: entry.service?.name,
+        staffName: entry.staff?.name,
+      });
+    }
+  }
+
+  return result;
 }
 
 export async function callNextInQueue(queueId: string, orgId: string, staffId?: string) {
-  const next = await prisma.queueEntry.findFirst({
-    where: {
+  const entry = await prisma.$transaction(async (tx) => {
+    // Lock the next waiting entry so concurrent callers receive different rows.
+    const rows = await tx.$queryRawUnsafe<Array<{ id: string }>>(
+      `SELECT id FROM "QueueEntry" WHERE "queueId" = $1 AND "orgId" = $2 AND "status" = $3 ORDER BY "position" ASC, "createdAt" ASC LIMIT 1 FOR UPDATE SKIP LOCKED`,
       queueId,
       orgId,
-      status: QueueEntryStatus.WAITING,
-    },
-    orderBy: [{ position: "asc" }, { createdAt: "asc" }],
-    include: { queue: true },
+      QueueEntryStatus.WAITING
+    );
+    if (!rows.length) return null;
+
+    const nextId = rows[0].id;
+    await tx.queueEntry.update({
+      where: { id: nextId },
+      data: {
+        status: QueueEntryStatus.CALLED,
+        calledAt: new Date(),
+        ...(staffId ? { staffId } : {}),
+      },
+    });
+
+    return tx.queueEntry.findUnique({
+      where: { id: nextId },
+      include: { queue: true, contact: true, service: true, staff: true },
+    });
   });
 
-  if (!next) return null;
+  if (!entry) return null;
 
-  await updateQueueEntryStatus(next.id, orgId, QueueEntryStatus.CALLED, { staffId });
-  await scheduleNoShowCheck(next.id, orgId, next.queue.noShowThresholdSeconds);
+  const org = await prisma.organization.findUnique({
+    where: { id: orgId },
+    select: { name: true },
+  });
+
+  if (entry.contact) {
+    void sendQueueNotification(orgId, entry.contact, "called", {
+      token: entry.token,
+      position: entry.position,
+      estimatedWaitMin: entry.estimatedWaitMin ?? 0,
+      queueName: entry.queue.name,
+      businessName: org?.name ?? "",
+      serviceName: entry.service?.name,
+      staffName: entry.staff?.name,
+    });
+  }
+
+  await scheduleNoShowCheck(entry.id, orgId, entry.queue.noShowThresholdSeconds);
 
   // Re-normalize positions for remaining waiting entries
   await normalizeQueuePositions(queueId);
 
   return prisma.queueEntry.findUnique({
-    where: { id: next.id },
+    where: { id: entry.id },
     include: { contact: true, service: true, staff: true },
   });
 }
@@ -201,17 +327,17 @@ export async function getPublicQueueStatus(publicToken: string) {
   });
 
   return {
-    id: entry.id,
     token: entry.token,
     publicToken: entry.publicToken,
     status: entry.status,
+    isAfterHours: entry.isAfterHours,
     position: entry.position,
     ahead,
-    estimatedWaitMin: entry.estimatedWaitMin,
-    queue: { id: entry.queue.id, name: entry.queue.name },
-    contact: entry.contact,
-    service: entry.service,
-    staff: entry.staff,
+    estimatedWaitMin: entry.estimatedWaitMin ?? 0,
+    queue: { name: entry.queue.name },
+    service: entry.service
+      ? { name: entry.service.name, durationMin: entry.service.durationMin }
+      : null,
     calledAt: entry.calledAt,
     startedAt: entry.startedAt,
     completedAt: entry.completedAt,
@@ -250,11 +376,35 @@ export async function verifyQueueEntry(publicToken: string, code: string, orgId:
   return { ok: true, entry: await getQueueEntryByPublicToken(publicToken) };
 }
 
-export async function cancelQueueEntryByPublicToken(publicToken: string) {
+export async function cancelQueueEntryByPublicToken(publicToken: string, verificationCode?: string, phone?: string) {
   const entry = await getQueueEntryByPublicToken(publicToken);
   if (!entry) return null;
   if (entry.status === QueueEntryStatus.COMPLETED || entry.status === QueueEntryStatus.NO_SHOW) {
-    return entry;
+    return {
+      token: entry.token,
+      publicToken: entry.publicToken,
+      status: entry.status,
+    };
+  }
+
+  // Public token alone is not enough to cancel. Require either the phone
+  // number the customer joined with, or the original verification code.
+  if (phone) {
+    if (!entry.contact?.phone || entry.contact.phone.replace(/\D/g, "") !== phone.replace(/\D/g, "")) {
+      return { error: "Phone number does not match this queue entry" as const };
+    }
+  } else if (entry.verificationCode) {
+    if (!verificationCode) {
+      return { error: "Verification code is required" as const };
+    }
+    if (entry.verificationCode !== verificationCode) {
+      return { error: "Invalid verification code" as const };
+    }
+    if (entry.verificationCodeExpiresAt && entry.verificationCodeExpiresAt < new Date()) {
+      return { error: "Verification code has expired" as const };
+    }
+  } else {
+    return { error: "Verification is required to cancel" as const };
   }
 
   const updated = await prisma.queueEntry.update({
@@ -263,7 +413,28 @@ export async function cancelQueueEntryByPublicToken(publicToken: string) {
   });
   await cancelNoShowJob(entry.id);
   await normalizeQueuePositions(entry.queueId);
-  return updated;
+
+  if (entry.contact) {
+    const org = await prisma.organization.findUnique({
+      where: { id: entry.orgId },
+      select: { name: true },
+    });
+    void sendQueueNotification(entry.orgId, entry.contact, "cancelled", {
+      token: entry.token,
+      position: entry.position,
+      estimatedWaitMin: entry.estimatedWaitMin ?? 0,
+      queueName: entry.queue.name,
+      businessName: org?.name ?? "",
+      serviceName: entry.service?.name,
+      staffName: entry.staff?.name,
+    });
+  }
+
+  return {
+    token: updated.token,
+    publicToken: updated.publicToken,
+    status: updated.status,
+  };
 }
 
 export async function scheduleNoShowCheck(queueEntryId: string, orgId: string, thresholdSeconds: number) {

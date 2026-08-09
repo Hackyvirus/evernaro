@@ -14,7 +14,13 @@ vi.mock("@/lib/prisma", () => ({
   },
 }));
 
-import { requireOrgId, requirePlatformAdminId, UnauthorizedError } from "./session";
+import {
+  requireOrgId,
+  requirePlatformAdminId,
+  requireValidDashboardSession,
+  requireValidPlatformSession,
+  UnauthorizedError,
+} from "./session";
 
 beforeEach(() => {
   authMock.mockReset();
@@ -49,7 +55,7 @@ describe("requireOrgId", () => {
 
   it("returns the orgId when the session and DB agree", async () => {
     authMock.mockResolvedValue({ user: { id: "user_1", orgId: "org_A" } });
-    findUniqueUserMock.mockResolvedValue({ orgId: "org_A", isActive: true });
+    findUniqueUserMock.mockResolvedValue({ orgId: "org_A", isActive: true, emailVerified: true, org: { status: "ACTIVE" } });
     await expect(requireOrgId()).resolves.toBe("org_A");
   });
 });
@@ -70,5 +76,43 @@ describe("requirePlatformAdminId", () => {
     authMock.mockResolvedValue({ user: { id: "admin_1", isPlatformAdmin: true } });
     findUniquePlatformAdminMock.mockResolvedValue({ id: "admin_1" });
     await expect(requirePlatformAdminId()).resolves.toBe("admin_1");
+  });
+});
+
+describe("requireValidDashboardSession", () => {
+  it("throws when the DB no longer has this user in the session's org", async () => {
+    authMock.mockResolvedValue({ user: { id: "user_1", orgId: "org_A", role: "VIEWER" } });
+    findUniqueUserMock.mockResolvedValue({ orgId: "org_B", role: "VIEWER", isActive: true });
+    await expect(requireValidDashboardSession()).rejects.toThrow(UnauthorizedError);
+  });
+
+  it("throws when the user is inactive", async () => {
+    authMock.mockResolvedValue({ user: { id: "user_1", orgId: "org_A", role: "VIEWER" } });
+    findUniqueUserMock.mockResolvedValue({ orgId: "org_A", role: "VIEWER", isActive: false });
+    await expect(requireValidDashboardSession()).rejects.toThrow(UnauthorizedError);
+  });
+
+  it("returns the org details when the session and DB agree", async () => {
+    authMock.mockResolvedValue({ user: { id: "user_1", orgId: "org_A", role: "ADMIN" } });
+    findUniqueUserMock.mockResolvedValue({ orgId: "org_A", role: "ADMIN", isActive: true, emailVerified: true, org: { status: "ACTIVE" } });
+    await expect(requireValidDashboardSession()).resolves.toEqual({
+      orgId: "org_A",
+      userId: "user_1",
+      role: "ADMIN",
+    });
+  });
+});
+
+describe("requireValidPlatformSession", () => {
+  it("throws when the admin record no longer exists", async () => {
+    authMock.mockResolvedValue({ user: { id: "admin_1", isPlatformAdmin: true } });
+    findUniquePlatformAdminMock.mockResolvedValue(null);
+    await expect(requireValidPlatformSession()).rejects.toThrow(UnauthorizedError);
+  });
+
+  it("returns the admin id when everything checks out", async () => {
+    authMock.mockResolvedValue({ user: { id: "admin_1", isPlatformAdmin: true } });
+    findUniquePlatformAdminMock.mockResolvedValue({ id: "admin_1" });
+    await expect(requireValidPlatformSession()).resolves.toBe("admin_1");
   });
 });

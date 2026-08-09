@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { requirePlatformAdminId, UnauthorizedError } from "@/lib/session";
-import { CouponType, CouponDuration } from "@prisma/client";
+import { logAudit } from "@/lib/audit";
+import { CouponType, CouponDuration, AuditLogAction } from "@prisma/client";
 
 export async function GET() {
   try {
@@ -37,7 +38,7 @@ const bodySchema = z.object({
 
 export async function POST(req: Request) {
   try {
-    await requirePlatformAdminId();
+    const adminId = await requirePlatformAdminId();
     const parsed = bodySchema.safeParse(await req.json());
     if (!parsed.success) {
       return NextResponse.json(
@@ -62,6 +63,15 @@ export async function POST(req: Request) {
         isActive: data.isActive,
       },
     });
+
+    await logAudit({
+      platformAdminId: adminId,
+      action: AuditLogAction.SETTINGS_CHANGED,
+      targetType: "Coupon",
+      targetId: coupon.id,
+      metadata: { code: coupon.code, action: "CREATE" },
+    });
+
     return NextResponse.json({ coupon }, { status: 201 });
   } catch (err) {
     if (err instanceof UnauthorizedError) {

@@ -42,7 +42,7 @@ export async function PATCH(
     }
 
     const updated = await prisma.resource.update({
-      where: { id },
+      where: { id, orgId },
       data: parsed.data,
     });
 
@@ -74,7 +74,7 @@ export async function DELETE(
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 
-    await prisma.resource.delete({ where: { id } });
+    await prisma.resource.delete({ where: { id, orgId } });
 
     return NextResponse.json({ ok: true });
   } catch (err) {

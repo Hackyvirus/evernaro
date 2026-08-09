@@ -75,12 +75,22 @@ function channelDetail(channel: ChannelSummary | undefined): string | null {
 export default function ChannelsPage() {
   const [channels, setChannels] = useState<ChannelSummary[]>([]);
   const [loaded, setLoaded] = useState(false);
+  const [error, setError] = useState<string>("");
   const role = useRole();
 
   useEffect(() => {
     fetch("/api/channels")
-      .then((r) => r.json())
-      .then((d) => setChannels(d.channels ?? []))
+      .then(async (r) => {
+        if (!r.ok) {
+          const data = await r.json().catch(() => ({}));
+          setError(data.error ?? "Failed to load channels");
+          return;
+        }
+        const d = await r.json();
+        setChannels(d.channels ?? []);
+        setError("");
+      })
+      .catch(() => setError("Failed to load channels"))
       .finally(() => setLoaded(true));
   }, []);
 
@@ -92,6 +102,11 @@ export default function ChannelsPage() {
       />
 
       <div className="flex flex-1 flex-col gap-6 p-6">
+        {error && (
+          <div className="rounded-md bg-danger-light px-3 py-2 text-sm text-danger">
+            {error}
+          </div>
+        )}
         {!loaded ? (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {Array.from({ length: 5 }).map((_, i) => (

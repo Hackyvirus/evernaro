@@ -13,6 +13,9 @@ import {
   Search,
   Eye,
   X,
+  CreditCard,
+  Receipt,
+  AlertCircle,
 } from "lucide-react";
 
 interface Plan {
@@ -80,8 +83,40 @@ interface Metrics {
     paymentFailed: number;
     cancelled: number;
     paused: number;
+    expired: number;
+    incomplete: number;
   };
   customersByPlan: { planId: string; planName: string; active: number; trialing: number }[];
+}
+
+interface PlanSubscriptionCounts {
+  planId: string;
+  active: number;
+  trialing: number;
+}
+
+interface PaymentRow {
+  id: string;
+  orgId: string;
+  org: { id: string; name: string };
+  amountInr: number;
+  status: string;
+  razorpayPaymentId: string | null;
+  failureReason: string | null;
+  invoice: { id: string } | null;
+  createdAt: string | Date;
+}
+
+interface InvoiceRow {
+  id: string;
+  orgId: string;
+  org: { id: string; name: string };
+  amountInr: number;
+  status: string;
+  type: string;
+  createdAt: string | Date;
+  paidAt: string | Date | null;
+  razorpayOrderId: string | null;
 }
 
 interface SubscriptionRow {
@@ -111,6 +146,9 @@ interface SubscriptionRow {
 const TABS = [
   { id: "overview", label: "Overview", icon: LayoutDashboard },
   { id: "subscriptions", label: "Subscriptions", icon: Users },
+  { id: "payments", label: "Payments", icon: CreditCard },
+  { id: "invoices", label: "Invoices", icon: Receipt },
+  { id: "failedPayments", label: "Failed payments", icon: AlertCircle },
   { id: "plans", label: "Plans", icon: Layers },
   { id: "services", label: "Services", icon: Package },
   { id: "addOns", label: "Add-ons", icon: Tag },
@@ -126,6 +164,10 @@ interface Props {
   tax: TaxConfig | null;
   metrics: Metrics;
   initialSubscriptions: SubscriptionRow[];
+  planSubscriptionCounts: PlanSubscriptionCounts[];
+  allPayments: PaymentRow[];
+  allInvoices: InvoiceRow[];
+  failedPayments: PaymentRow[];
 }
 
 function formatCurrency(amount: number) {
@@ -141,7 +183,19 @@ function statusVariant(status: string): "default" | "success" | "warning" | "dan
   return "default";
 }
 
-export function BillingCatalogTabs({ plans, services, addOns, coupons, tax, metrics, initialSubscriptions }: Props) {
+export function BillingCatalogTabs({
+  plans,
+  services,
+  addOns,
+  coupons,
+  tax,
+  metrics,
+  initialSubscriptions,
+  planSubscriptionCounts,
+  allPayments,
+  allInvoices,
+  failedPayments,
+}: Props) {
   const [tab, setTab] = useState("overview");
   const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState("");
@@ -223,7 +277,7 @@ export function BillingCatalogTabs({ plans, services, addOns, coupons, tax, metr
             </Card>
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <Card className="p-5">
               <p className="text-xs text-text-secondary">Active subscriptions</p>
               <p className="mt-1 text-2xl font-extrabold text-text">{metrics.statusCounts.active}</p>
@@ -247,6 +301,14 @@ export function BillingCatalogTabs({ plans, services, addOns, coupons, tax, metr
             <Card className="p-5">
               <p className="text-xs text-text-secondary">Paused</p>
               <p className="mt-1 text-2xl font-extrabold text-text">{metrics.statusCounts.paused}</p>
+            </Card>
+            <Card className="p-5">
+              <p className="text-xs text-text-secondary">Expired</p>
+              <p className="mt-1 text-2xl font-extrabold text-text">{metrics.statusCounts.expired}</p>
+            </Card>
+            <Card className="p-5">
+              <p className="text-xs text-text-secondary">Incomplete</p>
+              <p className="mt-1 text-2xl font-extrabold text-text">{metrics.statusCounts.incomplete}</p>
             </Card>
           </div>
 
@@ -284,44 +346,40 @@ export function BillingCatalogTabs({ plans, services, addOns, coupons, tax, metr
               <thead className="bg-surface text-text-secondary">
                 <tr>
                   <th className="px-3 py-2 text-start text-xs uppercase">Client</th>
+                  <th className="px-3 py-2 text-start text-xs uppercase">Owner</th>
                   <th className="px-3 py-2 text-start text-xs uppercase">Plan</th>
                   <th className="px-3 py-2 text-start text-xs uppercase">Status</th>
                   <th className="px-3 py-2 text-start text-xs uppercase">Interval</th>
                   <th className="px-3 py-2 text-start text-xs uppercase">Amount</th>
+                  <th className="px-3 py-2 text-start text-xs uppercase">MRR</th>
                   <th className="px-3 py-2 text-start text-xs uppercase">Started</th>
-                  <th className="px-3 py-2 text-start text-xs uppercase">Next billing</th>
+                  <th className="px-3 py-2 text-start text-xs uppercase">Renewal</th>
                   <th className="px-3 py-2 text-start text-xs uppercase">Razorpay sub</th>
-                  <th className="px-3 py-2 text-start text-xs uppercase">Last payment</th>
                   <th className="px-3 py-2 text-start text-xs uppercase" />
                 </tr>
               </thead>
               <tbody>
                 {filteredSubscriptions.map((s) => {
-                  const lastPayment = s.payments[0];
+                  const mrrContribution = s.frequency.toLowerCase() === "yearly" ? Math.round(s.totalAmountInr / 12) : s.totalAmountInr;
                   return (
                     <tr key={s.id} className="border-t border-border">
                       <td className="px-3 py-2">
                         <p className="font-medium text-text">{s.org.name}</p>
                         <p className="text-xs text-text-muted">{s.org.slug}</p>
                       </td>
+                      <td className="px-3 py-2 text-xs">{s.org.users?.[0]?.email ?? "—"}</td>
                       <td className="px-3 py-2">{s.plan.name}</td>
                       <td className="px-3 py-2">
-                        <Badge variant={statusVariant(s.status)}>{s.status}</Badge>
+                        <Badge variant={statusVariant(s.status)}>{s.status.replace("_", " ")}</Badge>
                       </td>
                       <td className="px-3 py-2 capitalize">{s.frequency.toLowerCase()}</td>
                       <td className="px-3 py-2">{formatCurrency(s.totalAmountInr)}</td>
+                      <td className="px-3 py-2">{formatCurrency(mrrContribution)}</td>
                       <td className="px-3 py-2">{new Date(s.createdAt).toLocaleDateString()}</td>
                       <td className="px-3 py-2">
                         {s.currentPeriodEnd ? new Date(s.currentPeriodEnd).toLocaleDateString() : "—"}
                       </td>
                       <td className="px-3 py-2 font-mono text-xs">{s.razorpaySubscriptionId ?? "—"}</td>
-                      <td className="px-3 py-2">
-                        {lastPayment ? (
-                          <span className="text-success">{formatCurrency(lastPayment.amountInr)}</span>
-                        ) : (
-                          <span className="text-text-muted">—</span>
-                        )}
-                      </td>
                       <td className="px-3 py-2">
                         <Button size="sm" variant="secondary" onClick={() => setSelectedSubscription(s)}>
                           <Eye className="mr-1.5 h-3.5 w-3.5" /> View
@@ -332,7 +390,7 @@ export function BillingCatalogTabs({ plans, services, addOns, coupons, tax, metr
                 })}
                 {filteredSubscriptions.length === 0 && (
                   <tr>
-                    <td colSpan={10} className="px-3 py-6 text-center text-sm text-text-secondary">
+                    <td colSpan={11} className="px-3 py-6 text-center text-sm text-text-secondary">
                       No subscriptions found.
                     </td>
                   </tr>
@@ -462,6 +520,126 @@ export function BillingCatalogTabs({ plans, services, addOns, coupons, tax, metr
         </div>
       )}
 
+      {tab === "payments" && (
+        <div className="overflow-x-auto rounded-md border border-border">
+          <table className="w-full text-sm">
+            <thead className="bg-surface text-text-secondary">
+              <tr>
+                <th className="px-3 py-2 text-start text-xs uppercase">Organization</th>
+                <th className="px-3 py-2 text-start text-xs uppercase">Amount</th>
+                <th className="px-3 py-2 text-start text-xs uppercase">Status</th>
+                <th className="px-3 py-2 text-start text-xs uppercase">Razorpay payment ID</th>
+                <th className="px-3 py-2 text-start text-xs uppercase">Date</th>
+              </tr>
+            </thead>
+            <tbody>
+              {allPayments.map((p) => (
+                <tr key={p.id} className="border-t border-border">
+                  <td className="px-3 py-2">
+                    <p className="font-medium text-text">{p.org.name}</p>
+                  </td>
+                  <td className="px-3 py-2">{formatCurrency(p.amountInr)}</td>
+                  <td className="px-3 py-2">
+                    <Badge variant={statusVariant(p.status)}>{p.status}</Badge>
+                  </td>
+                  <td className="px-3 py-2 font-mono text-xs">{p.razorpayPaymentId ?? "—"}</td>
+                  <td className="px-3 py-2">{new Date(p.createdAt).toLocaleDateString()}</td>
+                </tr>
+              ))}
+              {allPayments.length === 0 && (
+                <tr>
+                  <td colSpan={5} className="px-3 py-6 text-center text-sm text-text-secondary">
+                    No payments found.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {tab === "invoices" && (
+        <div className="overflow-x-auto rounded-md border border-border">
+          <table className="w-full text-sm">
+            <thead className="bg-surface text-text-secondary">
+              <tr>
+                <th className="px-3 py-2 text-start text-xs uppercase">Organization</th>
+                <th className="px-3 py-2 text-start text-xs uppercase">Amount</th>
+                <th className="px-3 py-2 text-start text-xs uppercase">Status</th>
+                <th className="px-3 py-2 text-start text-xs uppercase">Type</th>
+                <th className="px-3 py-2 text-start text-xs uppercase">Created</th>
+                <th className="px-3 py-2 text-start text-xs uppercase">Paid</th>
+              </tr>
+            </thead>
+            <tbody>
+              {allInvoices.map((inv) => (
+                <tr key={inv.id} className="border-t border-border">
+                  <td className="px-3 py-2">
+                    <p className="font-medium text-text">{inv.org.name}</p>
+                  </td>
+                  <td className="px-3 py-2">{formatCurrency(inv.amountInr)}</td>
+                  <td className="px-3 py-2">
+                    <Badge variant={statusVariant(inv.status)}>{inv.status}</Badge>
+                  </td>
+                  <td className="px-3 py-2 capitalize">{inv.type.toLowerCase()}</td>
+                  <td className="px-3 py-2">{new Date(inv.createdAt).toLocaleDateString()}</td>
+                  <td className="px-3 py-2">{inv.paidAt ? new Date(inv.paidAt).toLocaleDateString() : "—"}</td>
+                </tr>
+              ))}
+              {allInvoices.length === 0 && (
+                <tr>
+                  <td colSpan={6} className="px-3 py-6 text-center text-sm text-text-secondary">
+                    No invoices found.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {tab === "failedPayments" && (
+        <div className="flex flex-col gap-4">
+          <div className="overflow-x-auto rounded-md border border-border">
+            <table className="w-full text-sm">
+              <thead className="bg-surface text-text-secondary">
+                <tr>
+                  <th className="px-3 py-2 text-start text-xs uppercase">Organization</th>
+                  <th className="px-3 py-2 text-start text-xs uppercase">Amount</th>
+                  <th className="px-3 py-2 text-start text-xs uppercase">Status</th>
+                  <th className="px-3 py-2 text-start text-xs uppercase">Failure reason</th>
+                  <th className="px-3 py-2 text-start text-xs uppercase">Razorpay payment ID</th>
+                  <th className="px-3 py-2 text-start text-xs uppercase">Date</th>
+                </tr>
+              </thead>
+              <tbody>
+                {failedPayments.map((p) => (
+                  <tr key={p.id} className="border-t border-border">
+                    <td className="px-3 py-2">
+                      <p className="font-medium text-text">{p.org.name}</p>
+                    </td>
+                    <td className="px-3 py-2">{formatCurrency(p.amountInr)}</td>
+                    <td className="px-3 py-2">
+                      <Badge variant="danger">{p.status}</Badge>
+                    </td>
+                    <td className="px-3 py-2">{p.failureReason ?? "—"}</td>
+                    <td className="px-3 py-2 font-mono text-xs">{p.razorpayPaymentId ?? "—"}</td>
+                    <td className="px-3 py-2">{new Date(p.createdAt).toLocaleDateString()}</td>
+                  </tr>
+                ))}
+                {failedPayments.length === 0 && (
+                  <tr>
+                    <td colSpan={6} className="px-3 py-6 text-center text-sm text-text-secondary">
+                      No failed payments found.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
       {tab === "plans" && (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {plans.map((plan) => (
@@ -478,7 +656,13 @@ export function BillingCatalogTabs({ plans, services, addOns, coupons, tax, metr
                 <span>₹{plan.monthlyPriceInr.toLocaleString("en-IN")}/mo</span>
                 <span>₹{plan.annualPriceInr.toLocaleString("en-IN")}/yr</span>
               </div>
-              <p className="mt-2 text-xs text-text-muted">{plan._count.subscriptions} active subscriptions</p>
+              <p className="mt-2 text-xs text-text-muted">
+                {(() => {
+                  const counts = planSubscriptionCounts.find((c) => c.planId === plan.id);
+                  const total = (counts?.active ?? 0) + (counts?.trialing ?? 0);
+                  return `${total} active (${counts?.active ?? 0} paid, ${counts?.trialing ?? 0} trialing)`;
+                })()}
+              </p>
               {plan.features.length > 0 && (
                 <ul className="mt-3 flex flex-col gap-1">
                   {plan.features.filter((f) => f.included).map((f) => (
