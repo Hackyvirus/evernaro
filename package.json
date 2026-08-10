@@ -9,7 +9,7 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "dev": "next dev",
-    "build": "next build",
+    "build": "prisma generate && next build",
     "start": "next start",
     "verify-env": "node scripts/verify-env.mjs",
     "worker": "npx tsx src/workers/index.ts"

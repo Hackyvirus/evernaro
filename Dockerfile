@@ -59,8 +59,9 @@ COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 COPY --from=builder --chown=nextjs:nodejs /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/prisma ./prisma
 
-# Entrypoint runs migrations (only when RUN_MIGRATIONS=true) and then starts.
+# Entrypoint runs migrations (only when RUN_MIGRATIONS=true), verifies env, and then starts.
 COPY --from=builder --chown=nextjs:nodejs /app/scripts/docker-entrypoint.sh ./scripts/docker-entrypoint.sh
+COPY --from=builder --chown=nextjs:nodejs /app/scripts/verify-env.mjs ./scripts/verify-env.mjs
 RUN chmod +x ./scripts/docker-entrypoint.sh
 
 USER nextjs
