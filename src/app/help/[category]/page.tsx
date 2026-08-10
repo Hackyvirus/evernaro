@@ -35,19 +35,19 @@ export default async function HelpCategoryPage({ params }: Props) {
   return (
     <article className="flex flex-col gap-8">
       <div className="border-b border-border pb-6">
-        <div className="mb-3 flex items-center gap-2 text-sm text-text-muted">
+        <div className="mb-3 flex flex-wrap items-center gap-2 text-sm text-text-muted">
           <Link href="/help" className="hover:text-primary hover:underline">
             Help Center
           </Link>
-          <span>/</span>
-          <span>{cat.title}</span>
+          <span className="hidden sm:inline">/</span>
+          <span className="w-full sm:w-auto">{cat.title}</span>
         </div>
-        <h1 className="text-3xl font-extrabold text-text">{cat.title}</h1>
+        <h1 className="text-2xl font-extrabold text-text sm:text-3xl">{cat.title}</h1>
         <p className="mt-2 text-base text-text-secondary">{cat.description}</p>
         <p className="mt-2 text-xs text-text-muted">{cat.readingTime} read</p>
       </div>
 
-      <div className="rounded-xl border border-border bg-card p-5 shadow-[var(--shadow-card)]">
+      <div className="rounded-xl border border-border bg-card p-4 shadow-[var(--shadow-card)] sm:p-5">
         <p className="mb-3 text-xs font-semibold tracking-wide text-text-muted uppercase">In this guide</p>
         <ul className="flex flex-col gap-1.5">
           {cat.sections.map((section) => (
@@ -68,7 +68,7 @@ export default async function HelpCategoryPage({ params }: Props) {
           const anchor = section.title.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
           return (
             <section key={section.title} id={anchor} className="scroll-mt-24">
-              <h2 className="mb-4 text-xl font-bold text-text">{section.title}</h2>
+              <h2 className="mb-4 text-lg font-bold text-text sm:text-xl">{section.title}</h2>
               {section.screenshot && (
                 <HelpScreenshot
                   src={`/help/screenshots/${section.screenshot}`}
@@ -85,9 +85,9 @@ export default async function HelpCategoryPage({ params }: Props) {
       </div>
 
       {cat.related.length > 0 && (
-        <div className="rounded-xl border border-border bg-card p-5 shadow-[var(--shadow-card)]">
+        <div className="rounded-xl border border-border bg-card p-4 shadow-[var(--shadow-card)] sm:p-5">
           <p className="mb-3 text-xs font-semibold tracking-wide text-text-muted uppercase">Related articles</p>
-          <div className="flex flex-wrap gap-3">
+          <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
             {cat.related.map((relatedId) => {
               const related = getCategoryById(relatedId);
               if (!related) return null;
@@ -105,13 +105,13 @@ export default async function HelpCategoryPage({ params }: Props) {
         </div>
       )}
 
-      <div className="flex flex-col justify-between gap-4 border-t border-border pt-6 sm:flex-row">
+      <div className="flex flex-col gap-4 border-t border-border pt-6 sm:flex-row sm:justify-between">
         {prev ? (
           <Link
             href={`/help/${prev.id}`}
             className="flex items-center gap-2 text-sm text-text-secondary hover:text-text"
           >
-            <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+            <ArrowLeft className="h-4 w-4 flex-shrink-0" aria-hidden="true" />
             <span className="font-medium">Previous</span>
             <span className="text-text-muted">— {prev.title}</span>
           </Link>
@@ -121,11 +121,11 @@ export default async function HelpCategoryPage({ params }: Props) {
         {next ? (
           <Link
             href={`/help/${next.id}`}
-            className="flex items-center gap-2 text-sm text-text-secondary hover:text-text"
+            className="flex items-center gap-2 text-sm text-text-secondary hover:text-text sm:ml-auto"
           >
             <span className="font-medium">Next</span>
             <span className="text-text-muted">— {next.title}</span>
-            <ArrowRight className="h-4 w-4" aria-hidden="true" />
+            <ArrowRight className="h-4 w-4 flex-shrink-0" aria-hidden="true" />
           </Link>
         ) : (
           <span />

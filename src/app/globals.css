@@ -260,6 +260,60 @@ textarea:focus-visible,
   padding: 0.125rem 0.375rem;
   font-size: 0.75rem;
   color: var(--color-primary);
+  word-break: break-word;
+}
+
+.help-article-content a {
+  color: var(--color-primary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.help-article-content a:hover {
+  color: var(--color-primary-hover);
+}
+
+.help-article-content .table-wrapper {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  margin-bottom: 1rem;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+}
+
+.help-article-content table {
+  width: 100%;
+  min-width: 560px;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.help-article-content th,
+.help-article-content td {
+  border: 1px solid var(--color-border);
+  padding: 0.75rem 1rem;
+  text-align: left;
+}
+
+.help-article-content th {
+  background: var(--color-surface);
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+@media (max-width: 640px) {
+  .help-article-content p {
+    font-size: 0.9375rem;
+  }
+
+  .help-article-content ul,
+  .help-article-content ol {
+    padding-left: 1rem;
+  }
+
+  .help-article-content li {
+    margin-bottom: 0.625rem;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

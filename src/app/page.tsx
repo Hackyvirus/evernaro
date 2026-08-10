@@ -6,6 +6,7 @@ import { Button, Card, Logo, ThemeToggle } from "@/components/ui";
 import { FlowMockup } from "@/components/landing/flow-mockup";
 import { Reveal } from "@/components/landing/reveal";
 import { Faq } from "@/components/landing/faq";
+import { MobileNav } from "@/components/mobile-nav";
 import {
   ArrowRight,
   Bell,
@@ -247,28 +248,36 @@ export default async function Home() {
   return (
     <div className="flex flex-1 flex-col bg-surface">
       <header className="sticky top-0 z-30 border-b border-border/60 bg-surface/80 backdrop-blur-md">
-        <div className="mx-auto flex w-full max-w-6xl items-center justify-between px-6 py-4">
+        <div className="mx-auto flex w-full max-w-6xl items-center justify-between px-4 py-4 sm:px-6">
           <Logo width={150} className="w-[130px] sm:w-[150px]" />
-          <nav className="flex items-center gap-3">
-            <Link href="/pricing" className="cursor-pointer text-sm text-text-secondary hover:text-text">
-              Pricing
-            </Link>
-            <Link href="/help" className="hidden cursor-pointer text-sm text-text-secondary hover:text-text sm:block">
-              Help
-            </Link>
-            <Link href="/contact" className="cursor-pointer text-sm text-text-secondary hover:text-text">
-              Contact
-            </Link>
-            <Link
-              href="/login"
-              className="hidden cursor-pointer text-sm text-text-secondary hover:text-text sm:block"
-            >
-              Log in
-            </Link>
-            <Link href="/signup">
+          <div className="flex items-center gap-2 sm:gap-3">
+            <nav className="hidden items-center gap-3 lg:flex">
+              <Link href="/pricing" className="cursor-pointer text-sm text-text-secondary hover:text-text">
+                Pricing
+              </Link>
+              <Link href="/help" className="cursor-pointer text-sm text-text-secondary hover:text-text">
+                Help &amp; User Guide
+              </Link>
+              <Link href="/contact" className="cursor-pointer text-sm text-text-secondary hover:text-text">
+                Contact
+              </Link>
+              <Link href="/login" className="cursor-pointer text-sm text-text-secondary hover:text-text">
+                Log in
+              </Link>
+            </nav>
+            <Link href="/signup" className="hidden lg:block">
               <Button size="sm">Get started</Button>
             </Link>
-          </nav>
+            <MobileNav
+              items={[
+                { href: "/pricing", label: "Pricing" },
+                { href: "/help", label: "Help & User Guide" },
+                { href: "/contact", label: "Contact" },
+                { href: "/login", label: "Log in" },
+              ]}
+              cta={{ href: "/signup", label: "Get started" }}
+            />
+          </div>
         </div>
       </header>
 

@@ -43,7 +43,7 @@ export function HelpSearch() {
                   className="flex w-full flex-col items-start gap-1 px-4 py-3 text-start text-sm hover:bg-hover"
                 >
                   <span className="font-medium text-text">{category.title}</span>
-                  <span className="text-text-secondary">{category.description}</span>
+                  <span className="text-xs text-text-secondary sm:text-sm">{category.description}</span>
                 </button>
               </li>
             ))}

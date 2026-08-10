@@ -6,17 +6,17 @@ import { Button } from "@/components/ui";
 
 export default function HelpCenterPage() {
   return (
-    <div className="flex flex-col gap-10">
+    <div className="flex flex-col gap-8 sm:gap-10">
       <div className="text-center">
-        <h1 className="text-3xl font-extrabold text-text sm:text-4xl">Evernaro Help Center</h1>
-        <p className="mx-auto mt-3 max-w-2xl text-base text-text-secondary">
+        <h1 className="text-2xl font-extrabold text-text sm:text-3xl lg:text-4xl">Evernaro Help Center</h1>
+        <p className="mx-auto mt-3 max-w-2xl px-2 text-base text-text-secondary sm:px-0">
           Step-by-step guides to set up your business, connect customer channels, manage appointments, and use the AI
           assistant. For salons, clinics, restaurants, and service businesses.
         </p>
-        <div className="mx-auto mt-6 flex justify-center">
+        <div className="mx-auto mt-6 flex justify-center px-2 sm:px-0">
           <HelpSearch />
         </div>
-        <div className="mt-6 flex flex-wrap items-center justify-center gap-3 text-sm text-text-muted">
+        <div className="mt-6 flex flex-wrap items-center justify-center gap-2 px-2 text-sm text-text-muted sm:gap-3 sm:px-0">
           <span>Popular:</span>
           <Link href="/help/getting-started" className="text-primary hover:text-primary-hover hover:underline">
             Getting started
@@ -46,8 +46,8 @@ export default function HelpCenterPage() {
         ))}
       </div>
 
-      <div className="rounded-xl border border-border bg-card p-6 text-center shadow-[var(--shadow-card)]">
-        <h2 className="text-xl font-bold text-text">Can&apos;t find what you need?</h2>
+      <div className="rounded-xl border border-border bg-card p-5 text-center shadow-[var(--shadow-card)] sm:p-6">
+        <h2 className="text-lg font-bold text-text sm:text-xl">Can&apos;t find what you need?</h2>
         <p className="mx-auto mt-2 max-w-lg text-sm text-text-secondary">
           Our team can help you set up channels, troubleshoot issues, or understand a feature. Reach out from your
           registered email address.

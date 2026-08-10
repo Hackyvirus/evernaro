@@ -13,10 +13,10 @@ export function HelpCategoryCard({ id, title, description, icon: Icon, readingTi
   return (
     <Link
       href={`/help/${id}`}
-      className="group flex flex-col gap-3 rounded-xl border border-border bg-card p-5 shadow-[var(--shadow-card)] transition-shadow hover:shadow-[var(--shadow-elevated)]"
+      className="group flex flex-col gap-3 rounded-xl border border-border bg-card p-4 shadow-[var(--shadow-card)] transition-shadow hover:shadow-[var(--shadow-elevated)] sm:p-5"
     >
-      <div className="flex items-start justify-between">
-        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary-lighter">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-primary-lighter">
           <Icon className="h-5 w-5 text-primary" aria-hidden="true" />
         </div>
         <span className="text-xs text-text-muted">{readingTime} read</span>
