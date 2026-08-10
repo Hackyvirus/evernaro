@@ -28,11 +28,11 @@ function slugify(input: string) {
 
 export async function POST(req: Request) {
   const ip = clientIp(req);
-  const ipAllowed = await checkRateLimit(`signup:${ip}`, 5, 60 * 60);
+  const ipAllowed = await checkRateLimit(`signup:${ip}`, 5, 60 * 60, { failClosed: true });
   if (!ipAllowed) {
     return NextResponse.json({ error: "Too many signup attempts — try again later." }, { status: 429 });
   }
-  const globalAllowed = await checkRateLimit("signup:global", 60, 60 * 60);
+  const globalAllowed = await checkRateLimit("signup:global", 60, 60 * 60, { failClosed: true });
   if (!globalAllowed) {
     return NextResponse.json({ error: "Signups are temporarily paused due to high volume." }, { status: 429 });
   }

@@ -4,6 +4,7 @@ import { UserRole } from "@prisma/client";
 import { requireOrgMember, UnauthorizedError, ForbiddenError } from "@/lib/session";
 import { updateQueueEntryStatus, QueueInvalidTransitionError } from "@/lib/services/queue-service";
 import { QueueEntryStatus } from "@prisma/client";
+import { prisma } from "@/lib/prisma";
 
 const statusSchema = z.object({
   status: z.nativeEnum(QueueEntryStatus),
@@ -19,6 +20,16 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     const parsed = statusSchema.safeParse(body);
     if (!parsed.success) {
       return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid input" }, { status: 400 });
+    }
+
+    if (parsed.data.staffId) {
+      const staff = await prisma.staffProfile.findFirst({
+        where: { id: parsed.data.staffId, orgId, isActive: true },
+        select: { id: true },
+      });
+      if (!staff) {
+        return NextResponse.json({ error: "Staff member not found" }, { status: 400 });
+      }
     }
 
     await updateQueueEntryStatus(id, orgId, parsed.data.status, { staffId: parsed.data.staffId });

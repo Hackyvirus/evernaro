@@ -8,6 +8,7 @@ import { findOrCreateContact, requireContactLimitIfNew, UsageLimitExceededError 
 import { keepAlive } from "@/lib/lifecycle";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { hasFeature } from "@/lib/billing/entitlements";
+import { bigintAdvisoryKey } from "@/lib/keys";
 
 // Generic inbound-email webhook contract. Point your provider's inbound
 // parse webhook (Postmark, Mailgun, SendGrid inbound parse, etc.) here,
@@ -23,36 +24,6 @@ const bodySchema = z.object({
 
 function isUniqueConstraintError(err: unknown): boolean {
   return err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002";
-}
-
-async function getOrCreateOpenConversation(
-  orgId: string,
-  contactId: string,
-  channelId: string,
-  subject?: string,
-  maxRetries = 2
-) {
-  let lastError: unknown;
-  for (let attempt = 0; attempt < maxRetries; attempt++) {
-    try {
-      return await prisma.$transaction(async (tx) => {
-        const existing = await tx.conversation.findFirst({
-          where: { orgId, contactId, channelId, status: "OPEN" },
-        });
-        if (existing) return existing;
-        return tx.conversation.create({
-          data: { orgId, contactId, channelId, subject: subject ?? "New conversation" },
-        });
-      });
-    } catch (err) {
-      if (isUniqueConstraintError(err)) {
-        lastError = err;
-        continue;
-      }
-      throw err;
-    }
-  }
-  throw lastError ?? new Error("Failed to find or create conversation");
 }
 
 export async function POST(req: Request) {
@@ -93,23 +64,34 @@ export async function POST(req: Request) {
 
     const contact = await findOrCreateContact({ email: from, name: fromName }, channel.orgId);
 
-    const conversation = await getOrCreateOpenConversation(
-      channel.orgId,
-      contact.id,
-      channel.id,
-      subject
-    );
-
+    const lockKey = bigintAdvisoryKey(`email:inbound:${messageId}`);
     const result = await prisma.$transaction(async (tx) => {
+      await tx.$queryRawUnsafe("SELECT pg_advisory_xact_lock($1)", lockKey);
+
+      // Global provider message id uniqueness guarantees exactly one inbound
+      // Message row per email, even if duplicate deliveries race.
       const existingMessage = await tx.message.findUnique({
-        where: {
-          providerMessageId_conversationId: {
-            providerMessageId: messageId,
-            conversationId: conversation.id,
-          },
-        },
+        where: { providerMessageId: messageId },
       });
-      if (existingMessage) return { duplicate: true, conversationId: conversation.id };
+      if (existingMessage) return { duplicate: true, conversationId: existingMessage.conversationId };
+
+      let conversation = await tx.conversation.findFirst({
+        where: { orgId: channel.orgId, contactId: contact.id, channelId: channel.id, status: "OPEN" },
+      });
+      if (!conversation) {
+        try {
+          conversation = await tx.conversation.create({
+            data: { orgId: channel.orgId, contactId: contact.id, channelId: channel.id, subject: subject ?? "New conversation" },
+          });
+        } catch (err) {
+          if (isUniqueConstraintError(err)) {
+            conversation = await tx.conversation.findFirst({
+              where: { orgId: channel.orgId, contactId: contact.id, channelId: channel.id, status: "OPEN" },
+            });
+          }
+          if (!conversation) throw err;
+        }
+      }
 
       await tx.message.create({
         data: {
@@ -129,7 +111,7 @@ export async function POST(req: Request) {
       return { duplicate: false, conversationId: conversation.id };
     });
 
-    if (await hasFeature(channel.orgId, "ai_assistant")) {
+    if (!result.duplicate && (await hasFeature(channel.orgId, "ai_assistant"))) {
       keepAlive(generateDraftReply(result.conversationId), "AI draft generation");
     }
 

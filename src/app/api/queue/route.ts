@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { getQueuesByOrg, createQueue, joinQueue, QueueDuplicateJoinError } from "@/lib/services/queue-service";
 import { getOrgActiveLocationId, validateLocationId } from "@/lib/location-scope";
 import { requireActiveSubscription, SubscriptionSuspendedError } from "@/lib/subscription";
+import { isBusinessOpen } from "@/lib/business-hours";
 
 const createQueueSchema = z.object({
   name: z.string().min(1),
@@ -127,10 +128,17 @@ export async function PUT(req: Request) {
       }
     }
 
+    const orgHours = await prisma.organization.findUnique({
+      where: { id: orgId },
+      select: { timezone: true, businessHours: true },
+    });
+    const businessOpen = orgHours ? isBusinessOpen(orgHours.timezone, orgHours.businessHours) : false;
+
     try {
       const entry = await joinQueue({
         orgId,
         ...parsed.data,
+        isAfterHours: !businessOpen,
       });
 
       return NextResponse.json({ entry }, { status: 201 });

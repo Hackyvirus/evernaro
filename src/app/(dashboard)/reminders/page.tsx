@@ -76,29 +76,41 @@ export default function RemindersPage() {
   const role = useRole();
   const [reminders, setReminders] = useState<ReminderSummary[]>([]);
   const [loaded, setLoaded] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>("all");
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState<string>("");
 
-  function load() {
-    fetch("/api/reminders")
-      .then((r) => r.json())
-      .then((d) => {
-        setReminders(d.reminders ?? []);
-        setLoaded(true);
-      });
+  async function load() {
+    try {
+      const res = await fetch("/api/reminders");
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(d.error ?? "Failed to load reminders");
+      setReminders(d.reminders ?? []);
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load reminders");
+    } finally {
+      setLoaded(true);
+    }
   }
 
   useEffect(() => {
     let active = true;
-    function poll() {
-      fetch("/api/reminders")
-        .then((r) => r.json())
-        .then((d) => {
-          if (!active) return;
-          setReminders(d.reminders ?? []);
-          setLoaded(true);
-        });
+    async function poll() {
+      try {
+        const res = await fetch("/api/reminders");
+        const d = await res.json().catch(() => ({}));
+        if (!active) return;
+        if (!res.ok) throw new Error(d.error ?? "Failed to load reminders");
+        setReminders(d.reminders ?? []);
+        setError(null);
+      } catch (err) {
+        if (!active) return;
+        setError(err instanceof Error ? err.message : "Failed to load reminders");
+      } finally {
+        if (active) setLoaded(true);
+      }
     }
     poll();
     const interval = setInterval(poll, 5000);
@@ -158,6 +170,7 @@ export default function RemindersPage() {
       </PageHeader>
 
       <div className="flex flex-col gap-4 p-6">
+        {error && <div className="rounded-lg bg-danger/10 p-3 text-sm text-danger">{error}</div>}
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex gap-2">
             {TABS.map((t) => (

@@ -14,6 +14,7 @@ import {
   FeatureNotAllowedError,
   UsageLimitExceededError,
 } from "@/lib/billing/entitlements";
+import { dailyCampaignRecipientLimit, dailyCampaignRecipientsUsed } from "@/lib/usage-limits";
 
 export async function GET() {
   try {
@@ -111,6 +112,17 @@ export async function POST(req: Request) {
       return NextResponse.json(
         { error: `No contacts reachable on this channel yet` },
         { status: 400 }
+      );
+    }
+
+    const dailyLimit = dailyCampaignRecipientLimit();
+    const alreadyUsed = await dailyCampaignRecipientsUsed(orgId);
+    if (alreadyUsed + contacts.length > dailyLimit) {
+      return NextResponse.json(
+        {
+          error: `Daily campaign recipient limit exceeded. Remaining today: ${Math.max(0, dailyLimit - alreadyUsed)}.`,
+        },
+        { status: 429 }
       );
     }
 

@@ -396,9 +396,26 @@ export async function finalizePlanChange(
 }
 
 export async function changeSubscriptionPlan(input: CreateSubscriptionInput & { prorate?: boolean; currentSubscriptionId?: string }) {
-  const current = await getActiveSubscription(input.orgId);
+  // Allow changes from active, trialing, past-due, or incomplete subscriptions
+  // so users can recover billing state and so upgrades/downgrades are possible.
+  const current = await prisma.customerSubscription.findFirst({
+    where: {
+      orgId: input.orgId,
+      status: {
+        in: [
+          ...SUBSCRIPTION_ACTIVE_STATUSES,
+          SubscriptionStatus.PAST_DUE,
+          SubscriptionStatus.INCOMPLETE,
+        ],
+      },
+    },
+    orderBy: { createdAt: "desc" },
+  });
   if (!current) {
     throw new Error("No active subscription to change. Please subscribe first.");
+  }
+  if (input.currentSubscriptionId && current.id !== input.currentSubscriptionId) {
+    throw new Error("The subscription you are trying to change is no longer active.");
   }
 
   const resolvedAddOns = await resolveAddOnSelections(input.planId, input.addOns ?? []);
@@ -458,11 +475,13 @@ export async function changeSubscriptionPlan(input: CreateSubscriptionInput & { 
     }
   }
 
-  const initialStatus = isFreePlan
-    ? SubscriptionStatus.ACTIVE
-    : trialEnd
-      ? SubscriptionStatus.TRIALING
-      : SubscriptionStatus.INCOMPLETE;
+  // Always create the new subscription in a non-active state first. This:
+  //   - avoids violating the one-active-per-org partial unique index,
+  //   - lets finalizePlanChange safely cancel the previous subscription and
+  //     activate the new one in one transactional step.
+  const initialStatus = trialEnd
+    ? SubscriptionStatus.TRIALING
+    : SubscriptionStatus.INCOMPLETE;
 
   const newSubscription = await prisma.customerSubscription.create({
     data: {
@@ -571,7 +590,11 @@ export async function changeSubscriptionPlan(input: CreateSubscriptionInput & { 
         razorpayOrderId = order.id;
       } catch (err) {
         // Roll back the pending subscription so the org is not left in a broken state.
-        await prisma.customerSubscription.delete({ where: { id: newSubscription.id } }).catch(() => {});
+        try {
+          await prisma.customerSubscription.delete({ where: { id: newSubscription.id } });
+        } catch (rollbackErr) {
+          console.error("Failed to roll back pending subscription after Razorpay order failure:", rollbackErr);
+        }
         console.error("Failed to create Razorpay order for changed subscription:", err);
         throw new Error("Could not create payment order. Your current plan is unchanged.");
       }

@@ -54,7 +54,11 @@ export async function POST(
         { type: "INBOX_MESSAGE", id: sent.id }
       );
     } catch (err) {
-      await prisma.message.delete({ where: { id: sent.id } }).catch(() => {});
+      try {
+        await prisma.message.delete({ where: { id: sent.id } });
+      } catch (deleteErr) {
+        console.error("Failed to delete rolled-back outbound message:", deleteErr);
+      }
       throw err;
     }
 

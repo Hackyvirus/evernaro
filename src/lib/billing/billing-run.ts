@@ -6,6 +6,8 @@ import { syncOrganizationStatusFromSubscription } from "./subscription-status";
 import { checkUsageLimit } from "./entitlements";
 import { getTaxConfig } from "./pricing-engine";
 import { recordSubscriptionPayment, finalizePlanChange } from "./subscription-service";
+import { createRazorpayOrder } from "@/lib/razorpay";
+import { sendPaymentFailedEmail } from "@/lib/billing-email";
 import { bigintAdvisoryKey } from "@/lib/keys";
 
 const DUNNING_RETRY_DAYS = [1, 3, 7];
@@ -65,7 +67,22 @@ export async function expireTrials(tx?: Prisma.TransactionClient) {
         where: { id: sub.id },
         data: { status: SubscriptionStatus.ACTIVE, currentPeriodStart: periodStart, currentPeriodEnd: periodEnd },
       });
-      await createInvoiceForSubscriptionPeriod(sub.id, client);
+      const invoice = await createInvoiceForSubscriptionPeriod(sub.id, client);
+      if (invoice && !invoice.razorpayOrderId) {
+        try {
+          const order = await createRazorpayOrder({
+            amountInr: invoice.amountInr,
+            receipt: `trial-expiry-${invoice.id}`,
+          });
+          await client.invoice.update({
+            where: { id: invoice.id },
+            data: { razorpayOrderId: order.id },
+          });
+        } catch (orderErr) {
+          // Razorpay not configured: invoice stays payable manually via platform.
+          console.error(`Failed to create Razorpay order for trial-expiry invoice ${invoice.id}:`, orderErr);
+        }
+      }
       await syncOrganizationStatusFromSubscription(sub.orgId, client);
       expired++;
     } catch (err) {
@@ -304,7 +321,8 @@ export async function runDailyBilling() {
     const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000);
     const subscriptions = await tx.customerSubscription.findMany({
       where: {
-        status: { in: [SubscriptionStatus.ACTIVE, SubscriptionStatus.TRIALING] },
+        // Trials are invoiced only through expireTrials() once trialEnd passes.
+        status: SubscriptionStatus.ACTIVE,
         currentPeriodEnd: { lte: tomorrow },
       },
     });
@@ -334,6 +352,11 @@ export async function applySubscriptionPayment(
   opts: { eventType: string; eventId?: string; tx?: Prisma.TransactionClient; advancePeriod?: boolean }
 ) {
   const client = opts.tx ?? prisma;
+  const lockKey = bigintAdvisoryKey(`subscription:payment:${subscriptionId}`);
+
+  // Serialize concurrent payment applications for the same subscription across
+  // Razorpay webhook and browser confirmation paths to prevent double period advance.
+  await client.$queryRawUnsafe("SELECT pg_advisory_xact_lock($1)", lockKey);
 
   const subscription = await client.customerSubscription.findUnique({
     where: { id: subscriptionId },
@@ -490,15 +513,49 @@ export async function runDunningReminders() {
     include: { subscription: true, org: true },
   });
 
+  let processed = 0;
   for (const record of pending) {
-    // Razorpay subscriptions retry automatically; we just update our internal status.
-    // If the subscription is already active again, resolve the dunning record.
-    if (record.subscription.status === SubscriptionStatus.ACTIVE) {
-      await prisma.dunningRecord.update({ where: { id: record.id }, data: { status: "resolved", resolvedAt: new Date() } });
-      continue;
+    try {
+      // If the subscription recovered (e.g. webhook or manual payment), resolve.
+      if (record.subscription.status === SubscriptionStatus.ACTIVE) {
+        await prisma.dunningRecord.update({
+          where: { id: record.id },
+          data: { status: "resolved", resolvedAt: new Date() },
+        });
+        processed++;
+        continue;
+      }
+
+      // Send a reminder email to the org owner and mark this attempt reminded.
+      const owner = await prisma.user.findFirst({
+        where: { orgId: record.orgId, role: "OWNER" },
+        select: { email: true },
+      });
+      const invoice = await prisma.invoice.findFirst({
+        where: { subscriptionId: record.subscriptionId, orgId: record.orgId, status: "PENDING" },
+        orderBy: { createdAt: "desc" },
+      });
+      if (owner && invoice) {
+        try {
+          await sendPaymentFailedEmail(owner.email, record.org.name, invoice.id, invoice.amountInr);
+        } catch (emailErr) {
+          console.error(`Failed to send dunning reminder email for record ${record.id}:`, emailErr);
+        }
+      }
+
+      await prisma.dunningRecord.update({
+        where: { id: record.id },
+        data: { status: "reminded" },
+      });
+      await logBillingEvent(record.orgId, record.subscriptionId, "DUNNING_REMINDER_SENT", {
+        dunningRecordId: record.id,
+        attempt: record.attempt,
+      });
+      processed++;
+    } catch (err) {
+      console.error(`Failed to process dunning record ${record.id}:`, err);
     }
-    // Otherwise, the next webhook or manual payment will resolve it.
   }
 
-  return { processed: pending.length };
+  return { processed };
 }

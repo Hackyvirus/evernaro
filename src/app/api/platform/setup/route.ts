@@ -2,7 +2,9 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import bcrypt from "bcryptjs";
 import crypto from "node:crypto";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { checkRateLimit, clientIp } from "@/lib/rate-limit";
 
 // First-run bootstrap only: creates the one platform admin account. Refuses
 // to run again once any PlatformAdmin exists — there's no invite/add-admin
@@ -17,18 +19,22 @@ const bodySchema = z.object({
   setupToken: z.string().min(1),
 });
 
+function isUniqueConstraintError(err: unknown): boolean {
+  return err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002";
+}
+
 export async function POST(req: Request) {
+  const allowed = await checkRateLimit(`platform-setup:${clientIp(req)}`, 5, 60 * 60, { failClosed: true });
+  if (!allowed) {
+    return NextResponse.json({ error: "Too many attempts. Please try again later." }, { status: 429 });
+  }
+
   const expectedToken = process.env.PLATFORM_SETUP_TOKEN;
   if (!expectedToken) {
     return NextResponse.json(
       { error: "Platform setup token is not configured" },
       { status: 503 }
     );
-  }
-
-  const existing = await prisma.platformAdmin.findFirst();
-  if (existing) {
-    return NextResponse.json({ error: "A platform admin already exists" }, { status: 403 });
   }
 
   const parsed = bodySchema.safeParse(await req.json());
@@ -47,9 +53,31 @@ export async function POST(req: Request) {
   }
 
   const passwordHash = await bcrypt.hash(password, 12);
-  await prisma.platformAdmin.create({
-    data: { name, email: email.toLowerCase(), passwordHash },
-  });
+
+  try {
+    // Atomic first-admin creation: a concurrent duplicate request will hit the
+    // unique email constraint and fall through to the already-exists response.
+    await prisma.$transaction(async (tx) => {
+      const existing = await tx.platformAdmin.findFirst({
+        where: {},
+        select: { id: true },
+      });
+      if (existing) {
+        throw new Error("ALREADY_EXISTS");
+      }
+      await tx.platformAdmin.create({
+        data: { name, email: email.toLowerCase(), passwordHash },
+      });
+    });
+  } catch (err) {
+    if (err instanceof Error && err.message === "ALREADY_EXISTS") {
+      return NextResponse.json({ error: "A platform admin already exists" }, { status: 403 });
+    }
+    if (isUniqueConstraintError(err)) {
+      return NextResponse.json({ error: "A platform admin already exists" }, { status: 403 });
+    }
+    throw err;
+  }
 
   return NextResponse.json({ ok: true });
 }

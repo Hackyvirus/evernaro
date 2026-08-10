@@ -2,7 +2,28 @@
 // linked Facebook Page). Requires a Meta App with instagram_manage_messages
 // permission and app review — see https://developers.facebook.com/docs/messenger-platform/instagram
 
+import crypto from "node:crypto";
+
 const GRAPH_API_VERSION = "v21.0";
+
+/**
+ * Verify a Meta webhook X-Hub-Signature-256 header.
+ * See https://developers.facebook.com/docs/graph-api/webhooks/getting-started/
+ */
+export function verifyInstagramSignature(
+  payload: string,
+  signature: string | null,
+  appSecret: string
+): boolean {
+  if (!signature || !signature.startsWith("sha256=")) return false;
+  const expected = crypto
+    .createHmac("sha256", appSecret)
+    .update(payload, "utf8")
+    .digest("hex");
+  const provided = signature.slice(7);
+  if (expected.length !== provided.length) return false;
+  return crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(provided));
+}
 
 export async function instagramSendMessage(opts: {
   pageAccessToken: string;

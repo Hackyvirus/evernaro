@@ -214,7 +214,7 @@ export default function InboxShell() {
     fetch("/api/users")
       .then((r) => r.json())
       .then((d) => setUsers(d.users ?? []))
-      .catch(() => {});
+      .catch((err) => console.error("Failed to load team users for assignment:", err));
   }, []);
 
   function updateFilter(key: string, value: string) {

@@ -21,7 +21,7 @@ async function main() {
   const passwordHash = await bcrypt.hash(newPassword, 12);
   await prisma.platformAdmin.update({
     where: { id: admin.id },
-    data: { passwordHash },
+    data: { passwordHash, tokenVersion: { increment: 1 } },
   });
 
   console.log(`Platform admin password reset for: ${admin.email}`);

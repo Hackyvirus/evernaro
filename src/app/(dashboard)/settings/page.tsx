@@ -651,7 +651,7 @@ function WhatsAppTab({
         placeholder="919876543210"
       />
       <Input
-        label="Gupshup App ID (optional — needed to manage message templates)"
+        label="Gupshup App ID"
         value={appId}
         onChange={(e) => setAppId(e.target.value)}
         placeholder="e.g. 7a1b2c3d-...."
@@ -661,7 +661,7 @@ function WhatsAppTab({
       <Button
         onClick={connect}
         loading={status === "saving"}
-        disabled={!apiKey || !appName || !sourceNumber}
+        disabled={!apiKey || !appName || !sourceNumber || !appId}
         className="w-fit"
       >
         {status === "saving" ? "Saving..." : channel ? "Update" : "Save"}

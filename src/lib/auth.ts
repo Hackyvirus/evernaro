@@ -31,9 +31,6 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       },
       authorize: async (credentials, request) => {
         const ip = clientIp(request);
-        const allowed = await checkRateLimit(`login-failed:${ip}`, 10, 15 * 60);
-        if (!allowed) return null;
-
         const email = credentials?.email as string | undefined;
         const password = credentials?.password as string | undefined;
         const totpCode = credentials?.totpCode as string | undefined;
@@ -53,7 +50,11 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         });
 
         const valid = await bcrypt.compare(password, user?.passwordHash ?? DUMMY_HASH);
-        if (!user || !valid || !user.isActive) return null;
+        if (!user || !valid || !user.isActive) {
+          // Only increment failed-login counters after a real authentication failure.
+          await checkRateLimit(`login-failed:${ip}`, 10, 15 * 60, { failClosed: true });
+          return null;
+        }
 
         if (user.mfaEnabled) {
           if (!user.mfaSecret) {
@@ -85,7 +86,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             const secret = decryptSecret(user.mfaSecret);
             mfaOk = verifyTotpCode(secret, code);
           }
-          if (!mfaOk) return null;
+          if (!mfaOk) {
+            await checkRateLimit(`login-failed:${ip}`, 10, 15 * 60, { failClosed: true });
+            return null;
+          }
         }
 
         return {
@@ -113,8 +117,6 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       },
       authorize: async (credentials, request) => {
         const ip = clientIp(request);
-        const allowed = await checkRateLimit(`login-failed:${ip}`, 10, 15 * 60);
-        if (!allowed) return null;
 
         const email = credentials?.email as string | undefined;
         const password = credentials?.password as string | undefined;
@@ -125,7 +127,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         });
 
         const valid = await bcrypt.compare(password, admin?.passwordHash ?? DUMMY_HASH);
-        if (!admin || !valid) return null;
+        if (!admin || !valid) {
+          await checkRateLimit(`login-failed:${ip}`, 10, 15 * 60, { failClosed: true });
+          return null;
+        }
 
         return {
           id: admin.id,

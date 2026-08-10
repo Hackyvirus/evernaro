@@ -22,18 +22,22 @@ export function ClientRow({ org, onUpdated }: { org: OrgSummary; onUpdated: () =
   const [saving, setSaving] = useState(false);
   const [invoicing, setInvoicing] = useState(false);
   const [invoiceMessage, setInvoiceMessage] = useState<string | null>(null);
+  const [feeError, setFeeError] = useState<string | null>(null);
 
   async function saveFee() {
     setSaving(true);
+    setFeeError(null);
     try {
-      await fetch(`/api/platform/organizations/${org.id}`, {
+      const res = await fetch(`/api/platform/organizations/${org.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ monthlyFeeInr: fee === "" ? null : Number(fee) }),
       });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error ?? "Failed to save fee");
       onUpdated();
-    } catch {
-      // best-effort — the field just won't update; no destructive state to unwind
+    } catch (err) {
+      setFeeError(err instanceof Error ? err.message : "Failed to save fee");
     } finally {
       setSaving(false);
     }
@@ -97,16 +101,19 @@ export function ClientRow({ org, onUpdated }: { org: OrgSummary; onUpdated: () =
         {org.lastActivityAt ? new Date(org.lastActivityAt).toLocaleString() : "—"}
       </td>
       <td className="px-3 py-2.5">
-        <div className="flex items-center gap-1">
-          <span className="text-text-muted">₹</span>
-          <input
-            className="h-8 w-20 rounded-md border border-border bg-card px-2 text-xs text-text outline-none transition-colors focus:border-primary disabled:cursor-not-allowed disabled:opacity-50"
-            value={fee}
-            onChange={(e) => setFee(e.target.value.replace(/[^0-9]/g, ""))}
-            onBlur={saveFee}
-            disabled={saving}
-            placeholder="0"
-          />
+        <div className="flex flex-col gap-1">
+          <div className="flex items-center gap-1">
+            <span className="text-text-muted">₹</span>
+            <input
+              className="h-8 w-20 rounded-md border border-border bg-card px-2 text-xs text-text outline-none transition-colors focus:border-primary disabled:cursor-not-allowed disabled:opacity-50"
+              value={fee}
+              onChange={(e) => setFee(e.target.value.replace(/[^0-9]/g, ""))}
+              onBlur={saveFee}
+              disabled={saving}
+              placeholder="0"
+            />
+          </div>
+          {feeError && <p className="max-w-[160px] text-xs text-danger">{feeError}</p>}
         </div>
       </td>
       <td className="px-3 py-2.5">

@@ -8,6 +8,8 @@ import * as Sentry from "@sentry/node";
 import { Queue, Worker, type Job } from "bullmq";
 import { RecipientStatus, ReminderStatus } from "@prisma/client";
 import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { redisConnection } from "../lib/redis";
 import { prisma } from "../lib/prisma";
 import { sendViaChannel } from "../lib/send";
@@ -58,7 +60,7 @@ process.on("unhandledRejection", async (err) => {
 const SHUTDOWN_SIGNALS: NodeJS.Signals[] = ["SIGTERM", "SIGINT"];
 let isShuttingDown = false;
 
-const healthFile = process.env.WORKER_HEALTH_FILE || "/tmp/worker.health";
+const healthFile = process.env.WORKER_HEALTH_FILE || path.join(os.tmpdir(), "worker.health");
 const heartbeat = setInterval(() => {
   try {
     fs.writeFileSync(healthFile, String(Date.now()));

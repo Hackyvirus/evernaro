@@ -130,6 +130,20 @@ export async function gupshupGetTemplateStatus(opts: { apiKey: string; appId: st
   return templates.find((t) => t.id === opts.gupshupTemplateId) ?? null;
 }
 
+// Lightweight credential validation during channel setup: fetch the template list.
+// A 200 response confirms the API key and App ID are recognized by Gupshup.
+export async function gupshupValidateCredentials(opts: { apiKey: string; appId: string }) {
+  const res = await fetch(GUPSHUP_TEMPLATE_API(opts.appId), {
+    method: "GET",
+    headers: { apikey: opts.apiKey },
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(data?.message || `Gupshup credential validation failed (${res.status})`);
+  }
+  return true;
+}
+
 export interface GupshupInboundPayload {
   app?: string;
   type?: string;

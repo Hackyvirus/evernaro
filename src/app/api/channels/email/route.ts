@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { requireOrgMember, UnauthorizedError, ForbiddenError } from "@/lib/session";
 import { encryptSecretOrNull } from "@/lib/crypto";
 import { logAudit } from "@/lib/audit";
+import { validateResendApiKey } from "@/lib/email";
 
 const bodySchema = z.object({
   emailAddress: z.string().email(),
@@ -20,6 +21,18 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "A valid email address and sender name are required" }, { status: 400 });
     }
     const { emailAddress, emailFromName, resendApiKey } = parsed.data;
+
+    if (resendApiKey) {
+      try {
+        await validateResendApiKey(resendApiKey);
+      } catch (err) {
+        return NextResponse.json(
+          { error: err instanceof Error ? err.message : "Invalid Resend API key" },
+          { status: 400 }
+        );
+      }
+    }
+
     const encryptedResendKey = encryptSecretOrNull(resendApiKey);
 
     const channel = await prisma.channel.upsert({

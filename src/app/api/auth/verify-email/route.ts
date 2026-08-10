@@ -7,7 +7,7 @@ import { sendWelcomeEmail } from "@/lib/auth-email";
 const schema = z.object({ token: z.string().min(1) });
 
 export async function POST(req: Request) {
-  const allowed = await checkRateLimit(`verify-email:${clientIp(req)}`, 10, 60 * 60);
+  const allowed = await checkRateLimit(`verify-email:${clientIp(req)}`, 10, 60 * 60, { failClosed: true });
   if (!allowed) {
     return NextResponse.json({ error: "Too many attempts. Please try again later." }, { status: 429 });
   }

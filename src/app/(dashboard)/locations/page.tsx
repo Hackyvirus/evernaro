@@ -26,23 +26,32 @@ export default function LocationsPage() {
 function LocationsPageContent() {
   const [locations, setLocations] = useState<Location[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [address, setAddress] = useState("");
   const [saving, setSaving] = useState(false);
 
-  function fetchLocations() {
-    return fetch("/api/locations")
-      .then((r) => r.json())
-      .then((data) => data.locations ?? []);
+  async function fetchLocations() {
+    const res = await fetch("/api/locations");
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error ?? "Failed to load locations");
+    return data.locations ?? [];
   }
 
-  function refresh() {
-    return fetchLocations().then(setLocations);
+  async function refresh() {
+    try {
+      const locations = await fetchLocations();
+      setLocations(locations);
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load locations");
+    }
   }
 
   useEffect(() => {
     fetchLocations()
       .then(setLocations)
+      .catch((err) => setError(err instanceof Error ? err.message : "Failed to load locations"))
       .finally(() => setLoading(false));
   }, []);
 
@@ -50,36 +59,57 @@ function LocationsPageContent() {
     e.preventDefault();
     if (!name.trim()) return;
     setSaving(true);
-    await fetch("/api/locations", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, address: address || undefined }),
-    });
-    setName("");
-    setAddress("");
-    setSaving(false);
-    await refresh();
+    setError(null);
+    try {
+      const res = await fetch("/api/locations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, address: address || undefined }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error ?? "Failed to add location");
+      setName("");
+      setAddress("");
+      await refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to add location");
+    } finally {
+      setSaving(false);
+    }
   }
 
   async function remove(id: string) {
     if (!confirm("Deactivate this location?")) return;
-    await fetch(`/api/locations/${id}`, { method: "DELETE" });
-    await refresh();
+    try {
+      const res = await fetch(`/api/locations/${id}`, { method: "DELETE" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error ?? "Failed to deactivate location");
+      await refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to deactivate location");
+    }
   }
 
   async function setDefault(id: string) {
-    await fetch(`/api/locations/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ isDefault: true }),
-    });
-    await refresh();
+    try {
+      const res = await fetch(`/api/locations/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isDefault: true }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error ?? "Failed to set default location");
+      await refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to set default location");
+    }
   }
 
   return (
     <div className="flex flex-1 flex-col overflow-y-auto">
       <PageHeader title="Locations" description="Manage branches or outlets for your business." />
       <div className="px-6 py-4">
+        {error && <div className="mb-4 rounded-lg bg-danger/10 p-3 text-sm text-danger">{error}</div>}
         <Card className="mb-6 p-4">
           <form onSubmit={add} className="flex flex-col gap-3 sm:flex-row sm:items-end">
             <div className="flex-1">

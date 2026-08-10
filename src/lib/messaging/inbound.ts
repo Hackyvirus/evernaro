@@ -30,7 +30,7 @@ export async function recordInboundMessage(data: InboundMessageData) {
         bigintAdvisoryKey(`inbound:${providerMessageId}`)
       );
 
-      const existing = await tx.message.findFirst({
+      const existing = await tx.message.findUnique({
         where: { providerMessageId },
         select: { id: true },
       });
@@ -86,7 +86,7 @@ export async function recordInboundMessage(data: InboundMessageData) {
         err.code === "P2002" &&
         providerMessageId
       ) {
-        const existing = await tx.message.findFirst({
+        const existing = await tx.message.findUnique({
           where: { providerMessageId },
           select: { id: true },
         });

@@ -6,11 +6,12 @@ import { requireOrgMember, UnauthorizedError, ForbiddenError } from "@/lib/sessi
 import { channelWebhookSecret } from "@/lib/webhook-secret";
 import { encryptSecret } from "@/lib/crypto";
 import { logAudit } from "@/lib/audit";
+import { gupshupValidateCredentials } from "@/lib/whatsapp";
 
 const bodySchema = z.object({
   apiKey: z.string().min(5),
   appName: z.string().min(1),
-  appId: z.string().optional(),
+  appId: z.string().min(1),
   sourceNumber: z.string().min(8),
 });
 
@@ -20,11 +21,21 @@ export async function POST(req: Request) {
     const parsed = bodySchema.safeParse(await req.json());
     if (!parsed.success) {
       return NextResponse.json(
-        { error: "API key, app name, and source number are all required" },
+        { error: "API key, app name, app ID, and source number are all required" },
         { status: 400 }
       );
     }
     const { apiKey, appName, appId, sourceNumber } = parsed.data;
+
+    try {
+      await gupshupValidateCredentials({ apiKey, appId });
+    } catch (err) {
+      return NextResponse.json(
+        { error: err instanceof Error ? err.message : "Invalid Gupshup credentials" },
+        { status: 400 }
+      );
+    }
+
     const encryptedApiKey = encryptSecret(apiKey);
 
     const channel = await prisma.channel.upsert({

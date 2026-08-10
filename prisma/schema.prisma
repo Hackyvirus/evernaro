@@ -618,7 +618,7 @@ model Message {
 
   @@index([conversationId])
   @@index([providerMessageId])
-  @@unique([providerMessageId, conversationId], map: "Message_providerMessageId_conversationId_key")
+  @@unique([providerMessageId])
 }
 
 // ---------- Bulk campaigns ----------
@@ -678,6 +678,7 @@ model CampaignRecipient {
   error      String?
   sentAt     DateTime?
 
+  @@unique([campaignId, contactId])
   @@index([campaignId])
 }
 

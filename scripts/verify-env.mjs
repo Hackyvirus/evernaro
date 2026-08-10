@@ -62,8 +62,8 @@ function validate() {
         })
     );
   } catch {
-    console.error("Could not read .env file. Run `cp .env.example .env` and fill it in first.");
-    process.exit(1);
+    // In production/Docker environments variables are injected directly; a local
+    // .env file is optional. Continue validating against process.env only.
   }
 
   const errors = [];

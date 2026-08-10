@@ -7,7 +7,7 @@ import { checkRateLimit } from "@/lib/rate-limit";
 import { keepAlive } from "@/lib/lifecycle";
 import { hasFeature, requireUsageLimit, UsageLimitExceededError as UsageLimitError } from "@/lib/billing/entitlements";
 import { recordInboundMessage } from "@/lib/messaging/inbound";
-import { type InstagramWebhookPayload, parseInstagramInboundBatch } from "@/lib/instagram";
+import { type InstagramWebhookPayload, parseInstagramInboundBatch, verifyInstagramSignature } from "@/lib/instagram";
 
 // Meta's webhook verification handshake — configure this exact URL (with the
 // query param below) as the callback URL in the Meta App's Webhooks product,
@@ -40,6 +40,16 @@ export async function POST(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    // Meta signs the raw payload with X-Hub-Signature-256 using the app secret.
+    // When META_APP_SECRET is configured, require the signature. The query secret
+    // remains as defense-in-depth URL obfuscation.
+    const appSecret = process.env.META_APP_SECRET;
+    const signature = req.headers.get("x-hub-signature-256");
+    const rawBody = await req.text();
+    if (appSecret && !verifyInstagramSignature(rawBody, signature, appSecret)) {
+      return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
+    }
+
     // Bounds worst-case AI spend if the secret ever leaks or Meta retries
     // runaway — 200 legitimate customer messages/minute is far more than any
     // real conversation volume.
@@ -52,7 +62,7 @@ export async function POST(
       return NextResponse.json({ error: "Channel not found" }, { status: 404 });
     }
 
-    const body: InstagramWebhookPayload = await req.json();
+    const body: InstagramWebhookPayload = JSON.parse(rawBody);
     const inboundMessages = parseInstagramInboundBatch(body);
 
     for (const inbound of inboundMessages) {

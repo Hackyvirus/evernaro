@@ -1,3 +1,5 @@
+import crypto from "node:crypto";
+
 // Voice calling via Twilio Programmable Voice.
 //
 // Chosen over Exotel (the plan doc's India-first default) because Twilio's
@@ -9,6 +11,28 @@
 // Swapping providers later is a matter of implementing this same interface.
 
 const TWILIO_API = "https://api.twilio.com/2010-04-01";
+
+/**
+ * Verify Twilio's X-Twilio-Signature header.
+ * See https://www.twilio.com/docs/usage/security#validating-requests
+ */
+export function verifyTwilioSignature(
+  authToken: string,
+  url: string,
+  params: Record<string, string>,
+  signature: string | null
+): boolean {
+  if (!signature) return false;
+  const sortedKeys = Object.keys(params).sort();
+  const payload =
+    url +
+    sortedKeys.map((key) => key + params[key]).join("");
+  const expected = crypto
+    .createHmac("sha1", authToken)
+    .update(payload, "utf8")
+    .digest("base64");
+  return crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(signature));
+}
 
 export async function twilioPlaceCall(opts: {
   accountSid: string;

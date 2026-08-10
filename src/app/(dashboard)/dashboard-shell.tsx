@@ -171,7 +171,7 @@ function SidebarContent({
         )}
         <div className={`flex items-center ${collapsed ? "flex-col gap-2" : "w-full justify-between"}`}>
           <Link
-            href="/help"
+            href="/support"
             className={`flex items-center gap-2 rounded-md py-2 text-sm text-text-secondary transition-colors hover:bg-hover hover:text-text ${collapsed ? "justify-center px-0" : "px-3"}`}
           >
             <HelpCircle className="h-[18px] w-[18px] flex-shrink-0" aria-hidden="true" />

@@ -1,5 +1,6 @@
-import { Card, PageHeader } from "@/components/ui";
-import { Mail, MessageCircle, BookOpen } from "lucide-react";
+import { Card, PageHeader, Button } from "@/components/ui";
+import { Mail, MessageCircle, BookOpen, ExternalLink } from "lucide-react";
+import Link from "next/link";
 
 export default function HelpPage() {
   return (
@@ -15,9 +16,15 @@ export default function HelpPage() {
           </div>
           <h2 className="mb-1 text-sm font-semibold text-text">Documentation</h2>
           <p className="text-sm text-text-secondary">
-            Need help connecting a channel or running a campaign? Email us and we&apos;ll share
-            step-by-step setup guides for your stack.
+            Visit the Evernaro Help Center for step-by-step guides on setup, channels, appointments, AI, billing, and
+            troubleshooting.
           </p>
+          <Link href="/help" target="_blank" rel="noopener noreferrer" className="mt-3 inline-block">
+            <Button size="sm" variant="secondary">
+              Open Help Center
+              <ExternalLink className="ml-1.5 h-3.5 w-3.5" aria-hidden="true" />
+            </Button>
+          </Link>
         </Card>
         <Card className="p-5">
           <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-md bg-primary-light">

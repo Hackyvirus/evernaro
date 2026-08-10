@@ -27,7 +27,7 @@ export async function POST(req: Request) {
   try {
     const { userId } = await requireOrgUser();
 
-    const allowed = await checkRateLimit(`mfa:setup:${userId}`, 5, 60 * 60);
+    const allowed = await checkRateLimit(`mfa:setup:${userId}`, 5, 60 * 60, { failClosed: true });
     if (!allowed) {
       return NextResponse.json({ error: "Too many attempts. Please try again later." }, { status: 429 });
     }
@@ -70,7 +70,7 @@ export async function PUT(req: Request) {
   try {
     const { userId } = await requireOrgUser();
 
-    const allowed = await checkRateLimit(`mfa:verify:${userId}`, 5, 15 * 60);
+    const allowed = await checkRateLimit(`mfa:verify:${userId}`, 5, 15 * 60, { failClosed: true });
     if (!allowed) {
       return NextResponse.json({ error: "Too many attempts. Please try again later." }, { status: 429 });
     }

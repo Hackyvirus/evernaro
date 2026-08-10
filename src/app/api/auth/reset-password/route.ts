@@ -11,7 +11,7 @@ const schema = z.object({
 });
 
 export async function POST(req: Request) {
-  const allowed = await checkRateLimit(`reset-password:${clientIp(req)}`, 10, 60 * 60);
+  const allowed = await checkRateLimit(`reset-password:${clientIp(req)}`, 10, 60 * 60, { failClosed: true });
   if (!allowed) {
     return NextResponse.json({ error: "Too many attempts. Please try again later." }, { status: 429 });
   }

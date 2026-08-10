@@ -112,7 +112,11 @@ export async function sendViaChannel(
         });
       }
     } catch (err) {
-      await refundWhatsAppMessage(debit.walletId, debit.id, "Gupshup send failed").catch(() => {});
+      try {
+        await refundWhatsAppMessage(debit.walletId, debit.id, "Gupshup send failed");
+      } catch (refundErr) {
+        console.error("Failed to refund WhatsApp wallet after send failure:", refundErr);
+      }
       throw err;
     }
     return;

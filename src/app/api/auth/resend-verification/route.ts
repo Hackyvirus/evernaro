@@ -8,7 +8,7 @@ import { sendVerificationEmail } from "@/lib/auth-email";
 const schema = z.object({ email: z.string().email() });
 
 export async function POST(req: Request) {
-  const allowed = await checkRateLimit(`resend-verification:${clientIp(req)}`, 5, 60 * 60);
+  const allowed = await checkRateLimit(`resend-verification:${clientIp(req)}`, 5, 60 * 60, { failClosed: true });
   if (!allowed) {
     return NextResponse.json({ error: "Too many attempts. Please try again later." }, { status: 429 });
   }

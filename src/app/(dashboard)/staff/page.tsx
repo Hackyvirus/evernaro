@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Button, Card, Input, PageHeader } from "@/components/ui";
+import { useRole, isAdmin } from "../role";
 
 type Staff = {
   id: string;
@@ -12,17 +13,26 @@ type Staff = {
 };
 
 export default function StaffPage() {
+  const role = useRole();
   const [staff, setStaff] = useState<Staff[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [name, setName] = useState("");
-  const [role, setRole] = useState("");
+  const [staffRole, setStaffRole] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
   async function load() {
-    const res = await fetch("/api/staff");
-    const data = await res.json();
-    setStaff(data.staff ?? []);
-    setLoading(false);
+    try {
+      const res = await fetch("/api/staff");
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Failed to load staff");
+      setStaff(data.staff ?? []);
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load staff");
+    } finally {
+      setLoading(false);
+    }
   }
 
   useEffect(() => {
@@ -34,16 +44,22 @@ export default function StaffPage() {
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setSubmitting(true);
-    const res = await fetch("/api/staff", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, role }),
-    });
-    setSubmitting(false);
-    if (res.ok) {
+    setError(null);
+    try {
+      const res = await fetch("/api/staff", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, role: staffRole }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error ?? "Failed to add staff");
       setName("");
-      setRole("");
-      load();
+      setStaffRole("");
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to add staff");
+    } finally {
+      setSubmitting(false);
     }
   }
 
@@ -52,17 +68,20 @@ export default function StaffPage() {
       <PageHeader title="Staff" description="Manage your team members and their roles." />
 
       <div className="flex flex-1 flex-col gap-6 p-6">
-        <Card className="p-4">
-          <form onSubmit={onSubmit} className="grid gap-4 sm:grid-cols-3">
-            <Input label="Name" required value={name} onChange={(e) => setName(e.target.value)} />
-            <Input label="Role" required value={role} onChange={(e) => setRole(e.target.value)} placeholder="e.g. Stylist" />
-            <div className="flex items-end">
-              <Button type="submit" loading={submitting} className="w-full">
-                Add staff
-              </Button>
-            </div>
-          </form>
-        </Card>
+        {error && <div className="rounded-lg bg-danger/10 p-3 text-sm text-danger">{error}</div>}
+        {isAdmin(role) && (
+          <Card className="p-4">
+            <form onSubmit={onSubmit} className="grid gap-4 sm:grid-cols-3">
+              <Input label="Name" required value={name} onChange={(e) => setName(e.target.value)} />
+              <Input label="Role" required value={staffRole} onChange={(e) => setStaffRole(e.target.value)} placeholder="e.g. Stylist" />
+              <div className="flex items-end">
+                <Button type="submit" loading={submitting} className="w-full">
+                  Add staff
+                </Button>
+              </div>
+            </form>
+          </Card>
+        )}
 
         {loading ? (
           <p className="text-sm text-text-secondary">Loading...</p>

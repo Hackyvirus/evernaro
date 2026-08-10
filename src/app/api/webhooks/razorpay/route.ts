@@ -14,6 +14,7 @@ import {
 } from "@/lib/billing/billing-run";
 import { syncOrganizationStatusFromSubscription } from "@/lib/billing/subscription-status";
 import { syncPaymentMethods } from "@/lib/billing/payment-methods";
+import { checkRateLimit } from "@/lib/rate-limit";
 
 interface RazorpayWebhookPaymentEntity {
   id?: string;
@@ -90,6 +91,12 @@ export async function POST(req: Request) {
 
   if (!verifyRazorpayWebhookSignature(rawBody, signature)) {
     return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
+  }
+
+  // Fail-open rate limit: Razorpay retries aggressively on non-2xx. A Redis
+  // outage must not cause us to drop legitimate retries.
+  if (!(await checkRateLimit("webhook:razorpay", 500, 60, { failClosed: false }))) {
+    return NextResponse.json({ ok: true });
   }
 
   let body: RazorpayWebhookPayload;
@@ -327,6 +334,7 @@ export async function POST(req: Request) {
 
       if (body.event === "subscription.payment.failed" || body.event === "subscription.pending") {
         const entity = body.payload?.subscription?.entity;
+        const payment = body.payload?.payment?.entity;
         if (!entity?.id) return;
 
         const subscription = await tx.customerSubscription.findFirst({
@@ -341,6 +349,22 @@ export async function POST(req: Request) {
         await syncOrganizationStatusFromSubscription(subscription.orgId, tx);
         if (body.event === "subscription.payment.failed") {
           await recordSubscriptionPaymentFailure(subscription.id, `Razorpay event: ${body.event}`, tx, eventId);
+          // Reconcile the failed payment attempt internally when Razorpay provides a payment id.
+          if (payment?.id) {
+            await recordSubscriptionPayment(
+              {
+                orgId: subscription.orgId,
+                subscriptionId: subscription.id,
+                amountInr: payment.amount ? Math.round(payment.amount / 100) : subscription.totalAmountInr,
+                razorpayPaymentId: payment.id,
+                razorpayOrderId: payment.order_id ?? undefined,
+                status: "FAILED",
+                failureReason: payment.error_description || payment.error_code || "Payment failed",
+                metadata: { source: "webhook", event: body.event },
+              },
+              tx
+            );
+          }
         }
         await logBillingEvent(subscription.orgId, subscription.id, body.event.toUpperCase(), {
           razorpayStatus: entity.status,
@@ -359,6 +383,7 @@ export async function POST(req: Request) {
 
       if (body.event === "subscription.halted") {
         const entity = body.payload?.subscription?.entity;
+        const payment = body.payload?.payment?.entity;
         if (!entity?.id) return;
 
         const subscription = await tx.customerSubscription.findFirst({
@@ -372,6 +397,21 @@ export async function POST(req: Request) {
         });
         await syncOrganizationStatusFromSubscription(subscription.orgId, tx);
         await recordSubscriptionPaymentFailure(subscription.id, `Razorpay event: ${body.event}`, tx, eventId);
+        if (payment?.id) {
+          await recordSubscriptionPayment(
+            {
+              orgId: subscription.orgId,
+              subscriptionId: subscription.id,
+              amountInr: payment.amount ? Math.round(payment.amount / 100) : subscription.totalAmountInr,
+              razorpayPaymentId: payment.id,
+              razorpayOrderId: payment.order_id ?? undefined,
+              status: "FAILED",
+              failureReason: payment.error_description || payment.error_code || "Subscription halted",
+              metadata: { source: "webhook", event: body.event },
+            },
+            tx
+          );
+        }
         await logBillingEvent(subscription.orgId, subscription.id, body.event.toUpperCase(), {
           razorpayStatus: entity.status,
         }, tx);
@@ -424,8 +464,11 @@ export async function POST(req: Request) {
       }
     }
   } catch (err) {
-    console.error("Razorpay webhook error:", err);
-    return NextResponse.json({ error: "Failed to process webhook" }, { status: 500 });
+    // Razorpay retries aggressively on non-2xx responses. Returning 200 with
+    // a logged error prevents duplicate processing while preserving observability.
+    // The webhook should be replayed manually after the underlying issue is fixed.
+    console.error("Razorpay webhook processing failed:", err);
+    return NextResponse.json({ ok: false, error: "Processing failed" }, { status: 200 });
   }
 
   return NextResponse.json({ ok: true });

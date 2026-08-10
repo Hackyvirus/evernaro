@@ -1,377 +1,335 @@
 # Evernaro
 
-Omnichannel customer messaging for small businesses, built by Eversity Tech LLP.
-One inbox for Telegram, Email, WhatsApp, Instagram, and Voice reminders, with
-AI-drafted replies a human reviews before sending.
+Evernaro is a multi-tenant omnichannel customer communication SaaS for Indian service businesses. It brings Telegram, Email, WhatsApp, Instagram, and Voice reminders into one team inbox, uses AI to draft replies from a business knowledge base, and automates appointment reminders and queue management.
 
-Two apps live in this repo: the **client dashboard** (what a business uses day
-to day) and the **platform admin dashboard** (what Eversity uses to manage
-every client org).
+**Current launch focus:** appointment-based Indian SMBs, starting with **salons and beauty clinics**. The core value proposition is reducing no-shows and saving front-desk time through automated WhatsApp appointment reminders and a unified team inbox.
 
-## Stack
+---
 
-- Next.js 16 (App Router) + TypeScript + Tailwind CSS v4
-- Prisma 6 + PostgreSQL (Neon)
-- Auth.js (next-auth v5 beta) — two separate Credentials providers, one for
-  org users, one for platform admins
-- BullMQ + Redis — background jobs for bulk Campaigns and scheduled Reminders
-- Sentry — error monitoring
-- Razorpay — billing
-- Vitest — unit tests
+## Architecture
+
+- **Frontend:** Next.js 16 App Router + React 19 + TypeScript 5 + Tailwind CSS v4
+- **Backend:** Next.js API routes (deployed as serverless functions on Vercel)
+- **Background jobs:** Separate long-running BullMQ worker (`src/workers/index.ts`) for campaigns, scheduled reminders, queue no-show checks, and daily billing runs
+- **Database:** PostgreSQL (Prisma ORM, migrations committed in `prisma/migrations/`)
+- **Queue / cache:** Redis + BullMQ
+- **Auth:** Auth.js v5 (NextAuth) with JWT sessions, bcrypt, TOTP MFA, and backup codes
+- **AI drafts:** OpenAI or Anthropic (configurable via `AI_PROVIDER`)
+- **Email:** Resend
+- **Payments:** Razorpay (subscriptions + wallet top-ups)
+- **WhatsApp:** Gupshup API with prepaid wallet and template enforcement
+- **Other channels:** Telegram bot, Instagram DMs, Twilio voice calls
+- **Error monitoring:** Sentry (optional, no-ops without config)
+- **Deployment target:** Vercel for the web app + Render for the persistent worker (preferred)
+- **Domain:** `evernaro.com` (configure in DNS + Vercel)
+
+See the deployment documentation for detailed setup:
+
+- `docs/DEPLOYMENT_ARCHITECTURE.md` — architecture and platform decisions
+- `docs/DEPLOYMENT.md` — step-by-step deployment instructions
+
+---
 
 ## Local setup
 
 ```bash
+# Clone
+git clone <repo-url>
+cd evernaro
+
+# Install dependencies
 npm install
-cp .env.example .env   # fill in real values — see below
-npx prisma generate
-npx prisma migrate dev
-npm run dev            # web app at http://localhost:3000
-npm run worker          # separate terminal — required for Campaigns/Reminders/Voice to actually send
+
+# Copy environment template
+cp .env.example .env
+
+# Generate the Prisma client
+npm run prisma:generate
+
+# Run the database migrations against your local Postgres
+npx prisma migrate deploy
+
+# Start the dev server
+npm run dev
 ```
 
-Generate fresh secret values (`AUTH_SECRET`, `ENCRYPTION_KEY`, webhook secret)
-instead of inventing them by hand:
+You also need a local **Postgres** database and **Redis** server. The easiest way is Docker:
 
 ```bash
-npm run secrets        # prints ready-to-paste values — copy into .env, never commit
+docker-compose up -d postgres redis
 ```
 
-Redis must be running locally for the worker (`REDIS_URL`, defaults to
-`redis://localhost:6379`).
+Then update `DATABASE_URL`, `DIRECT_URL`, and `REDIS_URL` in `.env` to match.
 
-### Demo accounts (local development only)
+### Required variables for local development
 
-After running migrations, seed the local database with demo accounts:
+At minimum fill these in `.env` before running the app:
+
+- `DATABASE_URL` — Postgres connection (pooled)
+- `DIRECT_URL` — Postgres connection (direct, non-pooled)
+- `AUTH_SECRET` — 32-byte base64 session key
+- `ENCRYPTION_KEY` — 32-byte base64 credential-encryption key
+- `NEXT_PUBLIC_BASE_URL` — `http://localhost:3000` for local dev
+- `REDIS_URL` — Redis connection string
+
+The included `.env` file already has secure local values for `AUTH_SECRET`, `ENCRYPTION_KEY`, `PLATFORM_SETUP_TOKEN`, `INBOUND_EMAIL_WEBHOOK_SECRET`, and `CRON_SECRET`. Replace the `REPLACE_WITH_YOUR_VALUE` placeholders for Postgres, Redis, AI, Resend, and Razorpay as needed.
+
+---
+
+## Development
+
+Commands from `package.json`:
+
+| Command | Purpose |
+|---|---|
+| `npm run dev` | Start Next.js dev server |
+| `npm run lint` | Run ESLint |
+| `npm run test` | Run Vitest unit tests |
+| `npm run typecheck` | Run `tsc --noEmit` |
+| `npm run build` | Production Next.js build |
+| `npm run start` | Start production server |
+| `npm run worker` | Start the BullMQ worker (`npx tsx src/workers/index.ts`) |
+| `npm run prisma:generate` | Generate Prisma client |
+| `npm run prisma:validate` | Validate Prisma schema |
+| `npm run verify-env` | Validate required environment variables |
+
+---
+
+## Database
+
+### Prisma setup
 
 ```bash
-npx prisma db seed   # or: npm run db:seed
+# Generate the client after schema changes
+npm run prisma:generate
+
+# Validate the schema
+npm run prisma:validate
+
+# Run migrations (production / CI)
+npx prisma migrate deploy
+
+# Open Prisma Studio
+npx prisma studio
 ```
 
-These accounts are created only when `NODE_ENV` is not `production` and are
-**not valid in production**. Rotate or remove them before going live.
+`DATABASE_URL` is the pooled connection used by the app. `DIRECT_URL` is the direct connection used by Prisma for migrations and introspection. Both are required because Prisma Migrate cannot run through a connection pooler.
 
-| URL | Email | Password |
-|---|---|---|---|
-| `/login` | `client@demo.com` | `DemoClient1234` |
-| `/platform/login` | `admin@demo.com` | `DemoAdmin1234` |
+---
 
-### Required environment variables
+## Redis / BullMQ
 
-See the comments in `.env` for the full list and what each one is for —
-database, auth, AI provider, email, encryption key, Redis, and the optional
-Sentry/rate-limit knobs. The two that will bite you if wrong:
+Redis is used for:
 
-- `NEXT_PUBLIC_BASE_URL` must match wherever the app is actually reachable —
-  every channel's inbound webhook URL is built from it.
-- `ENCRYPTION_KEY` must be a 32-byte key, base64-encoded (generate with
-  `node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"`).
-  Losing it makes every stored channel credential unrecoverable.
+- **BullMQ job queues:** `campaign-send`, `reminder-send`, `queue-no-show`, `billing-run`
+- **Rate limiting:** login, signup, and webhook endpoints
 
-## Testing
+The worker is a separate process that consumes these queues. It is **not** part of the Next.js server.
+
+---
+
+## Worker
+
+Start the worker locally:
 
 ```bash
-npm test        # vitest, runs once
-npx tsc --noEmit # type-check
-npm run lint     # lint
-npm run build    # production build
+npm run worker
 ```
 
-Test coverage is intentionally minimal — pure/security-critical logic only
-(encryption round-trip, phone formatting, the WhatsApp template-required
-validation, the org-scoping session guard, wallet math), not full coverage.
-CI (`.github/workflows/ci.yml`) runs all four on every push and PR.
+In production, run the worker as a persistent container/service. The Dockerfile for the worker is `Dockerfile.worker`. The worker is intentionally separate from the Next.js app because it needs a long-running process and cannot run on Vercel.
 
-## Architecture notes
+The worker uses the same environment variables as the web app (`DATABASE_URL`, `REDIS_URL`, `ENCRYPTION_KEY`, channel provider keys, etc.).
 
-- **Multi-tenancy**: every row that belongs to a business is scoped by
-  `orgId`, re-verified against the database on every request
-  (`src/lib/session.ts`) rather than trusted from the session JWT alone.
-- **Channel credentials** (bot tokens, API keys) are encrypted at rest
-  (AES-256-GCM, `src/lib/crypto.ts`) — a database leak alone doesn't expose
-  live third-party credentials.
-- **Authentication**: bcrypt password hashing, email verification, password
-  reset, and optional TOTP MFA (via Settings > Security). `src/lib/totp.ts`
-  handles TOTP secrets and backup codes; `src/lib/auth.ts` enforces MFA at
-  login.
-- **WhatsApp template compliance**: Meta rejects free-text messages sent more
-  than 24 hours after a contact's last inbound message. Campaigns and
-  Reminders enforce an approved template in that case
-  (`src/lib/whatsapp-template-validation.ts`); inbox replies show a warning
-  instead of a hard block, since a human is making that call in real time.
-- **Voice is reminder-only** — never wired into bulk Campaigns. India's
-  TRAI/DND rules make unsolicited automated calling a real compliance risk;
-  Voice only reaches contacts through an individually-scheduled Reminder.
-- **The worker (`src/workers/index.ts`) is a separate long-lived process**,
-  not part of the Next.js app — it consumes BullMQ jobs for Campaigns and
-  Reminders. It needs to run continuously in production, which Vercel's
-  serverless functions can't do (see Deployment below).
-- **Billing** (`src/lib/razorpay.ts`) uses Razorpay Orders + Checkout for a
-  one-time payment per invoice, not the Subscriptions product — Subscriptions
-  needs a Plan pre-created in the Razorpay dashboard, which needs a live
-  account to set up first. A platform admin generates an invoice (defaulting
-  to the org's monthly fee); the org owner pays it from their Billing page.
-  The webhook (`/api/webhooks/razorpay`) is the durable source of truth for
-  payment status — the client-side confirmation is just for fast UI feedback.
-- **Subscription enforcement**: suspended or past-due organizations are blocked
-  from sending messages at the single shared chokepoint (`src/lib/send.ts` and
-  `src/workers/index.ts`). The billing UI still shows a payment banner and a
-  way to settle the invoice.
+---
 
-## Deployment
+## Environment variables
 
-You deploy **two pieces** in production:
+See `.env.example` for the full template. Variables are grouped below.
 
-| Piece | Platform | Why |
+### Required core application
+
+| Variable | Purpose | Example |
 |---|---|---|
-| Next.js app | Vercel | Handles web traffic, API routes, and static pages. |
-| Worker | Render / Railway / Fly.io | Runs the BullMQ job queue continuously. Vercel cannot run long-lived processes. |
-| Database | Neon | Postgres (already configured). |
-| Redis | Upstash (or any managed Redis 6.2+) | Required for BullMQ. Local Redis is only for development. |
+| `DATABASE_URL` | Pooled Postgres connection string | `postgresql://...` |
+| `DIRECT_URL` | Direct Postgres connection string | `postgresql://...` |
+| `AUTH_SECRET` | 32-byte base64 session signing key | generate with `crypto.randomBytes(32).toString('base64')` |
+| `ENCRYPTION_KEY` | 32-byte base64 credential-encryption key | generate with `crypto.randomBytes(32).toString('base64')` |
+| `NEXT_PUBLIC_BASE_URL` | Public domain for webhooks | `https://evernaro.com` |
+| `REDIS_URL` | Redis/BullMQ connection string | `redis://localhost:6379` |
+| `PLATFORM_SETUP_TOKEN` | Token to create the first platform admin | 64-character hex |
 
-### High-level flow
-
-1. Buy/own a domain (`evernaro.com`).
-2. Create a Neon Postgres database.
-3. Create an Upstash Redis database.
-4. Create a Vercel project and connect the GitHub repo.
-5. Add all environment variables in Vercel.
-6. Deploy the Vercel app.
-7. Create a Render/Railway service for the worker using `Dockerfile.worker`.
-8. Add the same environment variables to the worker service.
-9. Connect your domain to Vercel.
-10. Configure third-party services (Razorpay, Resend, WhatsApp provider, etc.).
-
-You do **not** need to install Docker locally. Render/Railway/Fly.io build the Docker image for you from `Dockerfile.worker`.
-
-### Step 1: Generate production secrets
-
-Run this locally:
-
-```bash
-npm run secrets
-```
-
-It prints three values. Copy them somewhere safe (a password manager, not a chat). You will need them in Vercel and the worker service:
+### Authentication / security
 
 - `AUTH_SECRET`
 - `ENCRYPTION_KEY`
 - `INBOUND_EMAIL_WEBHOOK_SECRET`
+- `CRON_SECRET` (optional)
 
-**Never commit these.**
+### AI
 
-### Step 2: Neon Postgres
+- `AI_PROVIDER` — `openai` or `anthropic`
+- `OPENAI_API_KEY`
+- `ANTHROPIC_API_KEY`
 
-1. Create a project at [neon.tech](https://neon.tech).
-2. Create a database.
-3. Copy the **pooled** connection string for `DATABASE_URL`.
-4. Copy the **direct** connection string for `DIRECT_URL`.
+AI is optional. If no provider is configured, AI draft suggestions are silently skipped.
 
-Both strings look like:
+### Email
 
-```text
-postgresql://neondb_owner:PASSWORD@HOST-pooler.region.aws.neon.tech/evernaro?sslmode=require
-postgresql://neondb_owner:PASSWORD@HOST.region.aws.neon.tech/evernaro?sslmode=require
-```
+- `RESEND_API_KEY` — outbound and transactional email
+- `INBOUND_EMAIL_WEBHOOK_SECRET` — inbound email webhook verification
 
-### Step 3: Upstash Redis
+### WhatsApp / Gupshup
 
-1. Create an account at [upstash.com](https://upstash.com).
-2. Create a Redis database.
-3. Choose **Redis 6.2 or higher** (BullMQ requires this).
-4. Copy the **Redis URL** (it looks like `rediss://default:TOKEN@HOST:6379`).
-5. Paste it into `REDIS_URL`.
+Channel credentials are entered through the dashboard and encrypted at rest with `ENCRYPTION_KEY`. The app needs a Gupshup WhatsApp Business API account.
 
-### Step 4: Vercel — Next.js app
+### Razorpay
 
-1. Go to [vercel.com](https://vercel.com) and import the GitHub repo `Hackyvirus/evernaro`.
-2. Framework preset: **Next.js**.
-3. Add the environment variables listed in the table below.
-4. Click **Deploy**.
+- `RAZORPAY_KEY_ID` — public key
+- `NEXT_PUBLIC_RAZORPAY_KEY_ID` — same public key, exposed to browser for checkout
+- `RAZORPAY_KEY_SECRET` — server-side secret, **never expose to browser**
+- `RAZORPAY_WEBHOOK_SECRET` — configured in Razorpay dashboard for webhook verification
 
-Vercel will build the project on every push to `main`.
+### Monitoring
 
-### Step 5: Environment variables for production
+- `SENTRY_DSN` / `NEXT_PUBLIC_SENTRY_DSN`
+- `SENTRY_ORG`, `SENTRY_PROJECT`, `SENTRY_AUTH_TOKEN`
 
-Add these to **Vercel** → Project → Settings → Environment Variables.
+All optional. Sentry no-ops safely when not configured.
 
-| Variable | Example value / where to get it |
-|---|---|
-| `DATABASE_URL` | Neon pooled connection string |
-| `DIRECT_URL` | Neon direct connection string |
-| `AUTH_SECRET` | From `npm run secrets` |
-| `ENCRYPTION_KEY` | From `npm run secrets` |
-| `NEXT_PUBLIC_BASE_URL` | `https://evernaro.com` |
-| `REDIS_URL` | Upstash Redis URL |
-| `RESEND_API_KEY` | Resend API key |
-| `INBOUND_EMAIL_WEBHOOK_SECRET` | From `npm run secrets` |
-| `AI_PROVIDER` | `openai` or `anthropic` |
-| `OPENAI_API_KEY` | OpenAI API key (optional) |
-| `ANTHROPIC_API_KEY` | Anthropic API key (optional) |
-| `SENTRY_DSN` | Sentry project DSN |
-| `NEXT_PUBLIC_SENTRY_DSN` | Same as `SENTRY_DSN` |
-| `SENTRY_ORG` | Sentry organization slug |
-| `SENTRY_PROJECT` | Sentry project slug |
-| `SENTRY_AUTH_TOKEN` | Sentry auth token (for source maps) |
-| `RAZORPAY_KEY_ID` | Razorpay key ID |
-| `NEXT_PUBLIC_RAZORPAY_KEY_ID` | Same as `RAZORPAY_KEY_ID` |
-| `RAZORPAY_KEY_SECRET` | Razorpay key secret |
-| `RAZORPAY_WEBHOOK_SECRET` | Razorpay webhook secret |
-| `CAMPAIGN_RATE_PER_SECOND` | `5` |
-| `CAMPAIGN_WORKER_CONCURRENCY` | `5` |
-| `REMINDER_WORKER_CONCURRENCY` | `10` |
-| `SEAT_LIMIT` | `5` |
-| `DAILY_CAMPAIGN_RECIPIENT_LIMIT` | `2000` |
-| `RUN_MIGRATIONS` | `false` (set `true` only for the first deploy, then set back) |
+### Optional integrations
 
-### Step 6: Run the first database migration
+- Telegram bot token (configured in dashboard)
+- Instagram page access token + `META_APP_SECRET` (configured in dashboard)
+- Twilio credentials for voice calls (configured in dashboard)
 
-After the first deploy, you must run Prisma migrations against the Neon database.
+---
 
-**Option A — one-off Vercel command:**
+## Deployment
 
-In Vercel, run a one-off command:
+### Vercel (web app)
+
+1. Push this repo to GitHub.
+2. Import the project in Vercel.
+3. Add all required environment variables in the Vercel dashboard.
+4. Set the framework preset to **Next.js**.
+5. Deploy.
+
+**Important:** set `NEXT_PUBLIC_BASE_URL` to the production domain before connecting any channel, because all webhook URLs are built from it.
+
+### Worker
+
+Deploy `Dockerfile.worker` to a persistent host. Options:
+
+- Railway
+- Render
+- Fly.io
+- AWS ECS / Google Cloud Run (with CPU always allocated)
+
+The worker needs the same environment variables as the web app.
+
+### Database
+
+Provision a PostgreSQL database (e.g., Neon, Supabase, Railway, AWS RDS). Set both `DATABASE_URL` (pooled) and `DIRECT_URL` (direct).
+
+Run migrations once before the first deploy:
 
 ```bash
 npx prisma migrate deploy
 ```
 
-**Option B — from your local machine:**
+For Docker, set `RUN_MIGRATIONS=true` on a single app container to run migrations at startup. Disable it on replicas.
 
-Set `DATABASE_URL` and `DIRECT_URL` to your Neon production strings, then run:
+### Redis
+
+Provision a managed Redis instance (e.g., Upstash, Redis Cloud, Railway Redis). Set `REDIS_URL`.
+
+### Webhooks
+
+Configure each provider to point to the live URLs:
+
+- Telegram: `https://evernaro.com/api/telegram/webhook/<channelId>?secret=<channel-secret>`
+- WhatsApp/Gupshup: configured through Gupshup dashboard
+- Instagram: `https://evernaro.com/api/instagram/webhook/<channelId>`
+- Email inbound: `https://evernaro.com/api/email/inbound`
+- Razorpay: `https://evernaro.com/api/webhooks/razorpay`
+- Voice/Twilio: `https://evernaro.com/api/voice/twiml/<callLogId>` and status callback
+
+### Domain
+
+Point `evernaro.com` (or your chosen domain) to Vercel and configure DNS. Enable HTTPS.
+
+---
+
+## Preview vs Production
+
+- **Preview deployments:** Vercel creates a preview URL per branch. Do **not** connect live channel webhooks to preview URLs unless you configure them for testing.
+- **Production:** only the production domain should receive provider webhooks.
+
+---
+
+## First customer setup (salon pilot)
+
+Minimum steps to onboard a real salon:
+
+1. **Create account** — sign up at `/signup`, select Salon/Beauty.
+2. **Verify email** — click the verification link.
+3. **Configure salon** — set business name, hours, and public slug in `/settings`.
+4. **Add services** — create services (e.g., Haircut, Facial) with duration and price in `/services`.
+5. **Configure hours** — set business hours so the system knows when you are open.
+6. **Configure WhatsApp** — connect a Gupshup WhatsApp Business API channel in `/channels` and top up the wallet.
+7. **Configure reminders** — create a scheduled reminder template for appointments.
+8. **Configure AI** — add `OPENAI_API_KEY` or `ANTHROPIC_API_KEY` to enable AI draft replies.
+9. **Configure billing** — set Razorpay keys so the salon can subscribe and top up wallet.
+10. **Test appointment** — book an appointment for tomorrow.
+11. **Test reminder** — confirm the automated WhatsApp reminder is scheduled/sent.
+12. **Test inbound reply** — reply to the reminder and verify it appears in `/inbox` with an AI draft.
+
+---
+
+## CI/CD
+
+This repository includes a GitHub Actions workflow at `.github/workflows/ci.yml` that runs on every push and pull request:
+
+- Install dependencies
+- Generate Prisma client
+- Validate Prisma schema
+- Run ESLint
+- Run unit tests
+- Run TypeScript typecheck
+- Run production build
+- Build Docker image
+
+It uses CI-safe dummy values for `DATABASE_URL` and `DIRECT_URL` because no live database connection is required for validation.
+
+---
+
+## Security
+
+- `.env` is gitignored. Never commit it.
+- Channel credentials are encrypted with AES-256-GCM before being stored in Postgres.
+- Sessions are re-verified against the database on every protected request.
+- All API routes enforce organization scoping and role-based access.
+- `NEXT_PUBLIC_*` variables are exposed to the browser — only put public keys there (e.g., `NEXT_PUBLIC_RAZORPAY_KEY_ID`). Never expose server secrets.
+
+---
+
+## Useful scripts
 
 ```bash
-npx prisma migrate deploy
+# Generate secure secrets
+node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"   # AUTH_SECRET / ENCRYPTION_KEY
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"      # PLATFORM_SETUP_TOKEN
+node -e "console.log(require('crypto').randomBytes(24).toString('hex'))"      # INBOUND_EMAIL_WEBHOOK_SECRET / CRON_SECRET
+
+# Validate env
+npm run verify-env
+
+# Seed demo data (development only)
+npx tsx scripts/seed-demo-account.ts
 ```
 
-After the first migration, set `RUN_MIGRATIONS=false` in Vercel.
+---
 
-### Step 7: Render / Railway — worker
+## License
 
-The worker is a **Docker container**. You do not need to know Docker; the platform builds it for you.
-
-#### Render
-
-1. Go to [render.com](https://render.com) and create a **Web Service**.
-2. Connect the GitHub repo `Hackyvirus/evernaro`.
-3. Select **Docker** as the runtime.
-4. Set the **Dockerfile Path** to `Dockerfile.worker`.
-5. Set the same environment variables as Vercel (except `NEXT_PUBLIC_*` variables are not needed for the worker, but they will not hurt).
-6. Choose a **Basic** plan or higher. The worker must run 24/7.
-7. Deploy.
-
-#### Railway
-
-1. Go to [railway.app](https://railway.app) and create a new project.
-2. Choose **Deploy from GitHub repo** and select `Hackyvirus/evernaro`.
-3. Add a service.
-4. In the service settings, set the **Dockerfile** to `Dockerfile.worker`.
-5. Add the environment variables.
-6. Deploy.
-
-### Step 8: Connect your GoDaddy domain to Vercel
-
-You already own `evernaro.com` on GoDaddy.
-
-1. In Vercel, go to your project → **Settings** → **Domains**.
-2. Add `evernaro.com` and `www.evernaro.com`.
-3. Vercel will show you DNS records to add. They usually look like this:
-
-| Type | Name | Value |
-|---|---|---|
-| A | `@` | `76.76.21.21` |
-| CNAME | `www` | `cname.vercel-dns.com` |
-
-> The exact IP and CNAME value may differ. Use whatever Vercel shows you.
-
-4. Go to [godaddy.com](https://godaddy.com) → **My Products** → **DNS** for `evernaro.com`.
-5. Delete any existing A, CNAME, or AAAA records for `@` and `www`.
-6. Add the records from Vercel.
-7. Save.
-8. Wait 5–30 minutes for DNS to propagate.
-9. In Vercel, click **Verify**.
-
-Once verified, Vercel will issue an SSL certificate automatically.
-
-### Step 9: Configure email (Resend)
-
-1. Add `evernaro.com` as a domain in Resend.
-2. Resend will give you DNS records (SPF, DKIM, DMARC).
-3. Add those records in GoDaddy DNS.
-4. After verification, create and verify these sender addresses in Resend:
-   - `auth@evernaro.com`
-   - `billing@evernaro.com`
-   - `support@evernaro.com`
-   - `contact@evernaro.com`
-   - `notifications@evernaro.com`
-   - `security@evernaro.com`
-   - `updates@evernaro.com`
-5. Set `RESEND_API_KEY` in Vercel and the worker service.
-
-### Step 10: Configure Razorpay
-
-1. In Razorpay dashboard, set the webhook URL:
-
-```text
-https://evernaro.com/api/webhooks/razorpay
-```
-
-2. Subscribe to events: `payment.captured`, `payment.failed`.
-3. Set a webhook secret and paste it into `RAZORPAY_WEBHOOK_SECRET` in Vercel and the worker.
-
-### Step 11: Configure WhatsApp / other channels
-
-When you connect a channel in the app, it will ask for the webhook URL. The app builds it automatically from `NEXT_PUBLIC_BASE_URL`. As long as `NEXT_PUBLIC_BASE_URL=https://evernaro.com`, the webhook URLs will be correct.
-
-For WhatsApp, verify inbound webhooks reach:
-
-```text
-https://evernaro.com/api/whatsapp/webhook/[channelId]
-```
-
-## Troubleshooting
-
-### `output: "standalone"` breaks Vercel builds
-
-`next.config.ts` uses `output: "standalone"` only when `DOCKER_BUILD=true`. Vercel builds use the default Next.js output. If you see an error about `.next/next-server.js.nft.json`, make sure `DOCKER_BUILD` is not set in Vercel.
-
-### Docker build fails with Redis or database errors during static generation
-
-This project uses lazy initialization for external connections:
-
-- `src/lib/queue.ts` creates BullMQ queues only when a job is scheduled.
-- Pages that read sessions or query the database export `dynamic = "force-dynamic"` so they are never statically generated at build time.
-
-If you add a new page that uses `auth()`, `prisma`, `queue`, or `redisConnection`, either:
-- mark it with `export const dynamic = "force-dynamic"`, or
-- make sure it does not access external services during the build step.
-
-### CI now builds Docker images on every push
-
-`.github/workflows/ci.yml` runs both the Next.js build and a Docker build for `Dockerfile` and `Dockerfile.worker`. This catches Docker-only build failures before they reach production.
-
-## Production launch checklist
-
-1. **Make the repo private** if it contains real secrets in commit history.
-2. Generate fresh `AUTH_SECRET` and `ENCRYPTION_KEY` (`npm run secrets`). Store them in Vercel and the worker service.
-3. Verify `evernaro.com` in Resend and create the required sender addresses listed in Step 9.
-4. Set `NEXT_PUBLIC_BASE_URL=https://evernaro.com` before connecting any channel.
-5. Set all Razorpay keys and webhook.
-6. Run a small test payment and confirm the invoice becomes `PAID`.
-7. Verify the worker is running and connected to Redis.
-8. Replace placeholder testimonials in `src/app/page.tsx` with real quotes before marketing.
-9. Have the `Terms` and `Privacy` pages reviewed by a lawyer.
-10. Run a live WhatsApp send and verify inbound webhooks reach the production endpoint.
-11. Rotate the platform admin password and remove the seeded demo accounts.
-
-Run `npm run secrets` to print ready-to-paste values for `AUTH_SECRET`,
-`ENCRYPTION_KEY`, and the webhook secret. After filling in `.env`, run
-`npm run verify-env` to check that all required variables are present and
-well-formed before deploying.
-
-## Legal
-
-`src/app/terms` and `src/app/privacy` are production-ready drafts, accurate to
-what the product actually does. They still need review by a lawyer familiar with
-Indian IT and contract law (and any market you sell into) before you rely
-on them as final legal documents.
+Private — Eversity Tech LLP.

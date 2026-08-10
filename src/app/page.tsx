@@ -9,6 +9,7 @@ import { Faq } from "@/components/landing/faq";
 import {
   ArrowRight,
   Bell,
+  BookOpen,
   Bot,
   CalendarClock,
   Camera,
@@ -251,6 +252,9 @@ export default async function Home() {
           <nav className="flex items-center gap-3">
             <Link href="/pricing" className="cursor-pointer text-sm text-text-secondary hover:text-text">
               Pricing
+            </Link>
+            <Link href="/help" className="hidden cursor-pointer text-sm text-text-secondary hover:text-text sm:block">
+              Help
             </Link>
             <Link href="/contact" className="cursor-pointer text-sm text-text-secondary hover:text-text">
               Contact
@@ -659,6 +663,35 @@ export default async function Home() {
           </div>
         </section>
 
+        {/* User Guide CTA */}
+        <section className="flex flex-col gap-6">
+          <Reveal className="mx-auto max-w-2xl text-center">
+            <p className="text-xs font-medium tracking-wide text-primary uppercase">User Guide</p>
+            <h2 className="mt-2 text-3xl font-extrabold text-text">New to Evernaro?</h2>
+            <p className="mt-3 text-base text-text-secondary">
+              Learn how to set up your business, connect your communication channels, manage appointments, use
+              AI-assisted replies, and start automating customer communication.
+            </p>
+          </Reveal>
+          <Reveal delay={80}>
+            <Card className="mx-auto flex max-w-3xl flex-col items-center gap-5 p-8 text-center">
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary-lighter">
+                <BookOpen className="h-6 w-6 text-primary" aria-hidden="true" />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-text">Explore the Evernaro User Guide</h3>
+                <p className="mt-1 text-sm text-text-secondary">
+                  Step-by-step tutorials for salons, clinics, restaurants, and service businesses — no technical
+                  knowledge required.
+                </p>
+              </div>
+              <Link href="/help">
+                <Button size="lg">Open the User Guide</Button>
+              </Link>
+            </Card>
+          </Reveal>
+        </section>
+
         {/* Pricing */}
         <section className="flex flex-col gap-8">
           <Reveal className="mx-auto max-w-2xl text-center">
@@ -832,6 +865,7 @@ export default async function Home() {
                   { label: "Notifications", href: "/signup" },
                   { label: "Unified Inbox", href: "/signup" },
                   { label: "Analytics", href: "/signup" },
+                  { label: "Help Center", href: "/help" },
                 ].map((item) => (
                   <li key={item.label}>
                     <Link href={item.href} className="hover:text-text">

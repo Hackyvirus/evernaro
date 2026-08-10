@@ -31,3 +31,11 @@ export async function sendEmail(opts: {
   });
   if (error) throw new Error(error.message);
 }
+
+// Validate a Resend API key by listing API keys. Throws if the key is invalid.
+export async function validateResendApiKey(apiKey: string) {
+  const resend = new Resend(apiKey);
+  const { error } = await resend.apiKeys.list();
+  if (error) throw new Error(error.message);
+  return true;
+}

@@ -115,24 +115,35 @@ export function ClientDetail({
   const [walletMessage, setWalletMessage] = useState<string | null>(null);
 
   async function refreshWallet() {
-    const res = await fetch(`/api/platform/organizations/${org.id}/wallet`);
-    const d = await res.json().catch(() => ({}));
-    if (d.wallet) {
-      setWallet(d.wallet);
-      setThreshold(String(Math.round(d.wallet.lowBalanceThresholdPaise / 100)));
+    try {
+      const res = await fetch(`/api/platform/organizations/${org.id}/wallet`);
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(d.error ?? "Failed to load wallet");
+      if (d.wallet) {
+        setWallet(d.wallet);
+        setThreshold(String(Math.round(d.wallet.lowBalanceThresholdPaise / 100)));
+      }
+      setWalletTx(d.transactions ?? []);
+      setWalletMessage(null);
+    } catch (err) {
+      setWalletMessage(err instanceof Error ? err.message : "Failed to load wallet");
     }
-    setWalletTx(d.transactions ?? []);
   }
 
   async function saveThreshold() {
     setSavingThreshold(true);
+    setWalletMessage(null);
     try {
-      await fetch(`/api/platform/organizations/${org.id}/wallet`, {
+      const res = await fetch(`/api/platform/organizations/${org.id}/wallet`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ lowBalanceThresholdPaise: Math.round(Number(threshold) * 100) }),
       });
-      refreshWallet();
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(d.error ?? "Failed to save threshold");
+      await refreshWallet();
+    } catch (err) {
+      setWalletMessage(err instanceof Error ? err.message : "Failed to save threshold");
     } finally {
       setSavingThreshold(false);
     }
@@ -169,15 +180,18 @@ export function ClientDetail({
 
   async function saveFee() {
     setSavingFee(true);
+    setInvoiceMessage(null);
     try {
-      await fetch(`/api/platform/organizations/${org.id}`, {
+      const res = await fetch(`/api/platform/organizations/${org.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ monthlyFeeInr: fee === "" ? null : Number(fee) }),
       });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(d.error ?? "Failed to save fee");
       onRefresh();
-    } catch {
-      // best-effort
+    } catch (err) {
+      setInvoiceMessage(err instanceof Error ? err.message : "Failed to save fee");
     } finally {
       setSavingFee(false);
     }

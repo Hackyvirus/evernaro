@@ -46,6 +46,7 @@ export default function PlatformAuditLogsPage() {
   const [page, setPage] = useState(1);
   const [limit] = useState(50);
   const [loaded, setLoaded] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [orgs, setOrgs] = useState<OrgSummary[]>([]);
   const [orgId, setOrgId] = useState("");
   const [action, setAction] = useState("");
@@ -53,13 +54,18 @@ export default function PlatformAuditLogsPage() {
 
   useEffect(() => {
     fetch("/api/platform/organizations")
-      .then((r) => r.json())
-      .then((d) => setOrgs(d.organizations ?? []));
+      .then(async (r) => {
+        const d = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(d.error ?? "Failed to load organizations");
+        setOrgs(d.organizations ?? []);
+      })
+      .catch((err) => setError(err instanceof Error ? err.message : "Failed to load organizations"));
   }, []);
 
   useEffect(() => {
     async function load() {
       setLoaded(false);
+      setError(null);
       const params = new URLSearchParams();
       params.set("page", String(page));
       params.set("limit", String(limit));
@@ -68,9 +74,12 @@ export default function PlatformAuditLogsPage() {
       if (targetType) params.set("targetType", targetType);
       try {
         const res = await fetch(`/api/platform/audit-logs?${params.toString()}`);
-        const data = await res.json();
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error ?? "Failed to load audit logs");
         setLogs(data.logs ?? []);
         setTotal(data.total ?? 0);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to load audit logs");
       } finally {
         setLoaded(true);
       }
@@ -88,6 +97,7 @@ export default function PlatformAuditLogsPage() {
       />
 
       <div className="flex flex-col gap-4 p-6">
+        {error && <div className="rounded-lg bg-danger/10 p-3 text-sm text-danger">{error}</div>}
         <div className="flex flex-col gap-3 lg:flex-row lg:items-end">
           <div className="flex-1">
             <Select label="Organization" value={orgId} onChange={(e) => { setOrgId(e.target.value); setPage(1); }}>

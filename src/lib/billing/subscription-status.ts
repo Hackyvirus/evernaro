@@ -34,7 +34,10 @@ export function mapSubscriptionStatusToOrganizationStatus(
   if (SUBSCRIPTION_ACTIVE_STATUSES.includes(status)) {
     return OrganizationStatus.ACTIVE;
   }
-  if (status === SubscriptionStatus.PAST_DUE) {
+  if (status === SubscriptionStatus.PAST_DUE || status === SubscriptionStatus.INCOMPLETE) {
+    // INCOMPLETE subscriptions need billing access to complete payment; treat
+    // them like PAST_DUE so the org can reach the recovery flow. Paid features
+    // remain blocked by requireActiveSubscription.
     return OrganizationStatus.PAST_DUE;
   }
   return OrganizationStatus.SUSPENDED;
@@ -59,12 +62,14 @@ export async function syncOrganizationStatusFromSubscription(orgId: string, tx?:
   const active = subscriptions.find((s) =>
     SUBSCRIPTION_ACTIVE_STATUSES.includes(s.status)
   );
-  const pastDue = subscriptions.find((s) => s.status === SubscriptionStatus.PAST_DUE);
+  const recoverable = subscriptions.find((s) =>
+    s.status === SubscriptionStatus.PAST_DUE || s.status === SubscriptionStatus.INCOMPLETE
+  );
 
   let target: OrganizationStatus;
   if (active) {
     target = OrganizationStatus.ACTIVE;
-  } else if (pastDue) {
+  } else if (recoverable) {
     target = OrganizationStatus.PAST_DUE;
   } else if (subscriptions.length > 0) {
     target = OrganizationStatus.SUSPENDED;
