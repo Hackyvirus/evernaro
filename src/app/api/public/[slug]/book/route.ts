@@ -6,15 +6,16 @@ import { checkRateLimit, clientIp } from "@/lib/rate-limit";
 import { createAppointment, AppointmentSlotUnavailableError } from "@/lib/services/appointment-service";
 import { isAppointmentWithinBusinessHours } from "@/lib/business-hours";
 import { requireFeature, FeatureNotAllowedError } from "@/lib/billing/entitlements";
+import { isValidPhone } from "@/lib/phone";
 
 const bookSchema = z.object({
   serviceId: z.string().min(1),
   staffId: z.string().optional(),
   startsAt: z.string().datetime(),
-  name: z.string().min(1),
-  phone: z.string().min(5),
-  email: z.string().email().optional(),
-  notes: z.string().optional(),
+  name: z.string().trim().min(1).max(100),
+  phone: z.string().refine(isValidPhone, { message: "Enter a valid phone number" }),
+  email: z.string().email().max(254).optional(),
+  notes: z.string().max(1000).optional(),
   website: z.string().max(0).optional(),
 });
 

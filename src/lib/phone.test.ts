@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { normalizePhone, toGupshupFormat } from "./phone";
+import { normalizePhone, toGupshupFormat, isValidPhone } from "./phone";
 
 describe("normalizePhone", () => {
   it("adds a leading + when missing", () => {
@@ -17,6 +17,32 @@ describe("normalizePhone", () => {
 
   it("returns an empty string unchanged rather than producing a bare '+'", () => {
     expect(normalizePhone("   ")).toBe("");
+  });
+});
+
+describe("isValidPhone", () => {
+  it("accepts a plain E.164 number", () => {
+    expect(isValidPhone("+919876543210")).toBe(true);
+  });
+
+  it("accepts a number needing normalization first", () => {
+    expect(isValidPhone("91 98765-43210")).toBe(true);
+  });
+
+  it("rejects non-numeric input", () => {
+    expect(isValidPhone("abcdefgh")).toBe(false);
+  });
+
+  it("rejects a number that's too short", () => {
+    expect(isValidPhone("+1234")).toBe(false);
+  });
+
+  it("rejects an absurdly long string, not just letters", () => {
+    expect(isValidPhone("9".repeat(500))).toBe(false);
+  });
+
+  it("rejects empty input", () => {
+    expect(isValidPhone("")).toBe(false);
   });
 });
 

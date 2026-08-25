@@ -13,6 +13,7 @@ type QueueStatus = {
   ahead: number;
   estimatedWaitMin: number | null;
   queue: { id: string; name: string };
+  verificationCode: string | null;
   calledAt: string | null;
   startedAt: string | null;
   completedAt: string | null;
@@ -108,10 +109,11 @@ export default function PublicQueueTrackerPage() {
           </div>
         )}
 
-        {isCalled && (
-          <p className="mb-6 text-sm font-medium text-warning">
-            Please see the staff. Your verification code is required.
-          </p>
+        {isCalled && status.verificationCode && (
+          <div className="mb-6 rounded-lg border-2 border-dashed border-warning bg-warning/10 p-4">
+            <p className="text-sm font-medium text-warning">Show this code to staff:</p>
+            <p className="text-3xl font-bold tracking-widest text-text">{status.verificationCode}</p>
+          </div>
         )}
 
         {status.isAfterHours && status.status === "WAITING" && (

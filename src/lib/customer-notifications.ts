@@ -54,6 +54,7 @@ export async function sendQueueNotification(
     businessName: string;
     serviceName?: string | null;
     staffName?: string | null;
+    verificationCode?: string | null;
   }
 ) {
   try {
@@ -75,7 +76,8 @@ export async function sendQueueNotification(
           `Hi ${firstName}, it's your turn at ${meta.businessName}! ` +
           `Please proceed${meta.staffName ? ` to ${meta.staffName}` : ""}.` +
           (meta.serviceName ? ` Service: ${meta.serviceName}.` : "") +
-          ` Token: ${meta.token}.`;
+          ` Token: ${meta.token}.` +
+          (meta.verificationCode ? ` Show this code to staff: ${meta.verificationCode}.` : "");
         break;
       case "completed":
         text = `Hi ${firstName}, thank you for visiting ${meta.businessName}. We hope to see you again soon!`;

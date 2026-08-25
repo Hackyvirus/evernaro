@@ -7,7 +7,7 @@ import {
 } from "@/lib/services/queue-service";
 
 const cancelSchema = z.object({
-  phone: z.string().min(1),
+  phone: z.string().min(1).max(20),
 });
 
 export async function GET(req: Request, { params }: { params: Promise<{ token: string }> }) {

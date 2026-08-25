@@ -58,8 +58,17 @@ export async function createQueue(orgId: string, data: { name: string; serviceId
 }
 
 export async function getNextPosition(queueId: string) {
+  // Must consider every entry ever created in this queue, not just entries
+  // still WAITING. Filtering to WAITING meant that as soon as the queue's
+  // only entry was called (leaving zero WAITING rows), the "last position"
+  // lookup found nothing and restarted from 0 -- so every subsequent join
+  // got position 1 and display token "G-1" again, duplicating both across
+  // the queue's whole history instead of ever incrementing past the number
+  // of people simultaneously waiting. The "ahead of me" count elsewhere
+  // still filters to WAITING + a smaller position, so it's unaffected by
+  // position values no longer resetting.
   const last = await prisma.queueEntry.findFirst({
-    where: { queueId, status: QueueEntryStatus.WAITING },
+    where: { queueId },
     orderBy: { position: "desc" },
   });
   return (last?.position ?? 0) + 1;
@@ -272,6 +281,7 @@ export async function callNextInQueue(queueId: string, orgId: string, staffId?: 
       businessName: org?.name ?? "",
       serviceName: entry.service?.name,
       staffName: entry.staff?.name,
+      verificationCode: entry.verificationCode,
     });
   }
 
@@ -338,6 +348,11 @@ export async function getPublicQueueStatus(publicToken: string) {
     service: entry.service
       ? { name: entry.service.name, durationMin: entry.service.durationMin }
       : null,
+    // Only surfaced while there's an active code to show — null once the
+    // entry is verified or never had one. The tracker page was telling
+    // customers "your verification code is required" without ever showing
+    // it anywhere, and staff had no legitimate way to obtain it either.
+    verificationCode: entry.verificationCode,
     calledAt: entry.calledAt,
     startedAt: entry.startedAt,
     completedAt: entry.completedAt,

@@ -5,13 +5,14 @@ import { findOrCreateContact, requireContactLimitIfNew, UsageLimitExceededError 
 import { checkRateLimit, clientIp } from "@/lib/rate-limit";
 import { joinQueue, QueueDuplicateJoinError } from "@/lib/services/queue-service";
 import { isBusinessOpen, formatBusinessStatus } from "@/lib/business-hours";
+import { isValidPhone } from "@/lib/phone";
 
 const joinSchema = z.object({
   queueId: z.string().min(1),
   serviceId: z.string().optional(),
   staffId: z.string().optional(),
-  name: z.string().min(1),
-  phone: z.string().min(5),
+  name: z.string().trim().min(1).max(100),
+  phone: z.string().refine(isValidPhone, { message: "Enter a valid phone number" }),
   website: z.string().max(0).optional(),
 });
 
