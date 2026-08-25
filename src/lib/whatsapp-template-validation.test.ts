@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { whatsappSendRequiresTemplate, whatsappTemplateBodySchema } from "./whatsapp-template-validation";
+import { buildTemplateExample, whatsappSendRequiresTemplate, whatsappTemplateBodySchema } from "./whatsapp-template-validation";
 
 describe("whatsappSendRequiresTemplate", () => {
   it("requires a template for WhatsApp with no templateId", () => {
@@ -47,5 +47,31 @@ describe("whatsappTemplateBodySchema", () => {
     const result = whatsappTemplateBodySchema.parse({ name: "ok_name", bodyText: "{{1}}" });
     expect(result.category).toBe("UTILITY");
     expect(result.language).toBe("en");
+  });
+});
+
+describe("buildTemplateExample", () => {
+  it("fills a single {{1}} placeholder", () => {
+    expect(buildTemplateExample("Hi {{1}}, your visit is confirmed.")).toBe(
+      "Hi there, your visit is confirmed."
+    );
+  });
+
+  it("fills every distinct placeholder, not just {{1}} -- this was the actual bug: only {{1}} was ever filled, so Meta rejected any template with a {{2}} or later variable for having a literal '{{2}}' left in the submitted example", () => {
+    const body = "Hi {{1}}, it's your turn at {{2}}! Token {{3}}. Show this code: {{4}}.";
+    const example = buildTemplateExample(body);
+    expect(example).not.toMatch(/\{\{\d+\}\}/);
+    expect(example).toBe("Hi there, it's your turn at Sunrise Clinic! Token A-101. Show this code: 3.");
+  });
+
+  it("fills a repeated placeholder consistently", () => {
+    expect(buildTemplateExample("{{1}} confirmed for {{1}}")).toBe("there confirmed for there");
+  });
+
+  it("falls back to a generic sample beyond the curated list", () => {
+    const body = "{{1}} {{2}} {{3}} {{4}} {{5}} {{6}} {{7}} {{8}}";
+    const example = buildTemplateExample(body);
+    expect(example).not.toMatch(/\{\{\d+\}\}/);
+    expect(example.endsWith("sample8")).toBe(true);
   });
 });

@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { requireOrgMember, UnauthorizedError, ForbiddenError } from "@/lib/session";
 import { decryptSecret } from "@/lib/crypto";
 import { gupshupCreateTemplate } from "@/lib/whatsapp";
-import { whatsappTemplateBodySchema } from "@/lib/whatsapp-template-validation";
+import { whatsappTemplateBodySchema, buildTemplateExample } from "@/lib/whatsapp-template-validation";
 
 export async function GET() {
   try {
@@ -64,7 +64,7 @@ export async function POST(req: Request) {
     });
 
     try {
-      const example = bodyText.replace(/\{\{1\}\}/g, "there");
+      const example = buildTemplateExample(bodyText);
       const result = await gupshupCreateTemplate({
         apiKey: decryptSecret(channel.whatsappApiKey),
         appId: channel.whatsappAppId,
