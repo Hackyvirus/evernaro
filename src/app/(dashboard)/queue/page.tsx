@@ -405,7 +405,7 @@ export default function QueuePage() {
                         <div className="flex items-center gap-2">
                           <Input
                             placeholder="OTP"
-                            value={verifyingEntryId === e.publicToken ? verifyCode : ""}
+                            value={verifyCode}
                             onChange={(ev) => {
                               setVerifyCode(ev.target.value.replace(/\D/g, "").slice(0, 6));
                             }}
