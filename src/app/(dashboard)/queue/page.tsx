@@ -59,6 +59,9 @@ export default function QueuePage() {
   const [newQueueName, setNewQueueName] = useState("");
   const [selectedQueueId, setSelectedQueueId] = useState("");
   const [contactId, setContactId] = useState("");
+  const [isNewCustomer, setIsNewCustomer] = useState(false);
+  const [newCustomerName, setNewCustomerName] = useState("");
+  const [newCustomerPhone, setNewCustomerPhone] = useState("");
   const [serviceId, setServiceId] = useState("");
   const [submitting, setSubmitting] = useState(false);
   // Keyed by publicToken so each CALLED entry has its own OTP input --
@@ -208,13 +211,17 @@ export default function QueuePage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         queueId: selectedQueueId,
-        contactId,
         serviceId: serviceId || undefined,
+        ...(isNewCustomer
+          ? { name: newCustomerName, phone: newCustomerPhone }
+          : { contactId }),
       }),
     });
     setSubmitting(false);
     if (res.ok) {
       setContactId("");
+      setNewCustomerName("");
+      setNewCustomerPhone("");
       setServiceId("");
       setPollError("");
       load();
@@ -312,22 +319,70 @@ export default function QueuePage() {
                   ))}
                 </select>
               </div>
-              <div>
-                <label className="mb-1.5 block text-sm font-medium text-text">Customer</label>
-                <select
-                  required
-                  value={contactId}
-                  onChange={(e) => setContactId(e.target.value)}
-                  className="w-full rounded-md border border-border bg-card px-3 py-2 text-sm text-text outline-none focus:border-primary"
-                >
-                  <option value="">Select customer</option>
-                  {contacts.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name || c.phone || c.id}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              {isNewCustomer ? (
+                <>
+                  <div>
+                    <div className="mb-1.5 flex items-center justify-between">
+                      <label className="text-sm font-medium text-text">New customer name</label>
+                      <button
+                        type="button"
+                        className="cursor-pointer text-xs text-primary hover:underline"
+                        onClick={() => {
+                          setIsNewCustomer(false);
+                          setNewCustomerName("");
+                          setNewCustomerPhone("");
+                        }}
+                      >
+                        Use existing
+                      </button>
+                    </div>
+                    <input
+                      required
+                      value={newCustomerName}
+                      onChange={(e) => setNewCustomerName(e.target.value)}
+                      placeholder="Full name"
+                      className="w-full rounded-md border border-border bg-card px-3 py-2 text-sm text-text outline-none focus:border-primary"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1.5 block text-sm font-medium text-text">Phone</label>
+                    <input
+                      required
+                      type="tel"
+                      value={newCustomerPhone}
+                      onChange={(e) => setNewCustomerPhone(e.target.value)}
+                      placeholder="+91..."
+                      className="w-full rounded-md border border-border bg-card px-3 py-2 text-sm text-text outline-none focus:border-primary"
+                    />
+                  </div>
+                </>
+              ) : (
+                <div>
+                  <div className="mb-1.5 flex items-center justify-between">
+                    <label className="text-sm font-medium text-text">Customer</label>
+                    <button
+                      type="button"
+                      className="cursor-pointer text-xs text-primary hover:underline"
+                      onClick={() => setIsNewCustomer(true)}
+                    >
+                      New customer
+                    </button>
+                  </div>
+                  <select
+                    required
+                    value={contactId}
+                    onChange={(e) => setContactId(e.target.value)}
+                    className="w-full rounded-md border border-border bg-card px-3 py-2 text-sm text-text outline-none focus:border-primary"
+                  >
+                    <option value="">Select customer</option>
+                    {contacts.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name || c.phone || c.id}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
               <div>
                 <label className="mb-1.5 block text-sm font-medium text-text">Service</label>
                 <select

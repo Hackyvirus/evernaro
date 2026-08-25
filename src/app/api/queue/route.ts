@@ -7,6 +7,8 @@ import { getQueuesByOrg, createQueue, joinQueue, QueueDuplicateJoinError } from 
 import { getOrgActiveLocationId, validateLocationId } from "@/lib/location-scope";
 import { requireActiveSubscription, SubscriptionSuspendedError } from "@/lib/subscription";
 import { isBusinessOpen } from "@/lib/business-hours";
+import { isValidPhone } from "@/lib/phone";
+import { findOrCreateContact, requireContactLimitIfNew, UsageLimitExceededError } from "@/lib/contact-identity";
 
 const createQueueSchema = z.object({
   name: z.string().min(1),
@@ -14,12 +16,21 @@ const createQueueSchema = z.object({
   locationId: z.string().optional(),
 });
 
-const joinQueueSchema = z.object({
-  queueId: z.string().min(1),
-  contactId: z.string().min(1),
-  serviceId: z.string().optional(),
-  staffId: z.string().optional(),
-});
+// Either an existing contactId, or a name+phone to create one on the spot --
+// staff previously had no way to add a first-time walk-in who isn't already
+// in the CRM without leaving this form to create the contact separately.
+const joinQueueSchema = z
+  .object({
+    queueId: z.string().min(1),
+    contactId: z.string().min(1).optional(),
+    name: z.string().trim().min(1).max(100).optional(),
+    phone: z.string().refine((v) => !v || isValidPhone(v), { message: "Enter a valid phone number" }).optional(),
+    serviceId: z.string().optional(),
+    staffId: z.string().optional(),
+  })
+  .refine((data) => data.contactId || (data.name && data.phone), {
+    message: "Select an existing customer, or provide a name and phone number for a new one",
+  });
 
 export async function GET() {
   try {
@@ -101,12 +112,30 @@ export async function PUT(req: Request) {
     if (!queue) {
       return NextResponse.json({ error: "Queue not found" }, { status: 404 });
     }
-    const contact = await prisma.contact.findFirst({
-      where: { id: parsed.data.contactId, orgId },
-      select: { id: true },
-    });
-    if (!contact) {
-      return NextResponse.json({ error: "Contact not found" }, { status: 404 });
+
+    let contactId: string;
+    if (parsed.data.contactId) {
+      const contact = await prisma.contact.findFirst({
+        where: { id: parsed.data.contactId, orgId },
+        select: { id: true },
+      });
+      if (!contact) {
+        return NextResponse.json({ error: "Contact not found" }, { status: 404 });
+      }
+      contactId = contact.id;
+    } else {
+      const name = parsed.data.name!;
+      const phone = parsed.data.phone!;
+      try {
+        await requireContactLimitIfNew({ name, phone }, orgId);
+      } catch (err) {
+        if (err instanceof UsageLimitExceededError) {
+          return NextResponse.json({ error: err.message }, { status: 402 });
+        }
+        throw err;
+      }
+      const contact = await findOrCreateContact({ name, phone }, orgId);
+      contactId = contact.id;
     }
 
     if (parsed.data.serviceId) {
@@ -137,7 +166,10 @@ export async function PUT(req: Request) {
     try {
       const entry = await joinQueue({
         orgId,
-        ...parsed.data,
+        queueId: parsed.data.queueId,
+        contactId,
+        serviceId: parsed.data.serviceId,
+        staffId: parsed.data.staffId,
         isAfterHours: !businessOpen,
       });
 
