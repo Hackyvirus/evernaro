@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Users, Mail, Phone, MessageCircle, AtSign, Search, Plus, Upload, Tag, X } from "lucide-react";
-import { Button, Card, EmptyState, Input, PageHeader, Table, TableHead, TableBody, TableRow, TableHeader, TableCell, SkeletonTable, Badge, Select, Avatar } from "@/components/ui";
+import { Button, Card, EmptyState, Input, PageHeader, PhoneInput, Table, TableHead, TableBody, TableRow, TableHeader, TableCell, SkeletonTable, Badge, Select, Avatar } from "@/components/ui";
 import { useToast } from "@/components/ui/toast";
 import { contactLabel } from "@/lib/contact-label";
 import { useRole, isAgentOrAbove, isAdmin } from "../role";
@@ -312,7 +312,7 @@ export default function ContactsPage() {
               <Input label="Name" value={name} onChange={(e) => setName(e.target.value)} />
               <Input label="Company" value={company} onChange={(e) => setCompany(e.target.value)} />
               <Input label="Email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
-              <Input label="Phone (E.164)" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+919876543210" />
+              <PhoneInput label="Phone" value={phone} onChange={setPhone} />
               <Input label="Telegram chat ID" value={telegramChatId} onChange={(e) => setTelegramChatId(e.target.value)} />
               <Input label="Instagram user ID" value={instagramUserId} onChange={(e) => setInstagramUserId(e.target.value)} />
               <Input label="Tags (comma separated)" value={tags} onChange={(e) => setTags(e.target.value)} className="sm:col-span-2" />

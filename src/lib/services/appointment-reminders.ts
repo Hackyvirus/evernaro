@@ -2,17 +2,11 @@
 
 import { prisma } from "@/lib/prisma";
 import { enqueueReminder } from "@/lib/queue";
+import { chooseChannelForContact } from "@/lib/channel-selection";
 import { ChannelType } from "@prisma/client";
 
 function minutesBefore(date: Date, minutes: number): Date {
   return new Date(date.getTime() - minutes * 60000);
-}
-
-function chooseChannel(orgId: string) {
-  return prisma.channel.findFirst({
-    where: { orgId, isActive: true, type: { in: [ChannelType.WHATSAPP, ChannelType.TELEGRAM, ChannelType.EMAIL] } },
-    orderBy: { type: "asc" },
-  });
 }
 
 async function chooseWhatsAppTemplate(channelId: string) {
@@ -29,10 +23,9 @@ export async function scheduleAppointmentReminders(appointmentId: string) {
 
   if (!appointment) return;
 
-  const channel = await chooseChannel(appointment.orgId);
-  if (!channel) return;
-
   const contact = appointment.contact;
+  const channel = await chooseChannelForContact(appointment.orgId, contact);
+  if (!channel) return;
   const serviceName = appointment.service?.name ?? "your appointment";
   const startsAt = appointment.startsAt;
 

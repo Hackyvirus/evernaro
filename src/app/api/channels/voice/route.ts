@@ -5,11 +5,12 @@ import { prisma } from "@/lib/prisma";
 import { requireOrgMember, UnauthorizedError, ForbiddenError } from "@/lib/session";
 import { encryptSecret } from "@/lib/crypto";
 import { logAudit } from "@/lib/audit";
+import { isValidPhone } from "@/lib/phone";
 
 const bodySchema = z.object({
   accountSid: z.string().min(10),
   authToken: z.string().min(10),
-  fromNumber: z.string().min(8),
+  fromNumber: z.string().refine(isValidPhone, { message: "Enter a valid phone number, e.g. +15551234567" }),
   language: z.string().min(2).default("en-IN"),
 });
 
@@ -19,7 +20,7 @@ export async function POST(req: Request) {
     const parsed = bodySchema.safeParse(await req.json());
     if (!parsed.success) {
       return NextResponse.json(
-        { error: "Account SID, auth token, and from number are all required" },
+        { error: parsed.error.issues[0]?.message ?? "Account SID, auth token, and from number are all required" },
         { status: 400 }
       );
     }

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Plus, X, Save, HelpCircle, Package, Shield, Bot } from "lucide-react";
-import { Button, Card, EmptyState, Input, PageHeader, Select, Tabs, Textarea, Skeleton } from "@/components/ui";
+import { Button, Card, EmptyState, Input, PageHeader, PhoneInput, Select, Tabs, Textarea, Skeleton } from "@/components/ui";
 import { useToast } from "@/components/ui/toast";
 import { VERTICAL_PRESETS } from "@/lib/vertical-presets";
 import { RoleAwareAdminGuard } from "../role";
@@ -159,7 +159,7 @@ function KnowledgePageContent() {
       </div>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Input label="Business name" value={businessName} onChange={(e) => setBusinessName(e.target.value)} />
-        <Input label="Phone" value={phone} onChange={(e) => setPhone(e.target.value)} />
+        <PhoneInput label="Phone" value={phone} onChange={setPhone} />
         <Input label="Website" value={website} onChange={(e) => setWebsite(e.target.value)} />
         <Input label="Working hours" value={workingHours} onChange={(e) => setWorkingHours(e.target.value)} placeholder="e.g. MonSat 9am7pm" />
       </div>

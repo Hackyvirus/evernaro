@@ -4,6 +4,7 @@ import crypto from "node:crypto";
 import { prisma } from "@/lib/prisma";
 import { enqueueReminder } from "@/lib/queue";
 import { ChannelType } from "@prisma/client";
+import { chooseChannelForContact } from "@/lib/channel-selection";
 
 const REVIEW_TOKEN_TTL_HOURS = 72;
 
@@ -44,13 +45,6 @@ export function verifyReviewToken(token: string): { contactId: string; subject: 
   return { contactId, subject: { type: subjectType, id: subjectId } };
 }
 
-function chooseChannel(orgId: string) {
-  return prisma.channel.findFirst({
-    where: { orgId, isActive: true, type: { in: [ChannelType.WHATSAPP, ChannelType.TELEGRAM, ChannelType.EMAIL] } },
-    orderBy: { type: "asc" },
-  });
-}
-
 async function chooseWhatsAppTemplate(channelId: string) {
   return prisma.whatsAppTemplate.findFirst({
     where: { channelId, status: "APPROVED", name: { contains: "review", mode: "insensitive" } },
@@ -64,7 +58,7 @@ export async function scheduleReviewRequest(appointmentId: string) {
   });
   if (!appointment || appointment.status !== "COMPLETED") return;
 
-  const channel = await chooseChannel(appointment.orgId);
+  const channel = await chooseChannelForContact(appointment.orgId, appointment.contact);
   if (!channel) return;
 
   let whatsappTemplateId: string | undefined;

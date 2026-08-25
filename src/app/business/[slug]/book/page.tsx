@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import { Button, Card, Input, PageHeader } from "@/components/ui";
+import { Button, Card, Input, PageHeader, PhoneInput } from "@/components/ui";
 import { toZonedISO } from "@/lib/timezone";
 
 type Service = { id: string; name: string; durationMin: number | null; priceInr: number | null; description: string | null };
@@ -171,7 +171,7 @@ export default function PublicBookingPage() {
             </div>
 
             <Input label="Your name" required value={name} onChange={(e) => setName(e.target.value)} />
-            <Input label="Phone" type="tel" required value={phone} onChange={(e) => setPhone(e.target.value)} />
+            <PhoneInput label="Phone" required value={phone} onChange={setPhone} />
             <Input label="Email (optional)" type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
             <div>
               <label className="mb-1.5 block text-sm font-medium text-text">Notes (optional)</label>

@@ -234,7 +234,22 @@ export async function updateQueueEntryStatus(
     data,
   });
 
-  if (result.count > 0 && (status === QueueEntryStatus.COMPLETED || status === QueueEntryStatus.CANCELLED)) {
+  // CALLED was missing from this list entirely -- the dashboard's per-row
+  // "Call" button (PATCH /api/queue/entries/[id]/status, what the UI
+  // actually uses) generated and displayed a fresh verification code
+  // correctly, but never sent it anywhere. Only callNextInQueue (a
+  // different, separate function) sent the "called" WhatsApp notification;
+  // the button wired to the actual UI never called it. Confirmed live: the
+  // wallet was never charged for a "called" transition through this path,
+  // meaning no send was ever attempted -- the customer could only ever see
+  // the code by having the tracker page open at the right moment, not via
+  // the WhatsApp push this was supposed to provide.
+  if (
+    result.count > 0 &&
+    (status === QueueEntryStatus.COMPLETED ||
+      status === QueueEntryStatus.CANCELLED ||
+      status === QueueEntryStatus.CALLED)
+  ) {
     const entry = await prisma.queueEntry.findFirst({
       where: { id, orgId },
       include: { contact: true, service: true, staff: true, queue: true },
@@ -244,7 +259,13 @@ export async function updateQueueEntryStatus(
         where: { id: orgId },
         select: { name: true },
       });
-      void sendQueueNotification(orgId, entry.contact, status === QueueEntryStatus.COMPLETED ? "completed" : "cancelled", {
+      const event =
+        status === QueueEntryStatus.COMPLETED
+          ? "completed"
+          : status === QueueEntryStatus.CANCELLED
+            ? "cancelled"
+            : "called";
+      void sendQueueNotification(orgId, entry.contact, event, {
         token: entry.token,
         position: entry.position,
         estimatedWaitMin: entry.estimatedWaitMin ?? 0,
@@ -252,6 +273,7 @@ export async function updateQueueEntryStatus(
         businessName: org?.name ?? "",
         serviceName: entry.service?.name,
         staffName: entry.staff?.name,
+        verificationCode: entry.verificationCode,
       });
     }
   }

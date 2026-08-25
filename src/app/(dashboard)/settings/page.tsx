@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { QRCodeSVG } from "qrcode.react";
-import { Badge, Button, Card, Input, Select, Textarea, PageHeader, Tabs } from "@/components/ui";
+import { Badge, Button, Card, Input, PhoneInput, Select, Textarea, PageHeader, Tabs } from "@/components/ui";
 import { VERTICAL_PRESETS } from "@/lib/vertical-presets";
 import { RoleAwareAdminGuard } from "../role";
 import { NotificationPreferencesTab } from "./notification-preferences-tab";
@@ -644,11 +644,20 @@ function WhatsAppTab({
         onChange={(e) => setAppName(e.target.value)}
         placeholder="e.g. SushantRealtyBot"
       />
-      <Input
+      <PhoneInput
         label="Source number (registered WhatsApp business number)"
         value={sourceNumber}
-        onChange={(e) => setSourceNumber(e.target.value)}
-        placeholder="919876543210"
+        // Gupshup's `source` param takes digits only, no leading "+" (their
+        // own docs example: "918929874278") -- PhoneInput always composes a
+        // canonical +<code><digits> value, so strip the + here to keep this
+        // field in the exact shape gupshupSendMessage expects. This is the
+        // field that caused a real send failure tonight: it previously had
+        // no validation at all and silently accepted a number missing its
+        // country code ("8087776574" instead of "918087776574"), which
+        // Gupshup rejected as "Invalid App Details" with no indication the
+        // phone number was the actual problem.
+        onChange={(v) => setSourceNumber(v.replace(/^\+/, ""))}
+        hint="Must exactly match the number shown as verified in your Gupshup dashboard, including country code."
       />
       <Input
         label="Gupshup App ID"
@@ -1090,12 +1099,7 @@ function VoiceTab({
         placeholder="ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
       />
       <Input label="Auth token" type="password" value={authToken} onChange={(e) => setAuthToken(e.target.value)} />
-      <Input
-        label="From number (your Twilio voice number)"
-        value={fromNumber}
-        onChange={(e) => setFromNumber(e.target.value)}
-        placeholder="+15551234567"
-      />
+      <PhoneInput label="From number (your Twilio voice number)" value={fromNumber} onChange={setFromNumber} />
       <Select label="Call language" value={language} onChange={(e) => setLanguage(e.target.value)}>
         <option value="en-IN">English (India)</option>
         <option value="hi-IN">Hindi</option>

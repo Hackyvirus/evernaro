@@ -2,6 +2,7 @@ export { Button } from "./button";
 export { Logo } from "./logo";
 export { AuthHeader } from "./auth-header";
 export { Input, Textarea, Select } from "./input";
+export { PhoneInput } from "./phone-input";
 export { Card } from "./card";
 export { Badge } from "./badge";
 export { EmptyState } from "./empty-state";

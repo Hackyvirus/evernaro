@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Button, Card, Input, PageHeader } from "@/components/ui";
+import { Button, Card, Input, PageHeader, PhoneInput } from "@/components/ui";
 import Link from "next/link";
 
 type QueueEntry = {
@@ -344,17 +344,7 @@ export default function QueuePage() {
                       className="w-full rounded-md border border-border bg-card px-3 py-2 text-sm text-text outline-none focus:border-primary"
                     />
                   </div>
-                  <div>
-                    <label className="mb-1.5 block text-sm font-medium text-text">Phone</label>
-                    <input
-                      required
-                      type="tel"
-                      value={newCustomerPhone}
-                      onChange={(e) => setNewCustomerPhone(e.target.value)}
-                      placeholder="+91..."
-                      className="w-full rounded-md border border-border bg-card px-3 py-2 text-sm text-text outline-none focus:border-primary"
-                    />
-                  </div>
+                  <PhoneInput label="Phone" required value={newCustomerPhone} onChange={setNewCustomerPhone} />
                 </>
               ) : (
                 <div>
@@ -483,14 +473,6 @@ export default function QueuePage() {
                             onClick={() => verifyAndStart(e.publicToken)}
                           >
                             Verify & Start
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            title="For walk-ins you added yourself and already know are here -- skips the code check"
-                            onClick={() => updateStatus(e.id, "IN_PROGRESS")}
-                          >
-                            Skip (walk-in)
                           </Button>
                         </div>
                       )}

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { Button, Card, Input, PageHeader } from "@/components/ui";
+import { Button, Card, Input, PageHeader, PhoneInput } from "@/components/ui";
 
 type Service = { id: string; name: string; durationMin: number | null; priceInr: number | null };
 type Queue = { id: string; name: string; serviceId: string | null; service: Service | null };
@@ -101,7 +101,7 @@ export default function PublicQueueCheckInPage() {
             </div>
 
             <Input label="Your name" required value={name} onChange={(e) => setName(e.target.value)} />
-            <Input label="Phone" type="tel" required value={phone} onChange={(e) => setPhone(e.target.value)} />
+            <PhoneInput label="Phone" required value={phone} onChange={setPhone} />
             <Input
               label="Email (optional)"
               type="email"

@@ -7,12 +7,19 @@ import { channelWebhookSecret } from "@/lib/webhook-secret";
 import { encryptSecret } from "@/lib/crypto";
 import { logAudit } from "@/lib/audit";
 import { gupshupValidateCredentials } from "@/lib/whatsapp";
+import { isValidPhone } from "@/lib/phone";
 
 const bodySchema = z.object({
   apiKey: z.string().min(5),
   appName: z.string().min(1),
   appId: z.string().min(1),
-  sourceNumber: z.string().min(8),
+  // No format check existed here before -- a source number missing its
+  // country code ("8087776574" instead of "918087776574") saved
+  // successfully and every send silently failed at Gupshup with
+  // "Invalid App Details", giving no indication the number was the issue.
+  sourceNumber: z.string().refine(isValidPhone, {
+    message: "Enter the source number with country code, e.g. 918087776574",
+  }),
 });
 
 export async function POST(req: Request) {
@@ -21,7 +28,7 @@ export async function POST(req: Request) {
     const parsed = bodySchema.safeParse(await req.json());
     if (!parsed.success) {
       return NextResponse.json(
-        { error: "API key, app name, app ID, and source number are all required" },
+        { error: parsed.error.issues[0]?.message ?? "API key, app name, app ID, and source number are all required" },
         { status: 400 }
       );
     }

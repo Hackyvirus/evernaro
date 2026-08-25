@@ -27,7 +27,7 @@ import {
   Users,
   type LucideIcon,
 } from "lucide-react";
-import { Button, Card, Input, PageHeader, Skeleton, Badge, Textarea, Avatar, Tabs } from "@/components/ui";
+import { Button, Card, Input, PageHeader, PhoneInput, Skeleton, Badge, Textarea, Avatar, Tabs } from "@/components/ui";
 import { useToast } from "@/components/ui/toast";
 import { contactLabel } from "@/lib/contact-label";
 import { useRole, isAgentOrAbove } from "../../role";
@@ -392,7 +392,7 @@ export default function ContactDetailPage() {
               <Input label="Name" value={name} onChange={(e) => setName(e.target.value)} />
               <Input label="Company" value={company} onChange={(e) => setCompany(e.target.value)} />
               <Input label="Email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
-              <Input label="Phone" value={phone} onChange={(e) => setPhone(e.target.value)} />
+              <PhoneInput label="Phone" value={phone} onChange={setPhone} />
             </div>
             <div className="mt-4 flex items-center justify-end gap-2">
               <Button variant="secondary" onClick={() => setEditing(false)}>Cancel</Button>

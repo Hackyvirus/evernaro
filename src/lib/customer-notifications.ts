@@ -2,33 +2,10 @@
 
 import { prisma } from "@/lib/prisma";
 import { sendViaChannel } from "@/lib/send";
-import { ChannelType, type Contact } from "@prisma/client";
+import { chooseChannelForContact } from "@/lib/channel-selection";
+import type { Contact } from "@prisma/client";
 
 export type QueueNotificationEvent = "joined" | "called" | "completed" | "cancelled";
-
-async function chooseChannel(orgId: string) {
-  return prisma.channel.findFirst({
-    where: {
-      orgId,
-      isActive: true,
-      type: { in: [ChannelType.WHATSAPP, ChannelType.TELEGRAM, ChannelType.EMAIL] },
-    },
-    orderBy: { type: "asc" },
-  });
-}
-
-function isReachable(contact: Contact, channelType: ChannelType): boolean {
-  switch (channelType) {
-    case ChannelType.WHATSAPP:
-      return Boolean(contact.phone);
-    case ChannelType.TELEGRAM:
-      return Boolean(contact.telegramChatId);
-    case ChannelType.EMAIL:
-      return Boolean(contact.email);
-    default:
-      return false;
-  }
-}
 
 function formatTime(date: Date): string {
   return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
@@ -58,8 +35,8 @@ export async function sendQueueNotification(
   }
 ) {
   try {
-    const channel = await chooseChannel(orgId);
-    if (!channel || !isReachable(contact, channel.type)) return;
+    const channel = await chooseChannelForContact(orgId, contact);
+    if (!channel) return;
 
     const firstName = (contact.name ?? "there").split(" ")[0];
     let text = "";
@@ -112,8 +89,8 @@ export async function sendAppointmentConfirmation(
   businessName: string
 ) {
   try {
-    const channel = await chooseChannel(orgId);
-    if (!channel || !isReachable(contact, channel.type)) return;
+    const channel = await chooseChannelForContact(orgId, contact);
+    if (!channel) return;
 
     const firstName = (contact.name ?? "there").split(" ")[0];
     const serviceName = appointment.service?.name ?? "appointment";
