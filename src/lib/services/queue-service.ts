@@ -201,7 +201,16 @@ export async function updateQueueEntryStatus(
   }
 
   const data: Prisma.QueueEntryUncheckedUpdateManyInput = { status };
-  if (status === QueueEntryStatus.CALLED) data.calledAt = new Date();
+  if (status === QueueEntryStatus.CALLED) {
+    data.calledAt = new Date();
+    // The code's 5-minute window must start when the customer is actually
+    // called, not when they joined -- the old code set it once at join time
+    // and never refreshed it, so anyone who waited more than 5 minutes in
+    // line (the normal case) had an already-dead code before staff ever
+    // called them.
+    data.verificationCode = generateVerificationCode();
+    data.verificationCodeExpiresAt = new Date(Date.now() + OTP_TTL_MS);
+  }
   if (status === QueueEntryStatus.IN_PROGRESS) data.startedAt = new Date();
   if (status === QueueEntryStatus.COMPLETED) data.completedAt = new Date();
   if (status === QueueEntryStatus.CANCELLED) data.cancelledAt = new Date();
@@ -255,6 +264,10 @@ export async function callNextInQueue(queueId: string, orgId: string, staffId?: 
       data: {
         status: QueueEntryStatus.CALLED,
         calledAt: new Date(),
+        // Same reasoning as updateQueueEntryStatus: refresh the code and its
+        // 5-minute window at call time, not join time.
+        verificationCode: generateVerificationCode(),
+        verificationCodeExpiresAt: new Date(Date.now() + OTP_TTL_MS),
         ...(staffId ? { staffId } : {}),
       },
     });

@@ -38,7 +38,15 @@ export default function PublicQueueTrackerPage() {
         if (!res.ok) throw new Error("Entry not found");
         return res.json();
       })
-      .then((data) => setStatus(data.status as QueueStatus))
+      .then((data) => {
+        setStatus(data.status as QueueStatus);
+        // A single failed poll (transient network blip, cold-start timeout)
+        // used to leave `error` set forever, since nothing ever cleared it
+        // on a later successful poll -- the page rendered "Entry not found"
+        // permanently even once fresh data was arriving every 5 seconds,
+        // until a full page reload reset component state from scratch.
+        setError(null);
+      })
       .catch((err) => setError(err instanceof Error ? err.message : "Could not load queue status"))
       .finally(() => setLoading(false));
   }, [token]);
