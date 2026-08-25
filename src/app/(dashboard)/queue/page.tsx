@@ -484,6 +484,14 @@ export default function QueuePage() {
                           >
                             Verify & Start
                           </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            title="For walk-ins you added yourself and already know are here -- skips the code check"
+                            onClick={() => updateStatus(e.id, "IN_PROGRESS")}
+                          >
+                            Skip (walk-in)
+                          </Button>
                         </div>
                       )}
                       {e.status === "IN_PROGRESS" && (

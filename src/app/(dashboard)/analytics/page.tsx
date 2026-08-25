@@ -81,15 +81,30 @@ export default function AnalyticsPage() {
   const range = searchParams.get("range") ?? "30d";
   const [data, setData] = useState<AnalyticsResponse | null>(null);
   const [loaded, setLoaded] = useState(false);
+  // Distinct from a generic load failure: the API 403s when the org's plan
+  // doesn't include analytics. The page used to render the error body
+  // ({error: "..."}) as if it were real analytics data -- data.messages was
+  // undefined, and data.messages.sent crashed the whole page instead of
+  // showing an upgrade prompt.
+  const [upgradeMessage, setUpgradeMessage] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
     async function fetchAnalytics() {
       setLoaded(false);
+      setUpgradeMessage(null);
       try {
         const r = await fetch(`/api/analytics?range=${range}`);
         const d = await r.json();
-        if (active) setData(d);
+        if (!active) return;
+        if (!r.ok) {
+          if (r.status === 403) {
+            setUpgradeMessage(d.error ?? "This plan doesn't include Analytics.");
+          }
+          setData(null);
+          return;
+        }
+        setData(d);
       } catch {
         if (active) setData(null);
       } finally {
@@ -124,6 +139,19 @@ export default function AnalyticsPage() {
             ))}
           </div>
           <Skeleton className="h-48" />
+        </div>
+      ) : upgradeMessage ? (
+        <div className="p-6">
+          <Card className="flex flex-col items-center gap-3 p-8 text-center">
+            <TrendingUp className="h-8 w-8 text-text-muted" aria-hidden="true" />
+            <p className="text-sm font-medium text-text">{upgradeMessage}</p>
+            <a
+              href="/billing/plans"
+              className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground"
+            >
+              View plans
+            </a>
+          </Card>
         </div>
       ) : !data ? (
         <p className="p-6 text-sm text-danger">Failed to load analytics.</p>
