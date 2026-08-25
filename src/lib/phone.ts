@@ -7,7 +7,16 @@
 export function normalizePhone(input: string): string {
   const trimmed = input.trim().replace(/[\s\-()]/g, "");
   if (!trimmed) return trimmed;
-  return trimmed.startsWith("+") ? trimmed : `+${trimmed}`;
+  if (trimmed.startsWith("+")) return trimmed;
+  // A bare 10-digit number starting with 6-9 is almost certainly an Indian
+  // mobile number typed without its country code -- this product's whole
+  // audience is Indian SMBs. Just prepending "+" (the old behavior) turned
+  // "9356381344" into "+9356381344": syntactically E.164-shaped enough to
+  // pass length validation, but not a real, deliverable number (missing the
+  // 91), so WhatsApp sends silently failed at Gupshup with "Invalid App
+  // Details"-style rejections that had nothing to do with the app config.
+  if (/^[6-9]\d{9}$/.test(trimmed)) return `+91${trimmed}`;
+  return `+${trimmed}`;
 }
 
 // E.164 allows at most 15 digits total, and a valid number never starts with

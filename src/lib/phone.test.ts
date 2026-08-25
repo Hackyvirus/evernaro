@@ -18,6 +18,25 @@ describe("normalizePhone", () => {
   it("returns an empty string unchanged rather than producing a bare '+'", () => {
     expect(normalizePhone("   ")).toBe("");
   });
+
+  it("adds India's country code to a bare 10-digit mobile number", () => {
+    // The real-world bug this guards against: a bare "+" prefix on
+    // "9356381344" produces "+9356381344" -- a fake, undeliverable number
+    // that still passes length-based format validation.
+    expect(normalizePhone("9356381344")).toBe("+919356381344");
+  });
+
+  it("does not misinterpret an already-prefixed 10-digit number", () => {
+    // "919876543210" (12 digits, already carries 91) must not be treated as
+    // a bare national number and get a second 91 prepended.
+    expect(normalizePhone("919876543210")).toBe("+919876543210");
+  });
+
+  it("leaves a 10-digit number starting with 0-5 alone (not a mobile prefix)", () => {
+    // Indian mobile numbers always start with 6-9; a 10-digit string
+    // starting outside that range isn't one, so the heuristic shouldn't fire.
+    expect(normalizePhone("0123456789")).toBe("+0123456789");
+  });
 });
 
 describe("isValidPhone", () => {
