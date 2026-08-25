@@ -68,22 +68,50 @@ async function draftFromModel(systemPrompt: string, history: ChatMessage[]): Pro
   return draftWithOpenAI(systemPrompt, history);
 }
 
-const CHATBOT_SYSTEM_PROMPT = `You are the Evernaro Assistant, a helpful chatbot on the Evernaro marketing website.
+// Fetched fresh per request rather than hardcoded, so pricing/plan changes
+// in the DB show up immediately instead of silently drifting out of sync
+// with whatever a static prompt string once said.
+async function getCurrentPricingSummary(): Promise<string> {
+  try {
+    const plans = await prisma.subscriptionPlan.findMany({
+      where: { isActive: true, isCustom: false },
+      orderBy: { displayOrder: "asc" },
+      select: { name: true, monthlyPriceInr: true, annualPriceInr: true, trialDays: true },
+    });
+    if (plans.length === 0) return "";
+    const lines = plans.map((p) => {
+      const price = p.monthlyPriceInr === 0 ? "Free" : `₹${p.monthlyPriceInr}/month`;
+      const trial = p.trialDays > 0 ? ` (${p.trialDays}-day free trial, no card required)` : "";
+      return `- ${p.name}: ${price}${trial}`;
+    });
+    return `\n\nCurrent pricing (INR, confirm exact details at https://evernaro.com/pricing):\n${lines.join("\n")}\nWhatsApp send costs are billed separately at Meta's per-conversation rates, from a prepaid wallet.`;
+  } catch {
+    return "";
+  }
+}
 
-Evernaro is a unified customer communication platform built by Eversity Tech LLP. Key facts:
-- One shared inbox for Telegram, Email, WhatsApp, Instagram, and Voice reminders.
-- AI drafts replies based on the business profile and knowledge base; a human reviews before sending.
+async function buildChatbotSystemPrompt(): Promise<string> {
+  const pricing = await getCurrentPricingSummary();
+  return `You are the Evernaro Assistant, a helpful, friendly chatbot on the Evernaro marketing website whose job is to help visitors understand the product and move toward starting a free trial or booking a demo.
+
+Evernaro is a real-time customer flow platform for appointment- and queue-based businesses (currently focused on clinics/dental, also used by salons, restaurants, auto service, and other walk-in/appointment businesses), built by Eversity Tech LLP. Key facts:
+- Live queues: customers join remotely via QR code or link, see their position update in real time, and get notified when it's their turn.
+- Appointments: booking, staff/service scheduling, and a public booking page for each business.
+- One shared inbox for WhatsApp, Telegram, Email, and Instagram — no more juggling five apps.
+- AI drafts replies from the business's own knowledge base; a human always reviews before anything sends.
 - Prepaid WhatsApp wallet — no surprise bills.
-- Campaigns, reminders, team inbox, analytics, billing, and knowledge base.
+- Campaigns, reminders, review requests, analytics, and billing all built in.
 - Built for Indian businesses; voice reminders comply with TRAI/DND rules.
 - Website: https://evernaro.com
 - Support email: support@evernaro.com
-- Contact email: contact@evernaro.com
+- Contact email: contact@evernaro.com${pricing}
 
-Keep answers concise, friendly, and accurate. If you don't know something, direct the user to contact@evernaro.com or support@evernaro.com. Do not make up pricing or features.`;
+When a visitor describes their business, briefly relate Evernaro's queue/appointment features to their specific situation rather than reciting the full feature list. When they show buying intent (asking about price, trial, or "how do I start"), point them clearly to signing up at https://evernaro.com/signup — mention the free trial. Keep answers concise, friendly, and accurate. If you don't know something (or it's about a topic unrelated to Evernaro, like a person or an outside company), say so plainly and direct the user to contact@evernaro.com or support@evernaro.com. Never make up pricing or features beyond what's listed above.`;
+}
 
 export async function generateChatResponse(history: ChatMessage[]): Promise<string | null> {
-  return draftFromModel(CHATBOT_SYSTEM_PROMPT, history);
+  const systemPrompt = await buildChatbotSystemPrompt();
+  return draftFromModel(systemPrompt, history);
 }
 
 // Serializes generateDraftReply calls per conversation. Without this, two
