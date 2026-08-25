@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { QueueEntryStatus, type Prisma } from "@prisma/client";
 import crypto from "node:crypto";
+import { startOfDayInTimezone } from "@/lib/timezone";
 
 export function generateVerificationCode(): string {
   return String(crypto.randomInt(100000, 1000000));
@@ -58,7 +59,7 @@ export async function createQueue(orgId: string, data: { name: string; serviceId
 }
 
 export async function getNextPosition(queueId: string) {
-  // Must consider every entry ever created in this queue, not just entries
+  // Must consider every entry created today in this queue, not just entries
   // still WAITING. Filtering to WAITING meant that as soon as the queue's
   // only entry was called (leaving zero WAITING rows), the "last position"
   // lookup found nothing and restarted from 0 -- so every subsequent join
@@ -66,9 +67,19 @@ export async function getNextPosition(queueId: string) {
   // the queue's whole history instead of ever incrementing past the number
   // of people simultaneously waiting. The "ahead of me" count elsewhere
   // still filters to WAITING + a smaller position, so it's unaffected by
-  // position values no longer resetting.
+  // position values no longer resetting within a day.
+  //
+  // Scoped to the business's own calendar day (its org timezone, not UTC
+  // midnight) so tokens reset to G-1 each morning like a real walk-in queue,
+  // rather than climbing indefinitely across the queue's whole lifetime.
+  const queue = await prisma.queue.findUnique({
+    where: { id: queueId },
+    select: { org: { select: { timezone: true } } },
+  });
+  const todayStart = startOfDayInTimezone(queue?.org.timezone ?? "Asia/Kolkata");
+
   const last = await prisma.queueEntry.findFirst({
-    where: { queueId },
+    where: { queueId, createdAt: { gte: todayStart } },
     orderBy: { position: "desc" },
   });
   return (last?.position ?? 0) + 1;

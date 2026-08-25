@@ -44,3 +44,20 @@ export function toZonedISO(dateStr: string, timeStr: string, timeZone: string): 
 
   return new Date(utcMs).toISOString();
 }
+
+/**
+ * The UTC instant corresponding to midnight "today" in the given timezone,
+ * as of `now`. Used to scope per-day counters (e.g. queue token numbering)
+ * to the business's own calendar day rather than the server's UTC day.
+ */
+export function startOfDayInTimezone(timeZone: string, now: Date = new Date()): Date {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(now);
+  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? "";
+  const dateStr = `${get("year")}-${get("month")}-${get("day")}`;
+  return new Date(toZonedISO(dateStr, "00:00", timeZone));
+}
