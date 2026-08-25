@@ -31,6 +31,7 @@ export default function PublicQueueCheckInPage() {
   const [queueId, setQueueId] = useState("");
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
+  const [email, setEmail] = useState("");
   const [honeypot, setHoneypot] = useState("");
 
   useEffect(() => {
@@ -55,7 +56,7 @@ export default function PublicQueueCheckInPage() {
     const res = await fetch(`/api/public/${slug}/queue/join`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ queueId, name, phone, website: honeypot || undefined }),
+      body: JSON.stringify({ queueId, name, phone, email: email || undefined, website: honeypot || undefined }),
     });
 
     setSubmitting(false);
@@ -148,6 +149,13 @@ export default function PublicQueueCheckInPage() {
 
             <Input label="Your name" required value={name} onChange={(e) => setName(e.target.value)} />
             <Input label="Phone" type="tel" required value={phone} onChange={(e) => setPhone(e.target.value)} />
+            <Input
+              label="Email (optional)"
+              type="email"
+              hint="We'll notify you here too when it's your turn."
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+            />
 
             {error && <p className="text-sm text-danger">{error}</p>}
 

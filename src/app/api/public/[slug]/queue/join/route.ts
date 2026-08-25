@@ -13,6 +13,7 @@ const joinSchema = z.object({
   staffId: z.string().optional(),
   name: z.string().trim().min(1).max(100),
   phone: z.string().refine(isValidPhone, { message: "Enter a valid phone number" }),
+  email: z.string().trim().email().max(254).optional().or(z.literal("")),
   website: z.string().max(0).optional(),
 });
 
@@ -48,7 +49,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
     );
   }
 
-  const { queueId, serviceId, staffId, name, phone } = parsed.data;
+  const { queueId, serviceId, staffId, name, phone, email } = parsed.data;
 
   const queue = await prisma.queue.findFirst({
     where: { id: queueId, orgId: org.id, isActive: true },
@@ -79,7 +80,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
   }
 
   try {
-    await requireContactLimitIfNew({ name, phone }, org.id);
+    await requireContactLimitIfNew({ name, phone, email: email || undefined }, org.id);
   } catch (err) {
     if (err instanceof UsageLimitExceededError) {
       return NextResponse.json({ error: err.message }, { status: 402 });
@@ -87,7 +88,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
     throw err;
   }
 
-  const contact = await findOrCreateContact({ name, phone }, org.id);
+  const contact = await findOrCreateContact({ name, phone, email: email || undefined }, org.id);
 
   try {
     const entry = await joinQueue({
