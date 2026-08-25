@@ -37,7 +37,7 @@ const FAQS = [
   {
     question: "Does Evernaro support multiple locations?",
     answer:
-      "Multiple locations are not yet a first-class feature in the dashboard. For now each location can run as a separate organization.",
+      "Yes. You can add branches under one organization, and services, staff, appointments, and queues can all be scoped to a specific location from the dashboard.",
   },
   {
     question: "Does Evernaro support payments?",

@@ -76,14 +76,24 @@ const JOURNEY_STEPS = [
 
 const INDUSTRIES = [
   {
+    title: "Clinics",
+    flow: ["Register", "Wait", "Get called", "Consultation", "Follow-up"],
+    description: "Manage patient queues, appointments, doctors and follow-ups.",
+  },
+  {
+    title: "Dental",
+    flow: ["Book", "Wait", "Consultation", "Treatment", "Follow-up"],
+    description: "Dental appointments, treatments, and patient follow-ups.",
+  },
+  {
     title: "Salon & Beauty",
     flow: ["Join queue", "Track position", "Get notified", "Get served"],
     description: "Manage walk-ins, appointments, stylists, queues, payments and rebooking.",
   },
   {
-    title: "Healthcare / Clinics",
-    flow: ["Register", "Wait", "Get called", "Consultation", "Follow-up"],
-    description: "Manage patient queues, appointments, doctors and follow-ups.",
+    title: "Wellness",
+    flow: ["Book", "Arrive", "Session", "Payment", "Rebook"],
+    description: "Appointments, memberships, packages, and retention.",
   },
   {
     title: "Restaurants",
@@ -114,16 +124,6 @@ const INDUSTRIES = [
     title: "Legal",
     flow: ["Request", "Consultation", "Matter", "Follow-up"],
     description: "Client intake, consultations, matters, tasks and billing.",
-  },
-  {
-    title: "Dental",
-    flow: ["Book", "Wait", "Consultation", "Treatment", "Follow-up"],
-    description: "Dental appointments, treatments, and patient follow-ups.",
-  },
-  {
-    title: "Wellness",
-    flow: ["Book", "Arrive", "Session", "Payment", "Rebook"],
-    description: "Appointments, memberships, packages, and retention.",
   },
 ];
 
@@ -296,21 +296,22 @@ export default async function Home() {
             </Reveal>
             <Reveal delay={80}>
               <h1 className="text-4xl leading-[1.05] font-extrabold tracking-tight text-text sm:text-5xl lg:text-[3.25rem]">
-                Stop making customers
+                Stop losing patients
                 <span className="block bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
-                  wait blindly.
+                  to no-shows and long waits.
                 </span>
               </h1>
             </Reveal>
             <Reveal delay={160}>
               <p className="max-w-lg text-lg font-medium text-text">
-                The real-time customer flow platform for modern businesses.
+                The appointment and queue platform built for clinics and dental practices.
               </p>
             </Reveal>
             <Reveal delay={200}>
               <p className="max-w-lg text-base leading-relaxed text-text-secondary">
-                Let customers join queues, book appointments, track their status, and get notified when
-                it&apos;s their turn — while your team manages the entire customer journey from one place.
+                Send automated WhatsApp reminders that cut no-shows, let patients track their queue
+                position instead of crowding your waiting room, and win back missed visits with
+                automatic follow-ups — all from one inbox your front desk already knows how to use.
               </p>
             </Reveal>
             <Reveal delay={260}>
@@ -443,9 +444,9 @@ export default async function Home() {
         {/* Industries */}
         <section className="flex flex-col gap-10">
           <Reveal className="mx-auto max-w-2xl text-center">
-            <p className="text-xs font-medium tracking-wide text-primary uppercase">Industries</p>
+            <p className="text-xs font-medium tracking-wide text-primary uppercase">Also built for</p>
             <h2 className="mt-2 text-3xl font-extrabold text-text">
-              One platform. Built for different customer flows.
+              Built first for clinics — works for other customer-flow businesses too.
             </h2>
           </Reveal>
 
@@ -584,7 +585,7 @@ export default async function Home() {
                 <div className="space-y-3">
                   <div className="rounded-lg bg-surface p-3">
                     <p className="text-xs text-text-muted">Service</p>
-                    <p className="text-sm font-medium text-text">Haircut</p>
+                    <p className="text-sm font-medium text-text">Consultation</p>
                   </div>
                   <div className="rounded-lg bg-surface p-3">
                     <p className="text-xs text-text-muted">Payment</p>
@@ -821,10 +822,10 @@ export default async function Home() {
               />
               <div className="relative">
                 <h2 className="text-2xl font-bold text-text sm:text-3xl">
-                  Stop making customers guess when they&apos;ll be served.
+                  Stop losing patients to no-shows and long waits.
                 </h2>
                 <p className="mx-auto mt-2 max-w-md text-sm text-text-secondary">
-                  Give your customers a better way to wait, book and stay informed.
+                  Give your patients a better way to book, wait and stay informed.
                 </p>
               </div>
               <div className="relative flex flex-col items-center gap-3 sm:flex-row">
