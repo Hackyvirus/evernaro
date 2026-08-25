@@ -33,7 +33,7 @@ function buildQueueTemplateParams(
 ): string[] {
   switch (event) {
     case "joined":
-      return [firstName, meta.businessName, meta.token, String(meta.position), String(meta.estimatedWaitMin)];
+      return [firstName, meta.businessName, meta.token, String(meta.estimatedWaitMin)];
     case "called":
       return [firstName, meta.businessName, meta.token, meta.verificationCode ?? ""];
     case "completed":

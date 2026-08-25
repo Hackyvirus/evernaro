@@ -95,7 +95,7 @@ describe("sendQueueNotification WhatsApp template routing", () => {
     expect(whatsappTemplate).toBeUndefined();
   });
 
-  it("builds params in the joined-event order (no verification code)", async () => {
+  it("builds params in the joined-event order (no position or verification code)", async () => {
     findFirstTemplateMock.mockResolvedValue({
       id: "tmpl2",
       name: "queue_joined",
@@ -110,7 +110,7 @@ describe("sendQueueNotification WhatsApp template routing", () => {
     expect(whatsappTemplate).toEqual({
       gupshupTemplateId: "gs-joined-id",
       category: "UTILITY",
-      params: ["Sushant", "Saloon", "T-1", "1", "5"],
+      params: ["Sushant", "Saloon", "T-1", "5"],
     });
   });
 });
