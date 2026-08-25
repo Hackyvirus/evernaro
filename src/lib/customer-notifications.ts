@@ -1,11 +1,46 @@
 "server-only";
 
 import { prisma } from "@/lib/prisma";
-import { sendViaChannel } from "@/lib/send";
+import { sendViaChannel, type WhatsAppTemplateSend } from "@/lib/send";
 import { chooseChannelForContact } from "@/lib/channel-selection";
-import type { Contact } from "@prisma/client";
+import { ChannelType, type Contact } from "@prisma/client";
 
 export type QueueNotificationEvent = "joined" | "called" | "completed" | "cancelled";
+
+// Meta requires a pre-approved template for any WhatsApp send outside the
+// 24-hour window since the contact's last inbound message -- the normal case
+// for a first-time patient who scans a queue QR code and has never messaged
+// the business number before. Each event maps to its own approved template,
+// named exactly `queue_<event>` on the channel, submitted via Settings.
+// Free-form text (below) remains the fallback when no approved template
+// exists yet, or for orgs still relying on an open session window.
+async function chooseQueueTemplate(channelId: string, event: QueueNotificationEvent) {
+  return prisma.whatsAppTemplate.findFirst({
+    where: { channelId, status: "APPROVED", name: `queue_${event}` },
+  });
+}
+
+function buildQueueTemplateParams(
+  event: QueueNotificationEvent,
+  firstName: string,
+  meta: {
+    token: string;
+    position: number;
+    estimatedWaitMin: number;
+    businessName: string;
+    verificationCode?: string | null;
+  }
+): string[] {
+  switch (event) {
+    case "joined":
+      return [firstName, meta.businessName, meta.token, String(meta.position), String(meta.estimatedWaitMin)];
+    case "called":
+      return [firstName, meta.businessName, meta.token, meta.verificationCode ?? ""];
+    case "completed":
+    case "cancelled":
+      return [firstName, meta.businessName];
+  }
+}
 
 function formatTime(date: Date): string {
   return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
@@ -66,7 +101,19 @@ export async function sendQueueNotification(
 
     if (!text) return;
 
-    await sendViaChannel(channel, contact, text, undefined, undefined, {
+    let whatsappTemplate: WhatsAppTemplateSend | undefined;
+    if (channel.type === ChannelType.WHATSAPP) {
+      const template = await chooseQueueTemplate(channel.id, event);
+      if (template?.gupshupTemplateId) {
+        whatsappTemplate = {
+          gupshupTemplateId: template.gupshupTemplateId,
+          category: template.category,
+          params: buildQueueTemplateParams(event, firstName, meta),
+        };
+      }
+    }
+
+    await sendViaChannel(channel, contact, text, undefined, whatsappTemplate, {
       type: "REMINDER",
       id: `${meta.token}-${event}`,
     });
