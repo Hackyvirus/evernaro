@@ -721,6 +721,7 @@ function WhatsAppTemplates() {
   const [error, setError] = useState<string | null>(null);
   const [warning, setWarning] = useState<string | null>(null);
   const [syncingId, setSyncingId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   function refresh() {
     fetch("/api/whatsapp-templates")
@@ -771,6 +772,23 @@ function WhatsAppTemplates() {
       setError("Network error — check your connection and try again.");
     }
     setSyncingId(null);
+    refresh();
+  }
+
+  async function deleteTemplate(id: string, name: string) {
+    if (!window.confirm(`Delete template "${name}"? This removes it from Gupshup too, and the name can't be reused until it's gone.`)) {
+      return;
+    }
+    setDeletingId(id);
+    setError(null);
+    try {
+      const res = await fetch(`/api/whatsapp-templates/${id}`, { method: "DELETE" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) setError(data.error ?? "Failed to delete template");
+    } catch {
+      setError("Network error — check your connection and try again.");
+    }
+    setDeletingId(null);
     refresh();
   }
 
@@ -830,6 +848,13 @@ function WhatsAppTemplates() {
                       {syncingId === t.id ? "Checking..." : "Check status"}
                     </button>
                   )}
+                  <button
+                    onClick={() => deleteTemplate(t.id, t.name)}
+                    disabled={deletingId === t.id}
+                    className="cursor-pointer text-xs text-danger hover:underline disabled:opacity-50"
+                  >
+                    {deletingId === t.id ? "Deleting..." : "Delete"}
+                  </button>
                 </div>
               </div>
               <p className="mt-1 text-xs text-text-secondary">{t.bodyText}</p>

@@ -117,6 +117,28 @@ export async function gupshupCreateTemplate(opts: {
   return data as { template?: { id?: string; status?: string } };
 }
 
+// Confirmed against a live Gupshup account: DELETE takes the template's
+// `elementName` (its name, e.g. "queue_called") in the path -- not its `id`
+// GUID. Passing the id returns "Template Does not exists." even for a
+// template that genuinely exists.
+export async function gupshupDeleteTemplate(opts: {
+  apiKey: string;
+  appId: string;
+  elementName: string;
+}): Promise<void> {
+  const res = await fetch(`${GUPSHUP_TEMPLATE_API(opts.appId)}/${opts.elementName}`, {
+    method: "DELETE",
+    headers: { apikey: opts.apiKey },
+  });
+  if (res.ok) return;
+  const data = await res.json().catch(() => ({}));
+  // A template Gupshup no longer knows about (already deleted on their side,
+  // e.g. manually via their dashboard) isn't a real failure for our purposes
+  // -- the caller's goal is "make sure it's gone", and it already is.
+  if (res.status === 404) return;
+  throw new Error(data?.message || `Gupshup template deletion failed (${res.status})`);
+}
+
 export async function gupshupGetTemplateStatus(opts: { apiKey: string; appId: string; gupshupTemplateId: string }) {
   const res = await fetch(GUPSHUP_TEMPLATE_API(opts.appId), {
     method: "GET",
