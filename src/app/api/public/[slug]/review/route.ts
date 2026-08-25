@@ -50,18 +50,34 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
     );
   }
 
-  const appointment = await prisma.appointment.findFirst({
-    where: { id: payload.appointmentId, contactId: payload.contactId, orgId: org.id, status: "COMPLETED" },
-  });
-  if (!appointment) {
-    return NextResponse.json({ error: "Appointment not found or not completed" }, { status: 404 });
+  // The token's subject type determines which record must exist and be
+  // completed, and which metadata key dedup/linkage is tracked under --
+  // Review has no appointmentId/queueEntryId column, so both use the same
+  // metadata-based pattern the appointment flow already established.
+  const { type: subjectType, id: subjectId } = payload.subject;
+  const metadataKey = subjectType === "appointment" ? "appointmentId" : "queueEntryId";
+
+  if (subjectType === "appointment") {
+    const appointment = await prisma.appointment.findFirst({
+      where: { id: subjectId, contactId: payload.contactId, orgId: org.id, status: "COMPLETED" },
+    });
+    if (!appointment) {
+      return NextResponse.json({ error: "Appointment not found or not completed" }, { status: 404 });
+    }
+  } else {
+    const queueEntry = await prisma.queueEntry.findFirst({
+      where: { id: subjectId, contactId: payload.contactId, orgId: org.id, status: "COMPLETED" },
+    });
+    if (!queueEntry) {
+      return NextResponse.json({ error: "Queue entry not found or not completed" }, { status: 404 });
+    }
   }
 
   const existingReview = await prisma.review.findFirst({
     where: {
       orgId: org.id,
       contactId: payload.contactId,
-      metadata: { path: ["appointmentId"], equals: appointment.id },
+      metadata: { path: [metadataKey], equals: subjectId },
     },
   });
   if (existingReview) {
@@ -77,7 +93,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
       contactId: payload.contactId,
       rating,
       comment: comment ?? null,
-      metadata: { appointmentId: appointment.id },
+      metadata: { [metadataKey]: subjectId },
     },
   });
 
@@ -90,7 +106,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
     {
       rating,
       comment: comment ?? null,
-      appointmentId: appointment.id,
+      [metadataKey]: subjectId,
     }
   );
 

@@ -15,6 +15,7 @@ type QueueStatus = {
   queue: { id: string; name: string };
   verificationCode: string | null;
   businessName: string;
+  reviewUrl: string | null;
   calledAt: string | null;
   startedAt: string | null;
   completedAt: string | null;
@@ -141,6 +142,14 @@ export default function PublicQueueTrackerPage() {
             <p className="mt-1 text-sm text-text-secondary">
               We hope to see you again soon — we&apos;ll miss you until then.
             </p>
+            {status.reviewUrl && (
+              <a
+                href={status.reviewUrl}
+                className="mt-4 inline-block w-full rounded-md bg-primary px-4 py-2 text-center text-sm font-medium text-primary-foreground"
+              >
+                Leave a review
+              </a>
+            )}
           </div>
         )}
 

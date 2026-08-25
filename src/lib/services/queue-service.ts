@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { QueueEntryStatus, type Prisma } from "@prisma/client";
 import crypto from "node:crypto";
 import { startOfDayInTimezone } from "@/lib/timezone";
+import { generateReviewToken } from "@/lib/services/review-requests";
 
 export function generateVerificationCode(): string {
   return String(crypto.randomInt(100000, 1000000));
@@ -348,7 +349,7 @@ export async function getQueueEntryByPublicToken(publicToken: string) {
       contact: true,
       service: true,
       staff: true,
-      queue: { include: { org: { select: { name: true } } } },
+      queue: { include: { org: { select: { name: true, slug: true } } } },
     },
   });
 }
@@ -364,6 +365,17 @@ export async function getPublicQueueStatus(publicToken: string) {
       position: { lt: entry.position },
     },
   });
+
+  // Generated on the fly rather than stored -- the customer is already on
+  // this page when their entry completes, so there's no need for the
+  // scheduled-reminder flow appointments use. Only issued once there's a
+  // completed visit and a contact to attribute the review to.
+  const reviewUrl =
+    entry.status === QueueEntryStatus.COMPLETED && entry.contactId
+      ? `${process.env.NEXT_PUBLIC_BASE_URL}/business/${entry.queue.org.slug}/review?t=${
+          generateReviewToken(entry.contactId, { type: "queueEntry", id: entry.id }).token
+        }`
+      : null;
 
   return {
     token: entry.token,
@@ -389,6 +401,7 @@ export async function getPublicQueueStatus(publicToken: string) {
     cancelledAt: entry.cancelledAt,
     noShowAt: entry.noShowAt,
     createdAt: entry.createdAt,
+    reviewUrl,
   };
 }
 

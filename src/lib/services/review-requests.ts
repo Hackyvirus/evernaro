@@ -13,15 +13,22 @@ function getSecret() {
   return secret;
 }
 
-export function generateReviewToken(contactId: string, appointmentId: string) {
+export type ReviewSubjectType = "appointment" | "queueEntry";
+export type ReviewSubject = { type: ReviewSubjectType; id: string };
+
+// Subject type is encoded in the signed payload (not inferred at the call
+// site) so a token can only ever be redeemed against the kind of record it
+// was actually issued for -- an appointment-review link can't accidentally
+// verify a queue entry, and vice versa.
+export function generateReviewToken(contactId: string, subject: ReviewSubject) {
   const secret = getSecret();
   const expiresAt = Date.now() + REVIEW_TOKEN_TTL_HOURS * 60 * 60 * 1000;
-  const payload = `${contactId}:${appointmentId}:${expiresAt}`;
+  const payload = `${contactId}:${subject.type}:${subject.id}:${expiresAt}`;
   const signature = crypto.createHmac("sha256", secret).update(payload).digest("hex");
   return { token: `${Buffer.from(payload).toString("base64url")}.${signature}`, expiresAt: new Date(expiresAt) };
 }
 
-export function verifyReviewToken(token: string) {
+export function verifyReviewToken(token: string): { contactId: string; subject: ReviewSubject } | null {
   const [encoded, signature] = token.split(".");
   if (!encoded || !signature) return null;
 
@@ -29,11 +36,12 @@ export function verifyReviewToken(token: string) {
   const expected = crypto.createHmac("sha256", getSecret()).update(payload).digest("hex");
   if (!crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected))) return null;
 
-  const [contactId, appointmentId, expiresAtStr] = payload.split(":");
-  if (!contactId || !appointmentId || !expiresAtStr) return null;
+  const [contactId, subjectType, subjectId, expiresAtStr] = payload.split(":");
+  if (!contactId || !subjectId || !expiresAtStr) return null;
+  if (subjectType !== "appointment" && subjectType !== "queueEntry") return null;
   if (Date.now() > Number(expiresAtStr)) return null;
 
-  return { contactId, appointmentId };
+  return { contactId, subject: { type: subjectType, id: subjectId } };
 }
 
 function chooseChannel(orgId: string) {
@@ -66,7 +74,7 @@ export async function scheduleReviewRequest(appointmentId: string) {
     whatsappTemplateId = template.id;
   }
 
-  const { token } = generateReviewToken(appointment.contactId, appointment.id);
+  const { token } = generateReviewToken(appointment.contactId, { type: "appointment", id: appointment.id });
   const reviewUrl = `${process.env.NEXT_PUBLIC_BASE_URL}/business/${appointment.org.slug}/review?t=${token}`;
   const serviceName = appointment.service?.name ?? "your visit";
   const message = `Hi {{name}}, how was ${serviceName}? Please rate your experience here: ${reviewUrl}`;
