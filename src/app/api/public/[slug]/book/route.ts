@@ -31,7 +31,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
   }
 
   try {
-    await requireFeature(org.id, "appointment_bookings");
+    await requireFeature(org.id, "appointment_management");
   } catch (err) {
     if (err instanceof FeatureNotAllowedError) {
       return NextResponse.json({ error: err.message }, { status: 403 });

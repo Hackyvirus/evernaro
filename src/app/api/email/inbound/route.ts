@@ -66,7 +66,13 @@ export async function POST(req: Request) {
 
     const lockKey = bigintAdvisoryKey(`email:inbound:${messageId}`);
     const result = await prisma.$transaction(async (tx) => {
-      await tx.$queryRawUnsafe("SELECT pg_advisory_xact_lock($1)", lockKey);
+      // pg_advisory_xact_lock returns void — $queryRawUnsafe expects a
+      // result set to deserialize and throws on every call; $executeRawUnsafe
+      // is for statements with no rows to return. The ::bigint cast is
+      // required too — Prisma's raw-parameter serializer can't convert a
+      // native JS bigint on its own ("Could not convert from `JSON bigint
+      // value` to `PrismaValue`").
+      await tx.$executeRawUnsafe("SELECT pg_advisory_xact_lock($1::bigint)", lockKey);
 
       // Global provider message id uniqueness guarantees exactly one inbound
       // Message row per email, even if duplicate deliveries race.

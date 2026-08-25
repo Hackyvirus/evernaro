@@ -106,16 +106,25 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  if (!body.id) {
+  // Razorpay's webhook JSON body has no top-level event id (per its documented
+  // payload shape: entity/account_id/event/contains/payload/created_at) — the
+  // per-event id used for retry deduplication is delivered in the
+  // x-razorpay-event-id header, not body.id. Reading only body.id meant every
+  // real Razorpay webhook (which never sets it) short-circuited here before
+  // any payment/subscription processing ever ran.
+  const eventId = req.headers.get("x-razorpay-event-id") || body.id;
+  if (!eventId) {
     return NextResponse.json({ ok: true });
   }
-  const eventId = body.id;
 
   const lock = eventLockKey(eventId);
 
   try {
     await prisma.$transaction(async (tx) => {
-      await tx.$queryRaw`SELECT pg_advisory_xact_lock(${lock})`;
+      // pg_advisory_xact_lock returns void — $queryRaw expects a result set
+      // to deserialize and throws on every call; $executeRaw is for
+      // statements with no rows to return.
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(${lock})`;
 
       const existing = await tx.razorpayWebhookEvent.findUnique({
         where: { eventId },

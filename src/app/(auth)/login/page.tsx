@@ -28,15 +28,17 @@ export default function LoginPage() {
       });
       setLoading(false);
       if (res?.error) {
-        if (res.error === "MFA_REQUIRED" || res.error === "CredentialsSignin" || res.error === "mfa") {
-          // First attempt without MFA code: show MFA field. If the user actually
-          // has MFA enabled, the next submission with the code will succeed.
-          if (!needsMfa) {
-            setNeedsMfa(true);
-            return;
-          }
+        // `code` is set explicitly by MfaRequiredError in src/lib/auth.ts and
+        // survives the response — unlike `error`, which next-auth normalizes
+        // to the generic "CredentialsSignin" for wrong password, inactive
+        // account, and rate-limiting alike. Only a real MFA code fetches the
+        // second field; everything else gets a real "invalid" message
+        // instead of a bogus prompt for a code the user doesn't have.
+        if (res.code === "mfa_required" && !needsMfa) {
+          setNeedsMfa(true);
+          return;
         }
-        setError(needsMfa ? "Invalid email, password, or authentication code" : "Invalid email or password");
+        setError(needsMfa ? "Invalid authentication code" : "Invalid email or password");
         return;
       }
       router.push("/inbox");

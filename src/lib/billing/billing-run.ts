@@ -309,7 +309,12 @@ export async function runDailyBilling() {
   const lockKey = bigintAdvisoryKey(`billing:daily:${today}`);
 
   return prisma.$transaction(async (tx) => {
-    await tx.$queryRawUnsafe("SELECT pg_advisory_xact_lock($1)", lockKey);
+    // pg_advisory_xact_lock returns void — $queryRawUnsafe expects a result
+    // set to deserialize and throws on every call; $executeRawUnsafe is for
+    // statements with no rows to return. The ::bigint cast is required too —
+    // Prisma's raw-parameter serializer can't convert a native JS bigint on
+    // its own ("Could not convert from `JSON bigint value` to `PrismaValue`").
+    await tx.$executeRawUnsafe("SELECT pg_advisory_xact_lock($1::bigint)", lockKey);
 
     const run = await tx.billingRun.create({ data: { status: "running" } });
     let invoicesCreated = 0;
@@ -356,7 +361,12 @@ export async function applySubscriptionPayment(
 
   // Serialize concurrent payment applications for the same subscription across
   // Razorpay webhook and browser confirmation paths to prevent double period advance.
-  await client.$queryRawUnsafe("SELECT pg_advisory_xact_lock($1)", lockKey);
+  // pg_advisory_xact_lock returns void — $queryRawUnsafe expects a result set
+  // to deserialize and throws on every call; $executeRawUnsafe is for
+  // statements with no rows to return. The ::bigint cast is required too —
+  // Prisma's raw-parameter serializer can't convert a native JS bigint on
+  // its own ("Could not convert from `JSON bigint value` to `PrismaValue`").
+  await client.$executeRawUnsafe("SELECT pg_advisory_xact_lock($1::bigint)", lockKey);
 
   const subscription = await client.customerSubscription.findUnique({
     where: { id: subscriptionId },

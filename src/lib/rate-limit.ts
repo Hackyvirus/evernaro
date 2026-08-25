@@ -36,11 +36,21 @@ export async function checkRateLimit(
 ): Promise<boolean> {
   const redisKey = `ratelimit:${key}`;
   try {
-    const count = await withTimeout(redisConnection.incr(redisKey), RATE_LIMIT_TIMEOUT_MS);
-    if (count === 1) {
-      await withTimeout(redisConnection.expire(redisKey, windowSeconds), RATE_LIMIT_TIMEOUT_MS);
-    }
-    return count <= limit;
+    // INCR and EXPIRE run in one multi so a key can never end up incremented
+    // without a TTL — a prior version set the TTL only when count === 1 in a
+    // separate round-trip, and if that second call ever failed or timed out,
+    // the counter was left permanent (ttl -1), locking the account/IP out
+    // until someone manually cleared Redis. Renewing the TTL on every hit
+    // (not just the first) means an ongoing attack extends its own lockout
+    // window instead of racing a fixed reset, which is the safer default here.
+    const results = await withTimeout(
+      redisConnection.multi().incr(redisKey).expire(redisKey, windowSeconds).exec(),
+      RATE_LIMIT_TIMEOUT_MS
+    );
+    if (!results) throw new Error("Rate limit transaction returned no results");
+    const [[incrErr, count]] = results;
+    if (incrErr) throw incrErr;
+    return (count as number) <= limit;
   } catch (err) {
     if (process.env.SENTRY_DSN) {
       const Sentry = await import("@sentry/nextjs");

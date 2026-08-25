@@ -42,7 +42,10 @@ async function acquireBookingLock(
   startsAt: Date
 ) {
   const lockId = bookingAdvisoryLockId(orgId, staffId, resourceId, startsAt);
-  await tx.$queryRawUnsafe(`SELECT pg_advisory_xact_lock($1::bigint)`, lockId);
+  // pg_advisory_xact_lock returns void — $queryRawUnsafe tries to deserialize
+  // a result set and throws ("Failed to deserialize column of type 'void'")
+  // on every call. $executeRawUnsafe is for statements with no rows to return.
+  await tx.$executeRawUnsafe(`SELECT pg_advisory_xact_lock($1::bigint)`, lockId);
 }
 
 export async function createAppointment(input: CreateAppointmentInput) {

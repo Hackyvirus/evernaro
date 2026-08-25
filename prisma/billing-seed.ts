@@ -120,7 +120,19 @@ export async function seedBillingCatalog() {
         { serviceKey: "storage_mb", includedQuantity: 5000 },
       ],
       features: [
+        // "Everything in Starter" is a real grant, not just marketing copy —
+        // hasFeature() matches on `key` against this plan's own rows, with no
+        // concept of inheriting another plan's features. Without these,
+        // Growth orgs silently fail every Starter-tier entitlement check
+        // (e.g. requireFeature(orgId, "appointment_management") 403s) despite
+        // the pricing page advertising Growth as including everything Starter has.
         { key: "everything_in_starter", label: "Everything in Starter", included: true },
+        { key: "queue_management", label: "Queue Management", included: true },
+        { key: "appointment_management", label: "Appointment Management", included: true },
+        { key: "customer_management", label: "Customer Management", included: true },
+        { key: "customer_notifications", label: "Customer Notifications", included: true },
+        { key: "unified_inbox", label: "Unified Inbox (WhatsApp, Email, Telegram)", included: true },
+        { key: "email_support", label: "Email Support", included: true },
         { key: "ai_assistant", label: "AI Assistant", included: true },
         { key: "broadcast_campaigns", label: "Broadcast Campaigns", included: true },
         { key: "analytics", label: "Analytics", included: true },
@@ -146,7 +158,21 @@ export async function seedBillingCatalog() {
         { serviceKey: "storage_mb", includedQuantity: 25000 },
       ],
       features: [
+        // Same reasoning as Growth's "everything_in_starter" above — these
+        // are real grants the entitlement checks require, not just copy.
         { key: "everything_in_growth", label: "Everything in Growth", included: true },
+        { key: "queue_management", label: "Queue Management", included: true },
+        { key: "appointment_management", label: "Appointment Management", included: true },
+        { key: "customer_management", label: "Customer Management", included: true },
+        { key: "customer_notifications", label: "Customer Notifications", included: true },
+        { key: "unified_inbox", label: "Unified Inbox (WhatsApp, Email, Telegram)", included: true },
+        { key: "email_support", label: "Email Support", included: true },
+        { key: "ai_assistant", label: "AI Assistant", included: true },
+        { key: "broadcast_campaigns", label: "Broadcast Campaigns", included: true },
+        { key: "analytics", label: "Analytics", included: true },
+        { key: "staff_management", label: "Staff Management", included: true },
+        { key: "automated_reminders", label: "Automated Reminders", included: true },
+        { key: "priority_support", label: "Priority Support", included: true },
         { key: "advanced_analytics", label: "Advanced Analytics", included: true },
         { key: "higher_limits", label: "Higher usage limits", included: true },
         { key: "dedicated_support", label: "Dedicated Support", included: true },
@@ -170,7 +196,25 @@ export async function seedBillingCatalog() {
         { serviceKey: "storage_mb", includedQuantity: 0 },
       ],
       features: [
+        // Same reasoning as above — Enterprise must carry every real grant
+        // from Business (which itself carries Growth's and Starter's), not
+        // just the "Everything in Business" label.
         { key: "everything", label: "Everything in Business", included: true },
+        { key: "queue_management", label: "Queue Management", included: true },
+        { key: "appointment_management", label: "Appointment Management", included: true },
+        { key: "customer_management", label: "Customer Management", included: true },
+        { key: "customer_notifications", label: "Customer Notifications", included: true },
+        { key: "unified_inbox", label: "Unified Inbox (WhatsApp, Email, Telegram)", included: true },
+        { key: "email_support", label: "Email Support", included: true },
+        { key: "ai_assistant", label: "AI Assistant", included: true },
+        { key: "broadcast_campaigns", label: "Broadcast Campaigns", included: true },
+        { key: "analytics", label: "Analytics", included: true },
+        { key: "staff_management", label: "Staff Management", included: true },
+        { key: "automated_reminders", label: "Automated Reminders", included: true },
+        { key: "priority_support", label: "Priority Support", included: true },
+        { key: "advanced_analytics", label: "Advanced Analytics", included: true },
+        { key: "higher_limits", label: "Higher usage limits", included: true },
+        { key: "dedicated_support", label: "Dedicated Support", included: true },
         { key: "custom_sla", label: "Custom SLA", included: true },
         { key: "dedicated_csm", label: "Dedicated CSM", included: true },
         { key: "custom_integrations", label: "Custom Integrations", included: true },

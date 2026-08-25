@@ -1,4 +1,4 @@
-import NextAuth from "next-auth";
+import NextAuth, { CredentialsSignin } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
@@ -14,10 +14,13 @@ import { checkRateLimit, clientIp } from "@/lib/rate-limit";
 // enumeration.
 const DUMMY_HASH = "$2b$12$C6UzMDM.H6dfI/f/IKcEeO0j0FEEC0MEsAcaZ1EOwLmR2ILzTkoOK";
 
-export class MfaRequiredError extends Error {
-  constructor() {
-    super("MFA_REQUIRED");
-  }
+// Extends next-auth's CredentialsSignin (not a plain Error) so its `code`
+// survives the redirect/response as `res.code` — a plain thrown Error gets
+// normalized to the generic CredentialsSignin type with code "credentials",
+// which the login form can't distinguish from a wrong password or a
+// rate-limited account.
+export class MfaRequiredError extends CredentialsSignin {
+  code = "mfa_required";
 }
 
 export const { handlers, auth, signIn, signOut } = NextAuth({

@@ -56,7 +56,7 @@ export async function POST(req: Request) {
   try {
     const { orgId } = await requireOrgMember(UserRole.AGENT);
     await requireActiveSubscription(orgId);
-    await requireFeature(orgId, "appointment_bookings");
+    await requireFeature(orgId, "appointment_management");
 
     const body = await req.json();
     const parsed = appointmentSchema.safeParse(body);
@@ -133,6 +133,7 @@ export async function POST(req: Request) {
     if (err instanceof SubscriptionSuspendedError) {
       return NextResponse.json({ error: err.message }, { status: 403 });
     }
+    console.error("POST /api/appointments failed:", err);
     return NextResponse.json({ error: "Failed to create appointment" }, { status: 500 });
   }
 }
