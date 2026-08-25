@@ -1,31 +1,22 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { Button, Card, Input, PageHeader } from "@/components/ui";
 
 type Service = { id: string; name: string; durationMin: number | null; priceInr: number | null };
 type Queue = { id: string; name: string; serviceId: string | null; service: Service | null };
 type OrgInfo = { name: string; open: boolean; closedMessage: string };
-type Entry = {
-  id: string;
-  token: string;
-  publicToken: string;
-  position: number;
-  estimatedWaitMin: number | null;
-  isAfterHours?: boolean;
-  queue: { id: string; name: string };
-};
 
 export default function PublicQueueCheckInPage() {
   const params = useParams();
+  const router = useRouter();
   const slug = params.slug as string;
 
   const [org, setOrg] = useState<OrgInfo | null>(null);
   const [queues, setQueues] = useState<Queue[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
-  const [entry, setEntry] = useState<Entry | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const [queueId, setQueueId] = useState("");
@@ -62,7 +53,14 @@ export default function PublicQueueCheckInPage() {
     setSubmitting(false);
     if (res.ok) {
       const data = await res.json();
-      setEntry(data.entry);
+      // Redirect to the persistent tracker URL instead of showing an
+      // in-place confirmation screen: that screen was pure in-memory React
+      // state, so refreshing this page (easy to do by accident) wiped it
+      // and dumped the customer back on the empty join form with no way to
+      // recover their token unless they'd already tapped through to the
+      // tracker first. The tracker page fetches by the token in its own
+      // URL, so it survives a refresh correctly.
+      router.push(`/business/${slug}/queue/${data.entry.publicToken}`);
     } else {
       const data = await res.json().catch(() => ({}));
       setError(data.error ?? "Could not join queue. Please try again.");
@@ -71,51 +69,6 @@ export default function PublicQueueCheckInPage() {
 
   if (loading) return <div className="p-8 text-center">Loading...</div>;
   if (error && !org) return <div className="p-8 text-center text-danger">{error}</div>;
-
-  if (entry) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-surface px-4">
-        <Card className="w-full max-w-md p-8 text-center">
-          <h1 className="mb-2 text-xl font-semibold text-text">
-            {entry.isAfterHours ? "You&apos;re registered" : "You&apos;re in line"}
-          </h1>
-          <p className="mb-6 text-text-secondary">
-            {entry.queue.name} at {org?.name}
-          </p>
-          {entry.isAfterHours && (
-            <div className="mb-4 rounded-lg bg-warning/10 p-3 text-sm text-warning">
-              The business is currently closed. Your request is saved and the business will be notified when they open.
-            </div>
-          )}
-
-          <div className="mb-6 rounded-lg bg-primary/10 py-6">
-            <div className="text-sm text-text-secondary">Your token</div>
-            <div className="text-4xl font-bold text-primary">{entry.token}</div>
-          </div>
-
-          <div className="mb-6 grid grid-cols-2 gap-4">
-            <div className="rounded-lg border border-border p-4">
-              <div className="text-xs text-text-secondary">Position</div>
-              <div className="text-2xl font-semibold text-text">#{entry.position}</div>
-            </div>
-            <div className="rounded-lg border border-border p-4">
-              <div className="text-xs text-text-secondary">Est. wait</div>
-              <div className="text-2xl font-semibold text-text">
-                {entry.estimatedWaitMin ?? 0} min
-              </div>
-            </div>
-          </div>
-
-          <a
-            href={`/business/${slug}/queue/${entry.publicToken}`}
-            className="inline-block w-full rounded-md bg-primary px-4 py-2 text-center text-sm font-medium text-primary-foreground"
-          >
-            Open live tracker
-          </a>
-        </Card>
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen bg-surface px-4 py-8">

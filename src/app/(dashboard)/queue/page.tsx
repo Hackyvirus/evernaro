@@ -61,7 +61,10 @@ export default function QueuePage() {
   const [contactId, setContactId] = useState("");
   const [serviceId, setServiceId] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const [verifyCode, setVerifyCode] = useState("");
+  // Keyed by publicToken so each CALLED entry has its own OTP input --
+  // a single shared string meant typing into one entry's box showed the
+  // same text in every other CALLED entry's box too.
+  const [verifyCodes, setVerifyCodes] = useState<Record<string, string>>({});
   const [verifyingEntryId, setVerifyingEntryId] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [pollError, setPollError] = useState<string | null>(null);
@@ -248,15 +251,20 @@ export default function QueuePage() {
   }
 
   async function verifyAndStart(publicToken: string) {
-    if (!verifyCode || verifyCode.length !== 6) return;
+    const code = verifyCodes[publicToken];
+    if (!code || code.length !== 6) return;
     setVerifyingEntryId(publicToken);
     const res = await fetch("/api/queue/verify", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ publicToken, code: verifyCode }),
+      body: JSON.stringify({ publicToken, code }),
     });
     setVerifyingEntryId(null);
-    setVerifyCode("");
+    setVerifyCodes((prev) => {
+      const next = { ...prev };
+      delete next[publicToken];
+      return next;
+    });
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
       setPollError(data.error ?? "Verification failed");
@@ -405,9 +413,10 @@ export default function QueuePage() {
                         <div className="flex items-center gap-2">
                           <Input
                             placeholder="OTP"
-                            value={verifyCode}
+                            value={verifyCodes[e.publicToken] ?? ""}
                             onChange={(ev) => {
-                              setVerifyCode(ev.target.value.replace(/\D/g, "").slice(0, 6));
+                              const digits = ev.target.value.replace(/\D/g, "").slice(0, 6);
+                              setVerifyCodes((prev) => ({ ...prev, [e.publicToken]: digits }));
                             }}
                             className="w-24"
                             maxLength={6}
