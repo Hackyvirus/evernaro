@@ -134,8 +134,10 @@ export async function gupshupDeleteTemplate(opts: {
   const data = await res.json().catch(() => ({}));
   // A template Gupshup no longer knows about (already deleted on their side,
   // e.g. manually via their dashboard) isn't a real failure for our purposes
-  // -- the caller's goal is "make sure it's gone", and it already is.
-  if (res.status === 404) return;
+  // -- the caller's goal is "make sure it's gone", and it already is. Gupshup
+  // reports this as a 400 with this exact message, not 404 -- confirmed live
+  // against a template that had already been removed via their own dashboard.
+  if (res.status === 404 || data?.message === "Template Does not exists.") return;
   throw new Error(data?.message || `Gupshup template deletion failed (${res.status})`);
 }
 
