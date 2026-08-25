@@ -344,7 +344,12 @@ export async function getQueueEntryByToken(token: string, orgId: string) {
 export async function getQueueEntryByPublicToken(publicToken: string) {
   return prisma.queueEntry.findUnique({
     where: { publicToken },
-    include: { contact: true, service: true, staff: true, queue: true },
+    include: {
+      contact: true,
+      service: true,
+      staff: true,
+      queue: { include: { org: { select: { name: true } } } },
+    },
   });
 }
 
@@ -369,6 +374,7 @@ export async function getPublicQueueStatus(publicToken: string) {
     ahead,
     estimatedWaitMin: entry.estimatedWaitMin ?? 0,
     queue: { name: entry.queue.name },
+    businessName: entry.queue.org.name,
     service: entry.service
       ? { name: entry.service.name, durationMin: entry.service.durationMin }
       : null,

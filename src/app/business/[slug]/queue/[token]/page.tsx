@@ -14,6 +14,7 @@ type QueueStatus = {
   estimatedWaitMin: number | null;
   queue: { id: string; name: string };
   verificationCode: string | null;
+  businessName: string;
   calledAt: string | null;
   startedAt: string | null;
   completedAt: string | null;
@@ -132,7 +133,28 @@ export default function PublicQueueTrackerPage() {
 
         {isInProgress && <p className="mb-6 text-sm font-medium text-success">You are being served.</p>}
 
-        {isDone && <p className="mb-6 text-sm text-text-secondary">This queue session has ended.</p>}
+        {status.status === "COMPLETED" && (
+          <div className="mb-6">
+            <p className="text-base font-medium text-text">
+              Thanks for choosing {status.businessName || "us"}!
+            </p>
+            <p className="mt-1 text-sm text-text-secondary">
+              We hope to see you again soon — we&apos;ll miss you until then.
+            </p>
+          </div>
+        )}
+
+        {status.status === "CANCELLED" && (
+          <p className="mb-6 text-sm text-text-secondary">
+            Your queue entry was cancelled. Come back anytime — we&apos;d love to have you.
+          </p>
+        )}
+
+        {status.status === "NO_SHOW" && (
+          <p className="mb-6 text-sm text-text-secondary">
+            Looks like we missed each other. Feel free to join the queue again whenever you&apos;re ready.
+          </p>
+        )}
 
         {!isDone && !showCancelConfirm && (
           <Button variant="ghost" onClick={() => setShowCancelConfirm(true)} className="w-full">
