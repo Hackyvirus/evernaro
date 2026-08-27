@@ -21,6 +21,15 @@ export function whatsappSendRequiresTemplate(
 // {{1}} filled in.
 const GENERIC_EXAMPLE_VALUES = ["there", "Sunrise Clinic", "A-101", "3", "482913", "2", "15"];
 
+// Number of distinct {{n}} body variables in a template. Meta requires them
+// to run 1..n with no gaps, so this is also the highest n. The send path
+// always fills {{1}} with the contact's name; callers that supply the rest
+// (campaigns) must provide exactly `templateVariableCount - 1` values.
+export function templateVariableCount(bodyText: string): number {
+  const nums = new Set(Array.from(bodyText.matchAll(/\{\{(\d+)\}\}/g), (m) => Number(m[1])));
+  return nums.size;
+}
+
 export function buildTemplateExample(bodyText: string): string {
   const placeholders = new Set(Array.from(bodyText.matchAll(/\{\{(\d+)\}\}/g), (m) => m[1]));
   let example = bodyText;

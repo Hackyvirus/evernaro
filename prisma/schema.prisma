@@ -645,6 +645,10 @@ model Campaign {
   messageTemplate    String // supports {{name}} placeholder, substituted per-recipient; for WhatsApp-with-template campaigns this mirrors the template body for display only — the send path uses whatsappTemplateId
   whatsappTemplateId String?
   whatsappTemplate   WhatsAppTemplate? @relation(fields: [whatsappTemplateId], references: [id])
+  // Campaign-level values for the template's {{2}}..{{n}} body variables, in
+  // order. {{1}} is always the recipient's name and is prepended per-send, so
+  // it is NOT stored here. Empty when the template has only {{1}}.
+  templateParams     String[]          @default([])
   status             CampaignStatus    @default(DRAFT)
   scheduledAt        DateTime?
   timezone           String            @default("Asia/Kolkata")

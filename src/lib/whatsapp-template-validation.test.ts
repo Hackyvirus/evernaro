@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { buildTemplateExample, whatsappSendRequiresTemplate, whatsappTemplateBodySchema } from "./whatsapp-template-validation";
+import {
+  buildTemplateExample,
+  templateVariableCount,
+  whatsappSendRequiresTemplate,
+  whatsappTemplateBodySchema,
+} from "./whatsapp-template-validation";
 
 describe("whatsappSendRequiresTemplate", () => {
   it("requires a template for WhatsApp with no templateId", () => {
@@ -47,6 +52,21 @@ describe("whatsappTemplateBodySchema", () => {
     const result = whatsappTemplateBodySchema.parse({ name: "ok_name", bodyText: "{{1}}" });
     expect(result.category).toBe("UTILITY");
     expect(result.language).toBe("en");
+  });
+});
+
+describe("templateVariableCount", () => {
+  it("counts distinct {{n}} variables", () => {
+    expect(templateVariableCount("Hi {{1}}, your {{2}} at {{3}} is on {{4}} at {{5}}.")).toBe(5);
+  });
+
+  it("is 0 for a body with no variables and 1 for name-only", () => {
+    expect(templateVariableCount("Thanks for visiting!")).toBe(0);
+    expect(templateVariableCount("Hi {{1}}, thanks!")).toBe(1);
+  });
+
+  it("does not double-count a repeated variable", () => {
+    expect(templateVariableCount("{{1}} — see you soon {{1}}")).toBe(1);
   });
 });
 

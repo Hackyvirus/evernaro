@@ -149,7 +149,9 @@ async function processCampaignJob(job: Job<CampaignSendJob>) {
       wat?.gupshupTemplateId
         ? {
             gupshupTemplateId: wat.gupshupTemplateId,
-            params: [recipient.contact.name?.trim() || "there"],
+            // {{1}} = recipient name (per-recipient); {{2}}..{{n}} are the
+            // campaign-level values captured at creation time.
+            params: [recipient.contact.name?.trim() || "there", ...recipient.campaign.templateParams],
             category: wat.category,
           }
         : undefined,

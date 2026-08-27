@@ -113,6 +113,7 @@ export async function PATCH(
           description: campaign.description,
           messageTemplate: campaign.messageTemplate,
           whatsappTemplateId: campaign.whatsappTemplateId,
+          templateParams: campaign.templateParams,
           status: "DRAFT",
           totalRecipients: recipients.length,
           recipients: { createMany: { data: recipients.map((r) => ({ contactId: r.contactId })) } },

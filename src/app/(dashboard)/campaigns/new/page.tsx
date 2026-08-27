@@ -75,6 +75,7 @@ function NewCampaignPageContent() {
   const [selectedContactIds, setSelectedContactIds] = useState<string[]>([]);
   const [messageTemplate, setMessageTemplate] = useState("");
   const [whatsappTemplateId, setWhatsappTemplateId] = useState("");
+  const [templateParams, setTemplateParams] = useState<string[]>([]);
   const [scheduleMode, setScheduleMode] = useState<"now" | "later">("now");
   const [scheduledDate, setScheduledDate] = useState("");
   const [scheduledTime, setScheduledTime] = useState("");
@@ -85,6 +86,24 @@ function NewCampaignPageContent() {
   const selectedChannel = channels.find((c) => c.id === channelId);
   const isWhatsApp = selectedChannel?.type === "WHATSAPP";
   const approvedTemplates = templates.filter((t) => t.status === "APPROVED");
+  const selectedTemplateBody =
+    templates.find((t) => t.id === whatsappTemplateId && t.status === "APPROVED")?.bodyText ?? "";
+
+  // {{2}}..{{n}} of the selected template. {{1}} is always the recipient's
+  // name, filled per-send, so it isn't collected in the wizard.
+  const extraVarNumbers = useMemo(() => {
+    const nums = Array.from(
+      new Set(Array.from(selectedTemplateBody.matchAll(/\{\{(\d+)\}\}/g), (m) => Number(m[1])))
+    ).sort((a, b) => a - b);
+    return nums.filter((n) => n >= 2);
+  }, [selectedTemplateBody]);
+
+  const setVar = (i: number, value: string) =>
+    setTemplateParams((prev) => {
+      const next = extraVarNumbers.map((_, idx) => prev[idx] ?? "");
+      next[i] = value;
+      return next;
+    });
 
   useEffect(() => {
     let active = true;
@@ -130,10 +149,15 @@ function NewCampaignPageContent() {
 
   const previewMessage = useMemo(() => {
     if (isWhatsApp) {
-      return approvedTemplates.find((t) => t.id === whatsappTemplateId)?.bodyText ?? "";
+      if (!selectedTemplateBody) return "";
+      let body = selectedTemplateBody.replace(/\{\{1\}\}/g, "Customer");
+      extraVarNumbers.forEach((n, i) => {
+        body = body.replace(new RegExp(`\\{\\{${n}\\}\\}`, "g"), templateParams[i]?.trim() || `{{${n}}}`);
+      });
+      return body;
     }
     return messageTemplate.replace(/\{\{name\}\}/g, "Customer");
-  }, [isWhatsApp, messageTemplate, whatsappTemplateId, approvedTemplates]);
+  }, [isWhatsApp, messageTemplate, selectedTemplateBody, extraVarNumbers, templateParams]);
 
   function canProceed() {
     if (step === 0) return Boolean(name && channelId);
@@ -142,7 +166,10 @@ function NewCampaignPageContent() {
       if (audience === "selected") return selectedContactIds.length > 0;
       return true;
     }
-    if (step === 2) return isWhatsApp ? Boolean(whatsappTemplateId) : Boolean(messageTemplate.trim());
+    if (step === 2) {
+      if (!isWhatsApp) return Boolean(messageTemplate.trim());
+      return Boolean(whatsappTemplateId) && extraVarNumbers.every((_, i) => (templateParams[i] ?? "").trim());
+    }
     if (step === 3) return scheduleMode === "now" || Boolean(scheduledAt);
     return true;
   }
@@ -157,6 +184,7 @@ function NewCampaignPageContent() {
       channelId,
       messageTemplate: finalMessage,
       whatsappTemplateId: isWhatsApp ? whatsappTemplateId : undefined,
+      templateParams: isWhatsApp ? extraVarNumbers.map((_, i) => (templateParams[i] ?? "").trim()) : undefined,
       timezone,
     };
     if (scheduledAt) body.scheduledAt = scheduledAt;
@@ -223,7 +251,7 @@ function NewCampaignPageContent() {
             <div className="space-y-4">
               <Input label="Campaign name" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. August property alerts" />
               <Textarea label="Description (optional)" value={description} onChange={(e) => setDescription(e.target.value)} rows={2} />
-              <Select label="Channel" value={channelId} onChange={(e) => { setChannelId(e.target.value); setWhatsappTemplateId(""); }}>
+              <Select label="Channel" value={channelId} onChange={(e) => { setChannelId(e.target.value); setWhatsappTemplateId(""); setTemplateParams([]); }}>
                 <option value="">Select channel...</option>
                 {channels.filter((c) => c.type !== "VOICE").map((c) => (
                   <option key={c.id} value={c.id}>{channelLabel(c)}</option>
@@ -283,10 +311,28 @@ function NewCampaignPageContent() {
           {step === 2 && (
             <div className="space-y-4">
               {isWhatsApp ? (
-                <Select label="WhatsApp template" value={whatsappTemplateId} onChange={(e) => setWhatsappTemplateId(e.target.value)}>
-                  <option value="">Select approved template...</option>
-                  {approvedTemplates.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
-                </Select>
+                <>
+                  <Select label="WhatsApp template" value={whatsappTemplateId} onChange={(e) => { setWhatsappTemplateId(e.target.value); setTemplateParams([]); }}>
+                    <option value="">Select approved template...</option>
+                    {approvedTemplates.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+                  </Select>
+                  {extraVarNumbers.length > 0 && (
+                    <div className="space-y-3 rounded-md border border-border bg-surface p-3">
+                      <p className="text-xs font-medium text-text-muted">
+                        Template values — <code>{"{{1}}"}</code> is each recipient&apos;s name; fill the rest for this campaign
+                      </p>
+                      {extraVarNumbers.map((n, i) => (
+                        <Input
+                          key={n}
+                          label={`{{${n}}}`}
+                          value={templateParams[i] ?? ""}
+                          onChange={(e) => setVar(i, e.target.value)}
+                          placeholder={`Value for {{${n}}}`}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </>
               ) : (
                 <Textarea label="Message" value={messageTemplate} onChange={(e) => setMessageTemplate(e.target.value)} rows={6} placeholder="Hi {{name}}, ..." />
               )}

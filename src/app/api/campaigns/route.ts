@@ -5,7 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { requireOrgMember, UnauthorizedError, ForbiddenError } from "@/lib/session";
 import { enqueueCampaignRecipient } from "@/lib/queue";
 import { CHANNEL_IDENTIFIER_FIELD } from "@/lib/channel-reachability";
-import { whatsappSendRequiresTemplate } from "@/lib/whatsapp-template-validation";
+import { whatsappSendRequiresTemplate, templateVariableCount } from "@/lib/whatsapp-template-validation";
 import { requireActiveSubscription, SubscriptionSuspendedError } from "@/lib/subscription";
 import { logAudit } from "@/lib/audit";
 import {
@@ -42,6 +42,10 @@ const bodySchema = z.object({
   channelId: z.string().min(1),
   messageTemplate: z.string().min(1).max(4096),
   whatsappTemplateId: z.string().optional(),
+  // Values for the template's {{2}}..{{n}} variables ({{1}} is the recipient
+  // name, filled per-send). Each must be non-empty and single-line — Meta
+  // rejects template params containing newlines or tabs.
+  templateParams: z.array(z.string().min(1).regex(/^[^\n\t]*$/, "Template values can't contain line breaks")).optional(),
   timezone: z.string().optional(),
   scheduledAt: z.string().datetime().optional(),
   audience: z.union([
@@ -59,7 +63,7 @@ export async function POST(req: Request) {
     if (!parsed.success) {
       return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid input" }, { status: 400 });
     }
-    const { name, description, channelId, messageTemplate, whatsappTemplateId, timezone, scheduledAt, audience } = parsed.data;
+    const { name, description, channelId, messageTemplate, whatsappTemplateId, templateParams, timezone, scheduledAt, audience } = parsed.data;
 
     const channel = await prisma.channel.findFirst({ where: { id: channelId, orgId } });
     if (!channel) {
@@ -78,6 +82,7 @@ export async function POST(req: Request) {
         { status: 400 }
       );
     }
+    const campaignTemplateParams = templateParams ?? [];
     if (channel.type === "WHATSAPP") {
       const template = await prisma.whatsAppTemplate.findFirst({
         where: { id: whatsappTemplateId, channelId: channel.id, status: "APPROVED" },
@@ -85,6 +90,16 @@ export async function POST(req: Request) {
       if (!template) {
         return NextResponse.json(
           { error: "That template isn't approved yet — check its status in Settings before using it." },
+          { status: 400 }
+        );
+      }
+      // {{1}} is the recipient name; the campaign must supply every other variable.
+      const expected = Math.max(0, templateVariableCount(template.bodyText) - 1);
+      if (campaignTemplateParams.length !== expected) {
+        return NextResponse.json(
+          {
+            error: `This template needs ${expected} value${expected === 1 ? "" : "s"} for its {{2}}+ variables — got ${campaignTemplateParams.length}.`,
+          },
           { status: 400 }
         );
       }
@@ -152,6 +167,7 @@ export async function POST(req: Request) {
         description: description ?? null,
         messageTemplate,
         whatsappTemplateId: whatsappTemplateId ?? null,
+        templateParams: channel.type === "WHATSAPP" ? campaignTemplateParams : [],
         status,
         scheduledAt: scheduledDate ?? null,
         timezone: timezone ?? "Asia/Kolkata",
