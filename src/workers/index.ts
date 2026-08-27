@@ -263,6 +263,14 @@ async function processReminderJob(job: Job<ReminderSendJob>) {
       if (!reminder.whatsappTemplate.gupshupTemplateId) {
         throw new Error("Template was never confirmed by Gupshup — check its status in Settings");
       }
+      // templateParams is the full ordered {{1}}..{{n}} list, built when the
+      // reminder was scheduled (appointment/review flows). Manual reminders
+      // and legacy rows leave it empty -- fall back to a single name param so
+      // a one-variable template still works.
+      const params =
+        reminder.templateParams.length > 0
+          ? reminder.templateParams
+          : [reminder.contact.name?.trim() || "there"];
       await sendViaChannel(
         reminder.channel,
         reminder.contact,
@@ -270,7 +278,7 @@ async function processReminderJob(job: Job<ReminderSendJob>) {
         undefined,
         {
           gupshupTemplateId: reminder.whatsappTemplate.gupshupTemplateId,
-          params: [reminder.contact.name?.trim() || "there"],
+          params,
           category: reminder.whatsappTemplate.category,
         },
         { type: "REMINDER", id: reminder.id }
@@ -324,6 +332,7 @@ async function processReminderJob(job: Job<ReminderSendJob>) {
           channelId: reminder.channelId,
           message: reminder.message,
           whatsappTemplateId: reminder.whatsappTemplateId,
+          templateParams: reminder.templateParams,
           scheduledFor: next,
           recurrence: reminder.recurrence,
         },

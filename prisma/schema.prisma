@@ -719,6 +719,11 @@ model Reminder {
   message            String
   whatsappTemplateId String?
   whatsappTemplate   WhatsAppTemplate?  @relation(fields: [whatsappTemplateId], references: [id])
+  // Ordered body params ({{1}}, {{2}}, ...) for whatsappTemplate. Built when
+  // the reminder is scheduled, from data the send-time worker no longer has
+  // (service/business/date/time). Empty for manual reminders and legacy rows;
+  // the worker then falls back to a single param -- the contact's name.
+  templateParams     String[]           @default([])
   assignedToId       String?
   assignedTo         User?              @relation(fields: [assignedToId], references: [id], onDelete: SetNull)
   scheduledFor       DateTime

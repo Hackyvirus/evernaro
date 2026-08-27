@@ -51,6 +51,18 @@ async function chooseWhatsAppTemplate(channelId: string) {
   });
 }
 
+// Ordered body params for the "*review*" WhatsApp template. The template MUST
+// be written with exactly these three variables in this order:
+//   {{1}} patient name   {{2}} service   {{3}} review link
+// Keep this and the approved template in lockstep.
+export function buildReviewRequestParams(args: {
+  contactName: string | null;
+  serviceName: string;
+  reviewUrl: string;
+}): string[] {
+  return [args.contactName?.trim() || "there", args.serviceName, args.reviewUrl];
+}
+
 export async function scheduleReviewRequest(appointmentId: string) {
   const appointment = await prisma.appointment.findUnique({
     where: { id: appointmentId },
@@ -61,17 +73,23 @@ export async function scheduleReviewRequest(appointmentId: string) {
   const channel = await chooseChannelForContact(appointment.orgId, appointment.contact);
   if (!channel) return;
 
-  let whatsappTemplateId: string | undefined;
-  if (channel.type === ChannelType.WHATSAPP) {
-    const template = await chooseWhatsAppTemplate(channel.id);
-    if (!template) return;
-    whatsappTemplateId = template.id;
-  }
-
   const { token } = generateReviewToken(appointment.contactId, { type: "appointment", id: appointment.id });
   const reviewUrl = `${process.env.NEXT_PUBLIC_BASE_URL}/business/${appointment.org.slug}/review?t=${token}`;
   const serviceName = appointment.service?.name ?? "your visit";
   const message = `Hi {{name}}, how was ${serviceName}? Please rate your experience here: ${reviewUrl}`;
+
+  let whatsappTemplateId: string | undefined;
+  let templateParams: string[] = [];
+  if (channel.type === ChannelType.WHATSAPP) {
+    const template = await chooseWhatsAppTemplate(channel.id);
+    if (!template) return;
+    whatsappTemplateId = template.id;
+    templateParams = buildReviewRequestParams({
+      contactName: appointment.contact.name,
+      serviceName,
+      reviewUrl,
+    });
+  }
 
   const scheduledFor = new Date(Date.now() + 2 * 60 * 60 * 1000); // 2 hours after completion
 
@@ -85,6 +103,7 @@ export async function scheduleReviewRequest(appointmentId: string) {
       message,
       scheduledFor,
       whatsappTemplateId: whatsappTemplateId ?? null,
+      templateParams,
     },
   });
 

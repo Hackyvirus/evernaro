@@ -46,6 +46,31 @@ export function toZonedISO(dateStr: string, timeStr: string, timeZone: string): 
 }
 
 /**
+ * Format an instant as a calendar date ("Fri, 28 Aug") in a specific IANA
+ * timezone. Server processes (the reminder worker, Vercel functions) run in
+ * UTC, so `Date#toLocaleDateString` without an explicit zone renders the
+ * wrong day for evening appointments -- always pass the org's timezone.
+ */
+export function formatDateInTimezone(date: Date, timeZone: string): string {
+  return new Intl.DateTimeFormat("en-IN", {
+    timeZone,
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+  }).format(date);
+}
+
+/** Format an instant as a wall-clock time ("03:30 pm") in a specific IANA timezone. */
+export function formatTimeInTimezone(date: Date, timeZone: string): string {
+  return new Intl.DateTimeFormat("en-IN", {
+    timeZone,
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: true,
+  }).format(date);
+}
+
+/**
  * The UTC instant corresponding to midnight "today" in the given timezone,
  * as of `now`. Used to scope per-day counters (e.g. queue token numbering)
  * to the business's own calendar day rather than the server's UTC day.
