@@ -11,12 +11,25 @@ export type QueueNotificationEvent = "joined" | "called" | "completed" | "cancel
 // 24-hour window since the contact's last inbound message -- the normal case
 // for a first-time patient who scans a queue QR code and has never messaged
 // the business number before. Each event maps to its own approved template,
-// named exactly `queue_<event>` on the channel, submitted via Settings.
-// Free-form text (below) remains the fallback when no approved template
-// exists yet, or for orgs still relying on an open session window.
+// named `queue_<event>` on the channel, submitted via Settings. Free-form
+// text (below) remains the fallback when no approved template exists yet,
+// or for orgs still relying on an open session window.
+//
+// The "joined" event is an exception: Gupshup's backend got stuck on the
+// name `queue_joined` ("New English content can't be added while the
+// existing English content is being deleted"), and then on `queue_checkin`
+// the same way (3 failed submissions each). The identical body now lives
+// under `queue_checkedin`. Same body, same params -- name only.
+const QUEUE_TEMPLATE_NAMES: Record<QueueNotificationEvent, string> = {
+  joined: "queue_checkedin",
+  called: "queue_called",
+  completed: "queue_completed",
+  cancelled: "queue_cancelled",
+};
+
 async function chooseQueueTemplate(channelId: string, event: QueueNotificationEvent) {
   return prisma.whatsAppTemplate.findFirst({
-    where: { channelId, status: "APPROVED", name: `queue_${event}` },
+    where: { channelId, status: "APPROVED", name: QUEUE_TEMPLATE_NAMES[event] },
   });
 }
 

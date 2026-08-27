@@ -98,7 +98,7 @@ describe("sendQueueNotification WhatsApp template routing", () => {
   it("builds params in the joined-event order (no position or verification code)", async () => {
     findFirstTemplateMock.mockResolvedValue({
       id: "tmpl2",
-      name: "queue_joined",
+      name: "queue_checkedin",
       status: "APPROVED",
       gupshupTemplateId: "gs-joined-id",
       category: "UTILITY",
@@ -106,6 +106,9 @@ describe("sendQueueNotification WhatsApp template routing", () => {
 
     await sendQueueNotification("org1", contact as never, "joined", meta);
 
+    expect(findFirstTemplateMock).toHaveBeenCalledWith({
+      where: { channelId: "channel1", status: "APPROVED", name: "queue_checkedin" },
+    });
     const [, , , , whatsappTemplate] = sendViaChannelMock.mock.calls[0];
     expect(whatsappTemplate).toEqual({
       gupshupTemplateId: "gs-joined-id",
