@@ -9,6 +9,7 @@ export function generateVerificationCode(): string {
 }
 import { enqueueNoShow, cancelNoShowJob } from "@/lib/queue";
 import { sendQueueNotification, sendBusinessQueueNotification } from "@/lib/customer-notifications";
+import { keepAlive } from "@/lib/lifecycle";
 
 const OTP_TTL_MS = 5 * 60 * 1000;
 const DEFAULT_SERVICE_MINUTES = 5;
@@ -155,21 +156,27 @@ export async function joinQueue(data: {
     select: { name: true },
   });
 
-  void sendQueueNotification(data.orgId, entry.contact, "joined", {
-    token: entry.token,
-    position: entry.position,
-    estimatedWaitMin: entry.estimatedWaitMin ?? 0,
-    queueName: entry.queue.name,
-    businessName: org?.name ?? "",
-    serviceName: entry.service?.name,
-    staffName: entry.staff?.name,
-  });
+  keepAlive(
+    sendQueueNotification(data.orgId, entry.contact, "joined", {
+      token: entry.token,
+      position: entry.position,
+      estimatedWaitMin: entry.estimatedWaitMin ?? 0,
+      queueName: entry.queue.name,
+      businessName: org?.name ?? "",
+      serviceName: entry.service?.name,
+      staffName: entry.staff?.name,
+    }),
+    "queue joined notification"
+  );
 
-  void sendBusinessQueueNotification(
-    data.orgId,
-    { token: entry.token, contact: entry.contact, queue: entry.queue },
-    org?.name ?? "",
-    entry.isAfterHours
+  keepAlive(
+    sendBusinessQueueNotification(
+      data.orgId,
+      { token: entry.token, contact: entry.contact, queue: entry.queue },
+      org?.name ?? "",
+      entry.isAfterHours
+    ),
+    "business queue notification"
   );
 
   return entry;
@@ -265,16 +272,19 @@ export async function updateQueueEntryStatus(
           : status === QueueEntryStatus.CANCELLED
             ? "cancelled"
             : "called";
-      void sendQueueNotification(orgId, entry.contact, event, {
-        token: entry.token,
-        position: entry.position,
-        estimatedWaitMin: entry.estimatedWaitMin ?? 0,
-        queueName: entry.queue.name,
-        businessName: org?.name ?? "",
-        serviceName: entry.service?.name,
-        staffName: entry.staff?.name,
-        verificationCode: entry.verificationCode,
-      });
+      keepAlive(
+        sendQueueNotification(orgId, entry.contact, event, {
+          token: entry.token,
+          position: entry.position,
+          estimatedWaitMin: entry.estimatedWaitMin ?? 0,
+          queueName: entry.queue.name,
+          businessName: org?.name ?? "",
+          serviceName: entry.service?.name,
+          staffName: entry.staff?.name,
+          verificationCode: entry.verificationCode,
+        }),
+        `queue ${event} notification`
+      );
     }
   }
 
@@ -320,16 +330,19 @@ export async function callNextInQueue(queueId: string, orgId: string, staffId?: 
   });
 
   if (entry.contact) {
-    void sendQueueNotification(orgId, entry.contact, "called", {
-      token: entry.token,
-      position: entry.position,
-      estimatedWaitMin: entry.estimatedWaitMin ?? 0,
-      queueName: entry.queue.name,
-      businessName: org?.name ?? "",
-      serviceName: entry.service?.name,
-      staffName: entry.staff?.name,
-      verificationCode: entry.verificationCode,
-    });
+    keepAlive(
+      sendQueueNotification(orgId, entry.contact, "called", {
+        token: entry.token,
+        position: entry.position,
+        estimatedWaitMin: entry.estimatedWaitMin ?? 0,
+        queueName: entry.queue.name,
+        businessName: org?.name ?? "",
+        serviceName: entry.service?.name,
+        staffName: entry.staff?.name,
+        verificationCode: entry.verificationCode,
+      }),
+      "queue called notification"
+    );
   }
 
   await scheduleNoShowCheck(entry.id, orgId, entry.queue.noShowThresholdSeconds);
@@ -499,15 +512,18 @@ export async function cancelQueueEntryByPublicToken(publicToken: string, verific
       where: { id: entry.orgId },
       select: { name: true },
     });
-    void sendQueueNotification(entry.orgId, entry.contact, "cancelled", {
-      token: entry.token,
-      position: entry.position,
-      estimatedWaitMin: entry.estimatedWaitMin ?? 0,
-      queueName: entry.queue.name,
-      businessName: org?.name ?? "",
-      serviceName: entry.service?.name,
-      staffName: entry.staff?.name,
-    });
+    keepAlive(
+      sendQueueNotification(entry.orgId, entry.contact, "cancelled", {
+        token: entry.token,
+        position: entry.position,
+        estimatedWaitMin: entry.estimatedWaitMin ?? 0,
+        queueName: entry.queue.name,
+        businessName: org?.name ?? "",
+        serviceName: entry.service?.name,
+        staffName: entry.staff?.name,
+      }),
+      "queue cancelled notification"
+    );
   }
 
   return {

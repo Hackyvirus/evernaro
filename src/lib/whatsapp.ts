@@ -3,6 +3,11 @@
 // startup plan's Phase 2 tech choices).
 
 const GUPSHUP_API = "https://api.gupshup.io/wa/api/v1/msg";
+// Template (HSM) sends use a different endpoint with a dedicated `template`
+// form field. Posting a `{type:"template",...}` blob to the plain /msg
+// endpoint above does NOT send a template -- Gupshup accepts it (returns
+// `submitted`) and delivers the JSON string as literal text. Confirmed live.
+const GUPSHUP_TEMPLATE_MSG_API = "https://api.gupshup.io/wa/api/v1/template/msg";
 
 export async function gupshupSendMessage(opts: {
   apiKey: string;
@@ -36,8 +41,9 @@ export async function gupshupSendMessage(opts: {
 }
 
 // Sends a pre-approved HSM/template message — the only way to message a
-// contact outside the 24-hour customer-service window Meta enforces. Same
-// endpoint as free-text sends, different `message` shape.
+// contact outside the 24-hour customer-service window Meta enforces. Uses
+// Gupshup's dedicated /template/msg endpoint with the template id and its
+// ordered body params in a `template` form field.
 export async function gupshupSendTemplateMessage(opts: {
   apiKey: string;
   sourceNumber: string;
@@ -51,13 +57,10 @@ export async function gupshupSendTemplateMessage(opts: {
     source: opts.sourceNumber,
     destination: opts.destination,
     "src.name": opts.appName,
-    message: JSON.stringify({
-      type: "template",
-      template: { id: opts.gupshupTemplateId, params: opts.params },
-    }),
+    template: JSON.stringify({ id: opts.gupshupTemplateId, params: opts.params }),
   });
 
-  const res = await fetch(GUPSHUP_API, {
+  const res = await fetch(GUPSHUP_TEMPLATE_MSG_API, {
     method: "POST",
     headers: {
       apikey: opts.apiKey,
