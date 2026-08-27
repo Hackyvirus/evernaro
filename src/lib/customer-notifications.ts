@@ -15,14 +15,16 @@ export type QueueNotificationEvent = "joined" | "called" | "completed" | "cancel
 // text (below) remains the fallback when no approved template exists yet,
 // or for orgs still relying on an open session window.
 //
-// The "joined" event is an exception: Gupshup's backend got stuck on the
-// name `queue_joined` ("New English content can't be added while the
-// existing English content is being deleted"), and then on `queue_checkin`
-// the same way (3 failed submissions each). The identical body now lives
-// under `queue_checkedin`. Same body, same params -- name only.
+// "joined" and "called" have drifted off their obvious `queue_<event>`
+// names because Gupshup's backend repeatedly got stuck deleting the old
+// name ("New English content can't be added while the existing English
+// content is being deleted"): queue_joined -> queue_checkin -> queue_checkedin,
+// and queue_called -> queue_yourturn. Same body and params each time --
+// only the name on the channel changes. If one of these gets stuck again,
+// pick a fresh name and update just this map.
 const QUEUE_TEMPLATE_NAMES: Record<QueueNotificationEvent, string> = {
   joined: "queue_checkedin",
-  called: "queue_called",
+  called: "queue_yourturn",
   completed: "queue_completed",
   cancelled: "queue_cancelled",
 };

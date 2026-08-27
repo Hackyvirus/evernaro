@@ -47,10 +47,10 @@ describe("sendQueueNotification WhatsApp template routing", () => {
     sendViaChannelMock.mockResolvedValue(undefined);
   });
 
-  it("sends via an approved queue_called template when one exists, with the correct ordered params", async () => {
+  it("sends via an approved queue_yourturn template when one exists, with the correct ordered params", async () => {
     findFirstTemplateMock.mockResolvedValue({
       id: "tmpl1",
-      name: "queue_called",
+      name: "queue_yourturn",
       status: "APPROVED",
       gupshupTemplateId: "gs-template-id",
       category: "UTILITY",
@@ -59,7 +59,7 @@ describe("sendQueueNotification WhatsApp template routing", () => {
     await sendQueueNotification("org1", contact as never, "called", meta);
 
     expect(findFirstTemplateMock).toHaveBeenCalledWith({
-      where: { channelId: "channel1", status: "APPROVED", name: "queue_called" },
+      where: { channelId: "channel1", status: "APPROVED", name: "queue_yourturn" },
     });
     expect(sendViaChannelMock).toHaveBeenCalledTimes(1);
     const [, , , , whatsappTemplate] = sendViaChannelMock.mock.calls[0];
@@ -83,7 +83,7 @@ describe("sendQueueNotification WhatsApp template routing", () => {
   it("ignores a template row that hasn't been confirmed by Gupshup yet (no gupshupTemplateId)", async () => {
     findFirstTemplateMock.mockResolvedValue({
       id: "tmpl1",
-      name: "queue_called",
+      name: "queue_yourturn",
       status: "APPROVED",
       gupshupTemplateId: null,
       category: "UTILITY",
