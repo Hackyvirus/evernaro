@@ -5,23 +5,16 @@ on:
     branches: [main]
   workflow_dispatch:
 
-jobs:
-  deploy-web:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Deploy to Vercel
-        uses: amondnet/vercel-action@v25
-        with:
-          vercel-token: ${{ secrets.VERCEL_TOKEN }}
-          vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
-          vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
-          vercel-args: "--prod"
-          working-directory: ./
+# The Next.js web app deploys via Vercel's native Git integration (project
+# linked in the Vercel dashboard), which builds every push to main and posts
+# its own commit status. This workflow only builds and publishes the worker
+# image; a duplicate GitHub-Action Vercel deploy lived here previously and
+# was removed -- it needed its own VERCEL_* secrets and only ever double-
+# deployed what Vercel was already shipping.
 
+jobs:
   deploy-worker:
     runs-on: ubuntu-latest
-    needs: deploy-web
     steps:
       - uses: actions/checkout@v4
       - name: Set up Docker Buildx
