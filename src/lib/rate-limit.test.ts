@@ -105,6 +105,13 @@ describe("checkRateLimit", () => {
 
     await expect(checkRateLimit("key", 5, 60, { failClosed: true })).resolves.toBe(false);
   });
+
+  it("fails OPEN on a timeout even when failClosed is set (infra hiccup, not abuse)", async () => {
+    const checkRateLimit = await importCheckRateLimit();
+    mockPipelineError(new Error("Rate limit check timed out"));
+
+    await expect(checkRateLimit("key", 5, 60, { failClosed: true })).resolves.toBe(true);
+  });
 });
 
 describe("clientIp", () => {

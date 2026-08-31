@@ -13,10 +13,14 @@ import { redisConnection } from "@/lib/redis";
 // and return { ok: true } instead of 429 so provider retries don't cause
 // outages.
 //
-// A short timeout guards against Redis hanging the request: the shared
-// connection is configured with maxRetriesPerRequest: null for BullMQ's
-// sake, which would otherwise let a single slow command stall indefinitely.
-const RATE_LIMIT_TIMEOUT_MS = 500;
+// A timeout guards against Redis hanging the request: the shared connection
+// is configured with maxRetriesPerRequest: null for BullMQ's sake, which
+// would otherwise let a single slow command stall indefinitely. It must be
+// generous enough to cover a cold serverless invocation's first TLS connect
+// to a remote Redis — 500ms was tripping constantly on Vercel cold starts
+// and, combined with failClosed, hard-429'd every signup/login.
+const RATE_LIMIT_TIMEOUT_MS = 1500;
+const TIMEOUT_MESSAGE = "Rate limit check timed out";
 // Fail closed by default for all security-sensitive and authenticated routes.
 // Public webhook routes explicitly opt out with failClosed: false.
 const FAIL_CLOSED_DEFAULT = process.env.RATE_LIMIT_FAIL_CLOSED !== "false";
@@ -24,7 +28,7 @@ const FAIL_CLOSED_DEFAULT = process.env.RATE_LIMIT_FAIL_CLOSED !== "false";
 function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
   return Promise.race([
     promise,
-    new Promise<T>((_, reject) => setTimeout(() => reject(new Error("Rate limit check timed out")), ms)),
+    new Promise<T>((_, reject) => setTimeout(() => reject(new Error(TIMEOUT_MESSAGE)), ms)),
   ]);
 }
 
@@ -52,12 +56,18 @@ export async function checkRateLimit(
     if (incrErr) throw incrErr;
     return (count as number) <= limit;
   } catch (err) {
+    // A timeout is an infra hiccup (usually a cold-start connect), never
+    // evidence of abuse — always fail open on it, even for failClosed routes.
+    // A hard Redis error (connection refused, etc.) still honours failClosed
+    // so auth/signup err safe when Redis is genuinely down.
+    const isTimeout = err instanceof Error && err.message === TIMEOUT_MESSAGE;
+    const allow = isTimeout ? true : !failClosed;
     if (process.env.SENTRY_DSN) {
       const Sentry = await import("@sentry/nextjs");
-      Sentry.captureException(err, { tags: { context: "rate-limit" }, extra: { key, failClosed } });
+      Sentry.captureException(err, { tags: { context: "rate-limit" }, extra: { key, failClosed, allow } });
     }
-    console.error(`Rate limit check failed (${failClosed ? "blocking" : "allowing"} request):`, err);
-    return !failClosed;
+    console.error(`Rate limit check failed (${allow ? "allowing" : "blocking"} request):`, err);
+    return allow;
   }
 }
 
