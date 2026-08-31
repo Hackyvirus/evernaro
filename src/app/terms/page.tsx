@@ -112,7 +112,8 @@ export default function TermsPage() {
       </div>
 
       <p className="mt-10 text-xs text-text-muted">
-        See also the <Link href="/privacy" className="text-primary hover:text-primary-hover">Privacy Policy</Link>.
+        See also the <Link href="/privacy" className="text-primary hover:text-primary-hover">Privacy Policy</Link>
+        {" "}and the <Link href="/refunds" className="text-primary hover:text-primary-hover">Refund &amp; Cancellation Policy</Link>.
       </p>
 
       <p className="mt-6 text-xs text-text-muted">

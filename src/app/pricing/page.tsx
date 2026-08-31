@@ -5,6 +5,7 @@ import { Card, Skeleton, Badge } from "@/components/ui";
 import { Check, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
+import { isPublicPlanSlug } from "@/lib/billing/public-plans";
 
 interface PlanFeature {
   id: string;
@@ -41,7 +42,7 @@ export default function PricingPage() {
     fetch("/api/billing/plans")
       .then((r) => r.json())
       .then((d) => {
-        setPlans((d.plans ?? []).filter((p: Plan) => !p.isCustom));
+        setPlans((d.plans ?? []).filter((p: Plan) => !p.isCustom && isPublicPlanSlug(p.slug)));
         setLoading(false);
       })
       .catch(() => setLoading(false));

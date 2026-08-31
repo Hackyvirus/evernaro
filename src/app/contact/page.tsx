@@ -76,6 +76,9 @@ export default function ContactPage() {
             <Link href="/privacy" className="cursor-pointer hover:text-text-secondary">
               Privacy
             </Link>
+            <Link href="/refunds" className="cursor-pointer hover:text-text-secondary">
+              Refunds
+            </Link>
             <span>&copy; 2026 Eversity Tech LLP</span>
           </div>
         </div>

@@ -7,6 +7,7 @@ import { FlowMockup } from "@/components/landing/flow-mockup";
 import { Reveal } from "@/components/landing/reveal";
 import { Faq } from "@/components/landing/faq";
 import { MobileNav } from "@/components/mobile-nav";
+import { PUBLIC_PLAN_SLUGS } from "@/lib/billing/public-plans";
 import {
   ArrowRight,
   Bell,
@@ -240,7 +241,7 @@ export default async function Home() {
   if (session) redirect("/dashboard");
 
   const plans = await prisma.subscriptionPlan.findMany({
-    where: { isActive: true, isCustom: false },
+    where: { isActive: true, isCustom: false, slug: { in: [...PUBLIC_PLAN_SLUGS] } },
     include: { features: { orderBy: { key: "asc" } } },
     orderBy: { displayOrder: "asc" },
   });
@@ -942,6 +943,11 @@ export default async function Home() {
                     Terms
                   </Link>
                 </li>
+                <li>
+                  <Link href="/refunds" className="hover:text-text">
+                    Refunds &amp; Cancellation
+                  </Link>
+                </li>
               </ul>
             </div>
           </div>
@@ -954,6 +960,9 @@ export default async function Home() {
               </Link>
               <Link href="/privacy" className="cursor-pointer hover:text-text-secondary">
                 Privacy
+              </Link>
+              <Link href="/refunds" className="cursor-pointer hover:text-text-secondary">
+                Refunds
               </Link>
               <Link href="/contact" className="cursor-pointer hover:text-text-secondary">
                 Contact

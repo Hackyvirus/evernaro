@@ -102,7 +102,8 @@ export default function PrivacyPage() {
       </div>
 
       <p className="mt-10 text-xs text-text-muted">
-        See also the <Link href="/terms" className="text-primary hover:text-primary-hover">Terms of Service</Link>.
+        See also the <Link href="/terms" className="text-primary hover:text-primary-hover">Terms of Service</Link>
+        {" "}and the <Link href="/refunds" className="text-primary hover:text-primary-hover">Refund &amp; Cancellation Policy</Link>.
       </p>
 
       <p className="mt-6 text-xs text-text-muted">
