@@ -20,13 +20,34 @@ export function getRazorpayBillingClient(): Razorpay {
   });
 }
 
+async function findRazorpayCustomerByEmail(client: Razorpay, email: string) {
+  // Razorpay has no "get customer by email", so scan the (bounded) list.
+  for (let skip = 0; skip < 2000; skip += 100) {
+    const page = await client.customers.all({ count: 100, skip });
+    const match = page.items.find((c) => c.email === email);
+    if (match) return match;
+    if (page.items.length < 100) break;
+  }
+  return null;
+}
+
 export async function createRazorpayCustomer(opts: { email: string; name: string; orgId: string }) {
   const client = getRazorpayBillingClient();
-  return client.customers.create({
-    email: opts.email,
-    name: opts.name,
-    notes: { orgId: opts.orgId },
-  });
+  try {
+    // fail_existing: 0 asks Razorpay to return an existing customer instead of
+    // erroring — but it still 400s on a duplicate email in practice (usually a
+    // customer orphaned by an earlier failed subscribe attempt), so recover.
+    return await client.customers.create({
+      email: opts.email,
+      name: opts.name,
+      notes: { orgId: opts.orgId },
+      fail_existing: 0,
+    });
+  } catch (err) {
+    const existing = await findRazorpayCustomerByEmail(client, opts.email);
+    if (existing) return existing;
+    throw err;
+  }
 }
 
 export async function createRazorpayPlan(opts: {
