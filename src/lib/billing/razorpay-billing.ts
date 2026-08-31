@@ -105,8 +105,11 @@ export async function fetchRazorpaySubscription(razorpaySubscriptionId: string) 
 
 export async function fetchRazorpayTokens(razorpayCustomerId: string) {
   const client = getRazorpayBillingClient();
-  return client.customers.fetchTokens(razorpayCustomerId) as unknown as Promise<
-    Array<{
+  // Razorpay returns { entity, count, items: [...] } here — not a bare array.
+  // Returning the object made the caller's `for (const t of tokens)` throw
+  // "not iterable", 500ing the billing page's payment-methods load.
+  const res = (await client.customers.fetchTokens(razorpayCustomerId)) as unknown as {
+    items?: Array<{
       id: string;
       entity: string;
       token: string;
@@ -121,8 +124,9 @@ export async function fetchRazorpayTokens(razorpayCustomerId: string) {
       };
       status: string;
       recurring?: string;
-    }>
-  >;
+    }>;
+  };
+  return res.items ?? [];
 }
 
 export async function deleteRazorpayToken(razorpayCustomerId: string, tokenId: string) {
