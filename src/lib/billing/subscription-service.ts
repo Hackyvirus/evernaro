@@ -20,6 +20,20 @@ import {
 } from "./subscription-status";
 import type { AddOnSelection } from "./types";
 
+// Razorpay SDK errors are shaped { statusCode, error: { code, description } }.
+// Pull out something human-readable so a failed plan change tells the operator
+// *why* (bad key, subscriptions not enabled, account under review, ...) instead
+// of a generic "could not initialize payment".
+function describeRazorpayError(err: unknown): string {
+  if (err && typeof err === "object") {
+    const e = err as { error?: { description?: string; code?: string }; statusCode?: number; message?: string };
+    const desc = e.error?.description ?? e.message;
+    if (desc) return e.statusCode ? `${desc} [${e.statusCode}]` : desc;
+    if (e.error?.code) return e.error.code;
+  }
+  return "unknown error — check server logs";
+}
+
 export type CreateSubscriptionInput = {
   orgId: string;
   ownerEmail: string;
@@ -471,7 +485,9 @@ export async function changeSubscriptionPlan(input: CreateSubscriptionInput & { 
     } catch (err) {
       // Do NOT cancel the existing subscription if Razorpay setup fails.
       console.error("Razorpay subscription setup failed for plan change:", err);
-      throw new Error("Could not initialize payment for the new plan. Your current plan is unchanged.");
+      throw new Error(
+        `Could not initialize payment for the new plan (${describeRazorpayError(err)}). Your current plan is unchanged.`,
+      );
     }
   }
 
