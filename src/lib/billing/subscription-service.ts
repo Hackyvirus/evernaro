@@ -476,12 +476,14 @@ export async function changeSubscriptionPlan(input: CreateSubscriptionInput & { 
   }
 
   // Always create the new subscription in a non-active state first. This:
-  //   - avoids violating the one-active-per-org partial unique index,
+  //   - avoids violating the one-active-per-org partial unique index
+  //     (UNIQUE(orgId) WHERE status IN ('TRIALING','ACTIVE')): the current
+  //     subscription still occupies that slot until finalizePlanChange runs,
   //   - lets finalizePlanChange safely cancel the previous subscription and
   //     activate the new one in one transactional step.
-  const initialStatus = trialEnd
-    ? SubscriptionStatus.TRIALING
-    : SubscriptionStatus.INCOMPLETE;
+  // INCOMPLETE even for trials — finalizePlanChange promotes it to TRIALING
+  // (see its trialEnd check) after cancelling the previous subscription.
+  const initialStatus = SubscriptionStatus.INCOMPLETE;
 
   const newSubscription = await prisma.customerSubscription.create({
     data: {
